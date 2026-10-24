@@ -15,29 +15,47 @@ final class AgendaModel: ObservableObject {
     @Published var calendars: [EKCalendar] = []
     @Published var lists: [EKCalendar] = []
     @Published var error: String?
+    /// True when `error` is a permissions problem, so the alert offers Settings.
+    @Published var errorOffersSettings = false
     @Published var loading = false
     @Published var reminders: [EKReminder] = []
+    /// Completed reminders are fetched only while a view shows them; accounts can have years of history.
+    @Published var includeCompleted = false { didSet { if includeCompleted != oldValue { scheduleRefresh() } } }
+    @Published var completedLoaded = false
+    @Published var undo: UndoAction?
     @Published var generation = 0
     @Published var sheet: AppSheet?
     private var revision = 0
+    private var pendingRefresh: Task<Void, Never>?
+    /// Coalesces bursts of triggers (store notifications, saves, sheet dismissals) into one fetch.
+    func scheduleRefresh() {
+        pendingRefresh?.cancel()
+        pendingRefresh = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await refresh()
+        }
+    }
     func refresh() async {
         revision += 1
         let current = revision
         loading = true
         calendars = EKEventStore.authorizationStatus(for: .event) == .fullAccess ? store.calendars(for: .event) : []
         lists = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : []
+        if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
         let result = await AgendaQuery.load(store: store)
-        let fetched: [EKReminder]
+        let wantsCompleted = includeCompleted
+        var fetched: [EKReminder] = []
         if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
-            fetched = await withCheckedContinuation { continuation in
-                store.fetchReminders(matching: store.predicateForReminders(in: nil)) {
-                    continuation.resume(returning: $0 ?? [])
-                }
+            fetched = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil))
+            if wantsCompleted {
+                fetched += await store.reminders(matching: store.predicateForCompletedReminders(withCompletionDateStarting: nil, ending: nil, calendars: nil))
             }
-        } else { fetched = [] }
+        }
         guard current == revision else { return }
         items = result
         reminders = fetched
+        completedLoaded = wantsCompleted
         generation += 1
         loading = false
         WidgetCenter.shared.reloadAllTimelines()
@@ -45,15 +63,30 @@ final class AgendaModel: ObservableObject {
     func request(_ type: EKEntityType) async {
         do {
             let granted = try await (type == .event ? store.requestFullAccessToEvents() : store.requestFullAccessToReminders())
-            if !granted { error = "Access is off. You can enable it in Settings → Apps → Lots of Events." }
+            if !granted {
+                errorOffersSettings = true
+                error = "Access is off. You can enable it in Settings → Apps → LotsOfEvents."
+            }
         } catch { self.error = error.localizedDescription }
         await refresh()
     }
 }
 
+/// A short-lived offer to reverse the last reminder change.
+struct UndoAction: Identifiable {
+    let id = UUID()
+    let message: String
+    let perform: @MainActor () -> Void
+}
+
 struct AgendaView: View {
     @ObservedObject var model: AgendaModel
-    private var dates: [Date] { Array(Set(model.items.map { Calendar.current.startOfDay(for: $0.date) })).sorted() }
+    /// Each day's rows, with multi-day events repeated under every day they cover.
+    private var days: [(day: Date, items: [AgendaItem])] {
+        let rows = WidgetAgendaLayout.byDay(model.items, start: .now, days: Preferences.days)
+        return Dictionary(grouping: rows) { Calendar.current.startOfDay(for: $0.date) }
+            .sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -77,9 +110,9 @@ struct AgendaView: View {
                 else if model.items.isEmpty {
                     ContentUnavailableView("A clear horizon", systemImage: "sun.horizon", description: Text("No items in this date range. Choose calendars and reminder lists, or add an event."))
                 }
-                ForEach(dates, id: \.self) { date in
+                ForEach(days, id: \.day) { date, items in
                     Section {
-                        ForEach(model.items.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }) { item in
+                        ForEach(items) { item in
                             Button { model.open(item) } label: {
                             HStack(spacing: 12) {
                                 RoundedRectangle(cornerRadius: 3).fill(item.color).frame(width: 4)
@@ -102,7 +135,10 @@ struct AgendaView: View {
             .tint(.teal)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Sources", systemImage: "slider.horizontal.3") { model.sheet = .sources } }
-                ToolbarItem(placement: .topBarTrailing) { Button("New event", systemImage: "plus") { model.sheet = .newEvent(.now) } }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Quick add", systemImage: "text.badge.plus") { model.sheet = .quickAdd }
+                    Button("New event", systemImage: "plus") { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
+                }
             }
             .refreshable { await model.refresh() }
 
@@ -121,7 +157,7 @@ struct SourcesView: View {
             Form {
                 Section("Looking ahead") {
                     Stepper("\(days) days, including today", value: $days, in: 2...14)
-                        .onChange(of: days) { _, value in Preferences.days = value; Preferences.defaults.set(0, forKey: "page"); Task { await model.refresh() } }
+                        .onChange(of: days) { _, value in Preferences.days = value; Preferences.defaults.set(0, forKey: "page"); model.scheduleRefresh() }
                 }
                 Section {
                     ForEach(AgendaTheme.allCases) { theme in
@@ -164,7 +200,7 @@ struct SourcesView: View {
                     Text("Select the lists to include. Only incomplete reminders due in the displayed date range appear. Undated and earlier overdue reminders are excluded.")
                 }
                 Section("Your Home Screen widget") {
-                    Text("Touch and hold your Home Screen, choose Edit → Add Widget, then search for Lots of Events. Use the arrows to page through your agenda and + to create an event.")
+                    Text("Touch and hold your Home Screen, choose Edit → Add Widget, then search for LotsOfEvents. Use the arrows to page through your agenda and + to create an event.")
                     Text("The widget uses these same selections. iOS controls when it refreshes.").foregroundStyle(.secondary)
                 }
             }.navigationTitle("Your agenda").toolbar { Button("Done") { dismiss() } }.tint(.teal)
@@ -172,8 +208,9 @@ struct SourcesView: View {
     }
     private func sourceToggle(_ source: EKCalendar, reminders: Bool) -> some View {
         Toggle(isOn: Binding(get: { Preferences.selected(source.calendarIdentifier, reminders: reminders) }, set: {
-            Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: reminders ? model.lists : model.calendars)
-            Task { await model.refresh() }
+            Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: (reminders ? model.lists : model.calendars).map(\.calendarIdentifier))
+            model.objectWillChange.send()
+            model.scheduleRefresh()
         })) {
             HStack {
                 Circle().fill(Color(cgColor: source.cgColor)).frame(width: 9, height: 9)
@@ -200,7 +237,7 @@ struct EventEditor: UIViewControllerRepresentable {
         return editor
     }
     func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
-    final class Coordinator: NSObject, EKEventEditViewDelegate {
+    @MainActor final class Coordinator: NSObject, @MainActor EKEventEditViewDelegate {
         let parent: EventEditor
         init(parent: EventEditor) { self.parent = parent }
         func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) { parent.dismiss() }

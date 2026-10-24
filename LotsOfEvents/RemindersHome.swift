@@ -51,7 +51,10 @@ struct RemindersHome: View {
         }
     }
     private var title: String { model.lists.first(where: { $0.calendarIdentifier == listID })?.title ?? filter.rawValue }
+    private var needsCompleted: Bool { listID == nil ? filter == .completed : showCompleted }
     var body: some View {
+        let rows = filtered
+        let counts = Dictionary(uniqueKeysWithValues: ReminderFilter.allCases.map { option in (option, model.reminders.count { matches($0, filter: option) }) })
         NavigationStack {
             Group {
                 if !model.reminderAccess {
@@ -63,7 +66,11 @@ struct RemindersHome: View {
                                 ForEach(ReminderFilter.allCases, id: \.self) { option in
                                     Button { filter = option; listID = nil } label: {
                                         VStack(alignment: .leading, spacing: 8) {
-                                            HStack { Image(systemName: option.symbol); Spacer(); Text("\(model.reminders.filter { matches($0, filter: option) }.count)").font(.title2.bold()) }
+                                            HStack {
+                                                Image(systemName: option.symbol); Spacer()
+                                                // Completed reminders load on demand, so their count is unknown until then.
+                                                Text(option == .completed && !model.completedLoaded ? " " : "\(counts[option] ?? 0)").font(.title2.bold())
+                                            }
                                             Text(option.rawValue).font(.subheadline.weight(.semibold))
                                         }.padding(12).foregroundStyle(listID == nil && filter == option ? Color.white : Color.primary)
                                             .background(listID == nil && filter == option ? Color.teal : Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -82,8 +89,8 @@ struct RemindersHome: View {
                         }
                         Section(title) {
                             if model.loading && model.reminders.isEmpty { ProgressView("Loading reminders…") }
-                            else if filtered.isEmpty { ContentUnavailableView("Nothing here", systemImage: "checkmark.circle", description: Text(search.isEmpty ? "Add a reminder or choose another view." : "No reminders match your search.")) }
-                            ForEach(filtered, id: \.calendarItemIdentifier) { reminder in
+                            else if rows.isEmpty { ContentUnavailableView("Nothing here", systemImage: "checkmark.circle", description: Text(search.isEmpty ? "Add a reminder or choose another view." : "No reminders match your search.")) }
+                            ForEach(rows, id: \.calendarItemIdentifier) { reminder in
                                 reminderRow(reminder)
                                     .swipeActions(edge: .leading) {
                                         Button(reminder.isCompleted ? "Reopen" : "Complete") { model.toggle(reminder) }.tint(.teal)
@@ -94,6 +101,8 @@ struct RemindersHome: View {
                 }
             }
             .navigationTitle("Reminders")
+            .onAppear { model.includeCompleted = needsCompleted }
+            .onChange(of: needsCompleted) { _, value in model.includeCompleted = value }
             .searchable(text: $search, prompt: "Search reminders and notes")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Sources", systemImage: "slider.horizontal.3") { model.sheet = .sources } }
@@ -130,7 +139,7 @@ struct RemindersHome: View {
             Button { model.sheet = .reminder(reminder, nil) } label: {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline) {
-                        if reminder.priority != 0 { Text(reminder.priority <= 4 ? "!!!" : reminder.priority <= 6 ? "!!" : "!").foregroundStyle(.orange).fontWeight(.bold) }
+                        if reminder.priority != 0 { Text(ReminderPriority.badge(reminder.priority)).foregroundStyle(.orange).fontWeight(.bold) }
                         Text(reminder.title ?? "Reminder").strikethrough(reminder.isCompleted).foregroundStyle(reminder.isCompleted ? .secondary : .primary)
                         Spacer(minLength: 0)
                     }
@@ -146,6 +155,16 @@ struct RemindersHome: View {
                 }.padding(.vertical, 4).contentShape(Rectangle())
             }.buttonStyle(.plain)
         }
+    }
+}
+
+/// EventKit priorities: 1–4 high, 5 medium, 6–9 low, 0 none.
+enum ReminderPriority {
+    static func normalized(_ priority: Int) -> Int {
+        switch priority { case 0: return 0; case 1...4: return 1; case 5: return 5; default: return 9 }
+    }
+    static func badge(_ priority: Int) -> String {
+        switch normalized(priority) { case 1: return "!!!"; case 5: return "!!"; default: return "!" }
     }
 }
 
@@ -205,7 +224,8 @@ struct ReminderEditor: View {
                         DatePicker("Due", selection: $due, displayedComponents: .date)
                         Toggle("Time", isOn: Binding(get: { hasTime }, set: { enabled in
                             hasTime = enabled
-                            alert = enabled ? .atTime : .none
+                            // Leave "Keep existing" alone so toggling Time doesn't replace a reminder's alarms.
+                            if alert != .keep { alert = enabled ? .atTime : .none }
                         }))
                         if hasTime { DatePicker("At", selection: $due, displayedComponents: .hourAndMinute) }
                         Picker("Repeat", selection: $repeatRule) {
@@ -262,7 +282,7 @@ struct ReminderEditor: View {
         hasDate = reminder.dueDateComponents != nil
         hasTime = reminder.dueDateComponents?.hour != nil
         due = ReminderDates.due(reminder) ?? .now
-        priority = reminder.priority == 0 ? 0 : reminder.priority <= 4 ? 1 : reminder.priority <= 6 ? 5 : 9
+        priority = ReminderPriority.normalized(reminder.priority)
         repeatRule = .keep
         alert = .keep
         completed = reminder.isCompleted
@@ -291,7 +311,7 @@ struct ReminderEditor: View {
         target.isCompleted = completed
         do {
             try model.store.save(target, commit: true)
-            Task { await model.refresh() }
+            model.scheduleRefresh()
             dismiss()
         } catch {
             _ = target.refresh()
@@ -301,7 +321,7 @@ struct ReminderEditor: View {
     }
     private func delete() {
         guard let reminder, !readOnly else { return }
-        do { try model.store.remove(reminder, commit: true); Task { await model.refresh() }; dismiss() }
+        do { try model.delete(reminder); dismiss() }
         catch { self.error = error.localizedDescription }
     }
 }

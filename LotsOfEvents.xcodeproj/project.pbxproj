@@ -13,13 +13,17 @@
 		15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */; };
 		4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */; };
+		64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */; };
 		7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */; };
 		A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9673B93B2FA0CF1B2871781C /* CalendarHome.swift */; };
 		B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */; };
 		C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
+		D15E2C569B02878EBAF8017B /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */; };
 		D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */; };
 		D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
+		D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */; };
 		F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -56,11 +60,13 @@
 
 /* Begin PBXFileReference section */
 		09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LotsOfEvents.entitlements; sourceTree = "<group>"; };
+		1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixesAndFeaturesTests.swift; sourceTree = "<group>"; };
 		20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LotsOfEvents.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgets.swift; sourceTree = "<group>"; };
 		3CBAF9DE5613BF613814BE64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
 		635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotsOfEventsApp.swift; sourceTree = "<group>"; };
+		6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
 		6E0355C3FB63242321937C6F /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LotsOfEventsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,21 +76,25 @@
 		9673B93B2FA0CF1B2871781C /* CalendarHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarHome.swift; sourceTree = "<group>"; };
 		9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreeDayAgendaWidget.swift; sourceTree = "<group>"; };
 		9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersHome.swift; sourceTree = "<group>"; };
+		9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAdd.swift; sourceTree = "<group>"; };
 		A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaQueryTests.swift; sourceTree = "<group>"; };
 		BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgetTests.swift; sourceTree = "<group>"; };
 		F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndReminderTests.swift; sourceTree = "<group>"; };
 		F90BC7114F0716F452585279 /* AgendaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgendaWidget.entitlements; sourceTree = "<group>"; };
+		FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		22F9ADE39CEE0AF5CFC4AB35 /* LotsOfEvents */ = {
 			isa = PBXGroup;
 			children = (
+				6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */,
 				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
 				3CBAF9DE5613BF613814BE64 /* Info.plist */,
 				09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */,
 				635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */,
 				6E0355C3FB63242321937C6F /* MainView.swift */,
+				9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */,
 				9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */,
 			);
 			path = LotsOfEvents;
@@ -117,6 +127,7 @@
 				A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */,
 				F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */,
 				BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */,
+				1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */,
 				54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */,
 			);
 			path = LotsOfEventsTests;
@@ -133,6 +144,7 @@
 		E581CA6862DD1CDD3BF0F2F3 /* AgendaWidget */ = {
 			isa = PBXGroup;
 			children = (
+				FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */,
 				F90BC7114F0716F452585279 /* AgendaWidget.entitlements */,
 				66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */,
 				2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */,
@@ -248,6 +260,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D15E2C569B02878EBAF8017B /* AgendaConfiguration.swift in Sources */,
 				C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */,
 				0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */,
 				133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */,
@@ -260,9 +273,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */,
+				912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */,
 				A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */,
 				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
 				C996037E77D3B8D325EFF313 /* MainView.swift in Sources */,
+				64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */,
 				D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -274,6 +289,7 @@
 				F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */,
 				15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */,
 				4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */,
+				D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */,
 				B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -353,7 +369,7 @@
 				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lots of Events";
+				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -372,7 +388,7 @@
 				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lots of Events";
+				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -460,7 +476,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -532,7 +548,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;

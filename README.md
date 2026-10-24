@@ -1,6 +1,6 @@
-# Lots of Events
+# LotsOfEvents
 
-Native SwiftUI iPhone/iPad agenda and WidgetKit extension. Requires iOS 18+ and Xcode 16+ (built with Xcode 27).
+Native SwiftUI iPhone/iPad agenda and WidgetKit extension. Requires iOS 18+ and Xcode 26+ (Swift 6 language mode; built with Xcode 27).
 
 ## Run
 
@@ -15,7 +15,8 @@ Native SwiftUI iPhone/iPad agenda and WidgetKit extension. Requires iOS 18+ and 
 
 - Shows today (including earlier events) plus four more days by default; configurable from 2–14 days total.
 - Includes events overlapping the range, and incomplete reminders with due dates inside it. Undated and earlier overdue reminders are excluded.
-- Calendars default to selected; reminder lists are opt-in. Empty selection means no items of that type.
+- Calendars default to selected, including calendars added later (hidden calendars are stored as exclusions); reminder lists are opt-in. Empty selection means no items of that type.
+- Multi-day events appear under every day they cover in Upcoming and the widgets; later days show “All day” or “Until <end time>”.
 - Widgets offer seven selectable darker matte themes (Graphite, Slate, Sage, Sand, Clay, Lavender, Black). Black stays black; the others have light/dark variants, in Sources → Widget theme. The selection is shared with all widgets. Widgets group items under date headings on a flat themed background, with colored calendar bars and single-line items. Item notes and date subtitles are hidden in the widget. All-day items have no time label; timed events show their start–end time beneath the title, and timed reminders show their due time. Pages adapt to the space needed by headings and notes. Arrow buttons change pages without opening the app. The + deep link opens Apple’s native event editor; the widget background opens the full agenda.
 - The native event editor supports calendars, all-day events, repeat rules, alerts, and locations.
 - Widget queries EventKit on refresh and reads selections through the App Group. It requests a refresh every 15 minutes or at midnight, with actual timing controlled by iOS. The app also requests reloads after source changes, event changes, and foregrounding.
@@ -23,7 +24,7 @@ Native SwiftUI iPhone/iPad agenda and WidgetKit extension. Requires iOS 18+ and 
 
 ## Validation
 
-Tests cover chronological merging and calendar-day date windows across daylight saving time. Run the LotsOfEvents scheme’s tests in Xcode.
+Thirty-three tests cover date windows across daylight saving time, calendar-selection migration, multi-day expansion, day-view column layout, Quick Add parsing, priorities, and widget logic. One test completes a repeating reminder in the simulator’s Reminders store and is skipped unless Reminders access is granted (`xcrun simctl privacy booted grant reminders com.walt.LotsOfEvents`). Run the LotsOfEvents scheme’s tests in Xcode.
 
 Device acceptance checks: grant/deny each permission independently; select and deselect all sources; create and cancel an event; verify all-day/multi-day events and dated reminders; add all widget sizes, exercise page arrows and +, and check refresh after editing in Apple Calendar/Reminders. Verify small-widget tap routing and App Group provisioning on your signed physical device before distribution.
 
@@ -39,6 +40,8 @@ Tap an event for Apple's native detail screen and Edit for supported changes/del
 
 Reminder editing includes title, notes, website URL, list moves, date-only/timed due dates, priority, completion, daily/weekly/monthly/yearly repeats, and time-based alerts. Existing complex repeats and alarms are preserved with Keep existing; changing due date shifts absolute alerts by the same interval. Removing the due date also removes repeats/alerts. Deletion requires confirmation and affects synced Apple Reminders data. Read-only lists cannot be changed.
 
+**Also included:** a timeline Day view (duration-sized blocks, side-by-side overlaps, current-time line, tap an hour to add); Quick Add (Upcoming → text-plus button, or `lotsofevents://quick-add`) that turns “Lunch Friday 1pm” into an event or reminder; Undo for completing, reopening, and deleting reminders (deleted reminders are recreated with a new identifier); Siri/Shortcuts actions “What’s Next” and “Add Reminder”; and new events default to the next half hour. Completed reminders load only while the Completed view or “Show completed” is open.
+
 This core release does not implement reminder subtasks, tags, attachments, shared-list collaboration, list/calendar creation or deletion, invitation management, or drag-and-drop scheduling. These require further work; some Apple Reminders features are not exposed by EventKit.
 
 Validation: twenty-one simulator tests cover date windows, DST, month grids, midnight end boundaries, multi-day/zero-duration events, date-only/timed reminder components, stable theme identifiers, preservation of repeat rules, alarm offsets, and location alerts, plus widget pagination, time subtitles, and selected-day overlap filtering. Signed device build/install is verified separately. Live account synchronization and every edit flow still need device acceptance testing with your accounts.
@@ -48,7 +51,7 @@ Validation: twenty-one simulator tests cover date windows, DST, month grids, mid
 
 A second gallery option, **Three-Day Agenda**, displays today and the next two dates as tappable tabs. The selected day shows its events and selected reminders, including multi-day events that overlap it. Timed items show times beneath the title; all-day items have no subtitle. Busy days have independent page controls. It uses the same theme and source selections as Upcoming Agenda, but always loads three days regardless of the Upcoming date-range setting. Date/page selection is shared between instances of this widget. When a saved day leaves the three-day range, selection returns to today.
 
-The original Upcoming Agenda widget keeps its existing gallery identity and layout. Add the new option through Home Screen → Edit → Add Widget → Lots of Events → Three-Day Agenda.
+The original Upcoming Agenda widget keeps its existing gallery identity and layout. Add the new option through Home Screen → Edit → Add Widget → LotsOfEvents → Three-Day Agenda.
 
 
 ## Additional small widgets
@@ -62,3 +65,8 @@ All five options use the existing theme and selected sources. The original Upcom
 - **Focus List:** all incomplete reminders from selected lists, including overdue, future, and undated items. Orders by due date, then priority. Complete tasks directly, add a reminder with +, or tap the background to open Reminders in the app.
 
 These five layouts support the small widget size. Selections and page positions are independent across layouts but shared among instances of the same layout. Reminder completion writes to Apple Reminders, honors read-only lists, and refreshes all widgets. The UI never completes sample gallery reminders. Live reminder completion and account synchronization should be checked on-device.
+
+
+## Widget options and Lock Screen
+
+Every widget can be edited (touch and hold → Edit Widget) to pick its own theme and limit it to specific calendars and reminder lists; leaving Calendars and Lists empty follows the app’s Sources screen. Next Up is also available as Lock Screen inline, circular, and rectangular widgets. Day tabs and highlights use the selected theme’s accent color.

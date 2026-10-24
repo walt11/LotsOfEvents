@@ -4,7 +4,7 @@ import AppIntents
 import EventKit
 
 struct PageAgendaIntent: AppIntent {
-    static var title: LocalizedStringResource = "Page through agenda"
+    static let title: LocalizedStringResource = "Page through agenda"
     @Parameter(title: "Page") var page: Int
     init() {}
     init(page: Int) { self.page = page }
@@ -23,9 +23,10 @@ struct AgendaEntry: TimelineEntry {
     var theme: AgendaTheme = .selected
     var selectedDay: Date = .now
     var dayPage: Int = 0
+    var days: Int = Preferences.days
 }
 
-struct AgendaProvider: TimelineProvider {
+struct AgendaProvider: AppIntentTimelineProvider {
     var threeDay = false
     func placeholder(in context: Context) -> AgendaEntry {
         AgendaEntry(date: .now, items: [
@@ -34,25 +35,26 @@ struct AgendaProvider: TimelineProvider {
             AgendaItem(id: "3", title: "Coffee with Alex", date: .now.addingTimeInterval(86400), allDay: false, reminder: false, source: "Personal", color: .purple)
         ], page: 0, connected: true)
     }
-    func getSnapshot(in context: Context, completion: @escaping (AgendaEntry) -> Void) {
-        if context.isPreview { completion(placeholder(in: context)) }
-        else { Task { completion(await entry()) } }
+    func snapshot(for configuration: AgendaConfigurationIntent, in context: Context) async -> AgendaEntry {
+        context.isPreview ? placeholder(in: context) : await entry(configuration)
     }
-    func getTimeline(in context: Context, completion: @escaping (Timeline<AgendaEntry>) -> Void) {
-        Task {
-            let entry = await entry()
-            let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
-            completion(Timeline(entries: [entry], policy: .after(min(Date.now.addingTimeInterval(900), midnight))))
-        }
+    func timeline(for configuration: AgendaConfigurationIntent, in context: Context) async -> Timeline<AgendaEntry> {
+        let entry = await entry(configuration)
+        let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
+        return Timeline(entries: [entry], policy: .after(min(Date.now.addingTimeInterval(900), midnight)))
     }
-    private func entry() async -> AgendaEntry {
+    private func entry(_ configuration: AgendaConfigurationIntent) async -> AgendaEntry {
         let now = Date.now
-        let items = await AgendaQuery.load(store: EKEventStore(), now: now, days: threeDay ? 3 : nil)
+        let sources = configuration.sources ?? []
+        // An empty choice means "use the app's Sources selection".
+        let calendarIDs = sources.isEmpty ? nil : Set(sources.filter { !$0.reminders }.map(\.id))
+        let listIDs = sources.isEmpty ? nil : Set(sources.filter(\.reminders).map(\.id))
+        let items = await AgendaQuery.load(store: EKEventStore(), now: now, days: threeDay ? 3 : nil, calendarIDs: calendarIDs, listIDs: listIDs)
         let start = Calendar.current.startOfDay(for: now)
         let end = Calendar.current.date(byAdding: .day, value: 3, to: start)!
         let saved = Date(timeIntervalSince1970: Preferences.defaults.double(forKey: "selectedWidgetDay"))
         let selected = saved >= start && saved < end ? saved : start
-        return AgendaEntry(date: now, items: items, page: Preferences.defaults.integer(forKey: "page"), connected: EKEventStore.authorizationStatus(for: .event) == .fullAccess || EKEventStore.authorizationStatus(for: .reminder) == .fullAccess, selectedDay: selected, dayPage: saved == selected ? Preferences.defaults.integer(forKey: "dayWidgetPage") : 0)
+        return AgendaEntry(date: now, items: items, page: Preferences.defaults.integer(forKey: "page"), connected: EKEventStore.authorizationStatus(for: .event) == .fullAccess || EKEventStore.authorizationStatus(for: .reminder) == .fullAccess, theme: configuration.theme.theme ?? .selected, selectedDay: selected, dayPage: saved == selected ? Preferences.defaults.integer(forKey: "dayWidgetPage") : 0, days: threeDay ? 3 : Preferences.days)
     }
 }
 
@@ -61,7 +63,7 @@ struct AgendaWidgetView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var todayColor: Color { entry.theme.text(colorScheme) }
     private func itemPages(height: CGFloat) -> [[AgendaItem]] {
-        WidgetAgendaLayout.pages(items: entry.items, height: max(0, height - 15), headings: true)
+        WidgetAgendaLayout.pages(items: WidgetAgendaLayout.byDay(entry.items, start: entry.date, days: entry.days), height: max(0, height - 15), headings: true)
     }
     var body: some View {
         GeometryReader { geometry in
@@ -86,7 +88,7 @@ struct AgendaWidgetView: View {
                     .padding(.trailing, 28)
                 Spacer(minLength: 4)
                 Text(entry.connected ? "All clear ahead" : "Connect your calendars").font(.headline)
-                Text(entry.connected ? "No items in the next \(Preferences.days) days." : "Open the app to choose calendars and reminder lists.")
+                Text(entry.connected ? "No items in the next \(entry.days) days." : "Open the app to choose calendars and reminder lists.")
                     .font(.caption).foregroundStyle(entry.theme.secondary(colorScheme))
             } else {
                 ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
@@ -155,7 +157,7 @@ struct AgendaWidgetView: View {
 
 struct UpcomingAgendaWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "UpcomingAgenda", provider: AgendaProvider()) { AgendaWidgetView(entry: $0) }
+        AppIntentConfiguration(kind: "UpcomingAgenda", intent: AgendaConfigurationIntent.self, provider: AgendaProvider()) { AgendaWidgetView(entry: $0) }
             .contentMarginsDisabled()
             .configurationDisplayName("Upcoming Agenda")
             .description("Today and the days ahead, with your selected reminders. Tap + to add an event.")

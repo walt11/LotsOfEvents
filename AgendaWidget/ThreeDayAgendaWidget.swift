@@ -3,7 +3,7 @@ import WidgetKit
 import AppIntents
 
 struct SelectWidgetDayIntent: AppIntent {
-    static var title: LocalizedStringResource = "Select agenda day"
+    static let title: LocalizedStringResource = "Select agenda day"
     @Parameter(title: "Day") var timestamp: Double
     init() {}
     init(day: Date) { timestamp = day.timeIntervalSince1970 }
@@ -16,7 +16,7 @@ struct SelectWidgetDayIntent: AppIntent {
 }
 
 struct PageDayWidgetIntent: AppIntent {
-    static var title: LocalizedStringResource = "Page selected day"
+    static let title: LocalizedStringResource = "Page selected day"
     @Parameter(title: "Page") var page: Int
     init() {}
     init(page: Int) { self.page = page }
@@ -29,7 +29,7 @@ struct PageDayWidgetIntent: AppIntent {
 
 struct ThreeDayAgendaWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "ThreeDayAgenda", provider: AgendaProvider(threeDay: true)) {
+        AppIntentConfiguration(kind: "ThreeDayAgenda", intent: AgendaConfigurationIntent.self, provider: AgendaProvider(threeDay: true)) {
             ThreeDayAgendaView(entry: $0)
         }
         .contentMarginsDisabled()
@@ -42,7 +42,6 @@ struct ThreeDayAgendaWidget: Widget {
 struct ThreeDayAgendaView: View {
     let entry: AgendaEntry
     @Environment(\.colorScheme) private var colorScheme
-    private var dark: Bool { colorScheme == .dark || entry.theme == .black }
     private var days: [Date] {
         let today = Calendar.current.startOfDay(for: entry.date)
         return (0..<3).map { Calendar.current.date(byAdding: .day, value: $0, to: today)! }
@@ -62,8 +61,8 @@ struct ThreeDayAgendaView: View {
                                 Text(day.formatted(.dateTime.day())).font(.system(size: 19, weight: .medium))
                             }
                             .frame(maxWidth: .infinity).frame(height: 38)
-                            .foregroundStyle(selected ? (dark ? Color.black : Color.white) : Color.blue)
-                            .background(selected ? (dark ? Color(white: 0.65) : Color(white: 0.25)) : .clear, in: RoundedRectangle(cornerRadius: 11))
+                            .foregroundStyle(selected ? entry.theme.onAccent(colorScheme) : entry.theme.accent(colorScheme))
+                            .background(selected ? entry.theme.accent(colorScheme) : .clear, in: RoundedRectangle(cornerRadius: 11))
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                             .accessibilityLabel(day.formatted(date: .complete, time: .omitted))

@@ -13,30 +13,79 @@ struct AgendaItem: Identifiable {
     var eventIdentifier: String? = nil
     var eventStartDate: Date? = nil
     var endDate: Date? = nil
+    /// The original item's ID when this row repeats a multi-day event on a later day.
+    var sourceID: String? = nil
+    /// True when this row shows an event that began before the row's day.
+    var continuation: Bool { sourceID != nil || (eventStartDate.map { $0 < date } ?? false) }
+    private var continuationLabel: String {
+        guard let endDate, endDate > date, Calendar.current.isDate(endDate, inSameDayAs: date) else { return "All day" }
+        return "Until \(endDate.formatted(date: .omitted, time: .shortened))"
+    }
     var widgetTimeLabel: String {
+        if continuation && !allDay { return continuationLabel }
         let start = eventStartDate ?? date
         guard !reminder, let endDate, endDate > start else { return start.formatted(date: .omitted, time: .shortened) }
         return "\(start.formatted(date: .omitted, time: .shortened))–\(endDate.formatted(date: .omitted, time: .shortened))"
     }
-    var timeLabel: String { allDay ? (reminder ? "Due" : "All day") : date.formatted(date: .omitted, time: .shortened) }
+    var timeLabel: String {
+        if continuation && !allDay { return continuationLabel }
+        return allDay ? (reminder ? "Due" : "All day") : date.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+extension Date {
+    /// The next :00 or :30 boundary in local time, used as the default start for new events.
+    func roundedUpToHalfHour(calendar: Calendar = .current) -> Date {
+        let hour = calendar.dateInterval(of: .hour, for: self)!.start
+        let offset = timeIntervalSince(hour)
+        return offset == 0 ? self : hour.addingTimeInterval(offset <= 1800 ? 1800 : 3600)
+    }
 }
 
 enum Preferences {
-    static let defaults = UserDefaults(suiteName: Bundle.main.object(forInfoDictionaryKey: "AgendaAppGroup") as? String ?? "group.com.walt.LotsOfEvents")!
+    // UserDefaults is documented as thread-safe.
+    nonisolated(unsafe) static let defaults = UserDefaults(suiteName: Bundle.main.object(forInfoDictionaryKey: "AgendaAppGroup") as? String ?? "group.com.walt.LotsOfEvents")!
     static var days: Int {
         get { max(2, min(14, defaults.object(forKey: "days") as? Int ?? 5)) }
         set { defaults.set(newValue, forKey: "days") }
     }
-    static func selected(_ id: String, reminders: Bool) -> Bool {
-        let key = reminders ? "reminderLists" : "calendars"
-        guard let ids = defaults.stringArray(forKey: key) else { return !reminders }
-        return ids.contains(id)
+    /// Reminder lists are opt-in. Calendars are stored as exclusions so calendars added later appear by default.
+    static func selected(_ id: String, reminders: Bool, in store: UserDefaults = defaults) -> Bool {
+        if reminders { return store.stringArray(forKey: "reminderLists")?.contains(id) ?? false }
+        if let hidden = store.stringArray(forKey: "hiddenCalendars") { return !hidden.contains(id) }
+        return store.stringArray(forKey: "calendars")?.contains(id) ?? true
     }
-    static func setSelected(_ id: String, enabled: Bool, reminders: Bool, available: [EKCalendar]) {
-        var ids = Set(available.filter { selected($0.calendarIdentifier, reminders: reminders) }.map(\.calendarIdentifier))
-        if enabled { ids.insert(id) } else { ids.remove(id) }
-        defaults.set(Array(ids), forKey: reminders ? "reminderLists" : "calendars")
-        defaults.set(0, forKey: "page")
+    static func setSelected(_ id: String, enabled: Bool, reminders: Bool, available: [String], in store: UserDefaults = defaults) {
+        if reminders {
+            var ids = Set(available.filter { selected($0, reminders: true, in: store) })
+            if enabled { ids.insert(id) } else { ids.remove(id) }
+            store.set(Array(ids), forKey: "reminderLists")
+        } else {
+            migrateCalendars(available: available, in: store)
+            var hidden = Set(store.stringArray(forKey: "hiddenCalendars") ?? [])
+            if enabled { hidden.remove(id) } else { hidden.insert(id) }
+            store.set(Array(hidden), forKey: "hiddenCalendars")
+        }
+        store.set(0, forKey: "page")
+    }
+    /// Converts the original explicit calendar selection into exclusions.
+    static func migrateCalendars(available: [String], in store: UserDefaults = defaults) {
+        guard store.stringArray(forKey: "hiddenCalendars") == nil, let legacy = store.stringArray(forKey: "calendars") else { return }
+        store.set(available.filter { !legacy.contains($0) }, forKey: "hiddenCalendars")
+        store.removeObject(forKey: "calendars")
+    }
+}
+
+/// Carries EventKit objects, which aren't Sendable, out of EventKit's fetch callback.
+struct EventKitResult<Value>: @unchecked Sendable { let value: Value }
+
+extension EKEventStore {
+    /// Runs in the caller's isolation, so a main-actor store never crosses actors.
+    nonisolated(nonsending) func reminders(matching predicate: NSPredicate) async -> [EKReminder] {
+        let result: EventKitResult<[EKReminder]> = await withCheckedContinuation { continuation in
+            fetchReminders(matching: predicate) { continuation.resume(returning: EventKitResult(value: $0 ?? [])) }
+        }
+        return result.value
     }
 }
 
@@ -53,11 +102,12 @@ enum AgendaQuery {
             return a.id < b.id
         }
     }
-    static func load(store: EKEventStore, now: Date = .now, days: Int? = nil) async -> [AgendaItem] {
+    /// `calendarIDs` and `listIDs` override the app's source selections, e.g. for a configured widget.
+    nonisolated(nonsending) static func load(store: EKEventStore, now: Date = .now, days: Int? = nil, calendarIDs: Set<String>? = nil, listIDs: Set<String>? = nil) async -> [AgendaItem] {
         let range = window(now: now, days: days ?? Preferences.days)
         var items: [AgendaItem] = []
         if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
-            let calendars = store.calendars(for: .event).filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
+            let calendars = store.calendars(for: .event).filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
             if !calendars.isEmpty {
                 items += store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars)).map {
                     AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate)
@@ -65,11 +115,9 @@ enum AgendaQuery {
             }
         }
         if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
-            let calendars = store.calendars(for: .reminder).filter { Preferences.selected($0.calendarIdentifier, reminders: true) }
+            let calendars = store.calendars(for: .reminder).filter { listIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: true) }
             if !calendars.isEmpty {
-                let reminders: [EKReminder] = await withCheckedContinuation { continuation in
-                    store.fetchReminders(matching: store.predicateForReminders(in: calendars)) { continuation.resume(returning: $0 ?? []) }
-                }
+                let reminders = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: calendars))
                 items += reminders.compactMap { reminder in
                     guard !reminder.isCompleted, let components = reminder.dueDateComponents,
                           let due = (components.calendar ?? Calendar.current).date(from: components),
@@ -105,6 +153,8 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
     func text(_ scheme: ColorScheme) -> Color { (scheme == .dark || self == .black) ? .white : .black }
     func secondary(_ scheme: ColorScheme) -> Color { text(scheme).opacity(0.6) }
     func accent(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.darkAccent : colors.accent) }
+    /// Text drawn on top of `accent`.
+    func onAccent(_ scheme: ColorScheme) -> Color { (scheme == .dark || self == .black) ? .black : .white }
     private func color(_ hex: UInt) -> Color {
         Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
     }
@@ -122,6 +172,17 @@ enum WidgetAgendaLayout {
         }.sorted {
             if $0.allDay != $1.allDay { return $0.allDay }
             return $0.date < $1.date
+        }
+    }
+    /// Lists each day's items in order, repeating multi-day events under every day they cover.
+    static func byDay(_ items: [AgendaItem], start: Date, days: Int, calendar: Calendar = .current) -> [AgendaItem] {
+        let first = calendar.startOfDay(for: start)
+        return (0..<days).flatMap { offset -> [AgendaItem] in
+            let day = calendar.date(byAdding: .day, value: offset, to: first)!
+            return self.items(on: day, from: items, calendar: calendar).map { item in
+                guard item.date < day else { return item }
+                return AgendaItem(id: "\(item.sourceID ?? item.id)@\(day.timeIntervalSince1970)", title: item.title, date: day, allDay: item.allDay, reminder: item.reminder, source: item.source, color: item.color, notes: item.notes, eventIdentifier: item.eventIdentifier, eventStartDate: item.eventStartDate, endDate: item.endDate, sourceID: item.sourceID ?? item.id)
+            }
         }
     }
     static func pages(items: [AgendaItem], height: CGFloat, headings: Bool, calendar: Calendar = .current) -> [[AgendaItem]] {
@@ -160,6 +221,11 @@ enum WidgetDashboardData {
     static func nextEvents(_ items: [AgendaItem], now: Date) -> [AgendaItem] {
         items.filter { !$0.reminder && !$0.allDay && ($0.endDate ?? $0.date) > now }
             .sorted { ($0.eventStartDate ?? $0.date) < ($1.eventStartDate ?? $1.date) }
+    }
+    /// "3:00 PM" for later today, otherwise weekday and time.
+    static func laterLabel(_ item: AgendaItem, now: Date, calendar: Calendar = .current) -> String {
+        let start = item.eventStartDate ?? item.date
+        return calendar.isDate(start, inSameDayAs: now) ? start.formatted(date: .omitted, time: .shortened) : start.formatted(.dateTime.weekday(.abbreviated).hour().minute())
     }
     static func sortedTasks(_ tasks: [WidgetTask]) -> [WidgetTask] {
         tasks.sorted {
