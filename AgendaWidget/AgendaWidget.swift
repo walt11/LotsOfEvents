@@ -139,13 +139,13 @@ struct AgendaWidgetView: View {
                 .frame(height: 14)
         }
         .overlay(alignment: .topTrailing) {
-            Link(destination: URL(string: "lotsofevents://new")!) {
+            Link(destination: URL(string: "lotsofevents://quick-add")!) {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 24, height: 15)
             }
             .foregroundStyle(entry.theme.secondary(colorScheme))
-            .accessibilityLabel("Create a new event")
+            .accessibilityLabel("Quick add")
         }
     }
     private func dayLabel(_ date: Date) -> String {
@@ -176,5 +176,7 @@ struct LotsOfEventsWidgets: WidgetBundle {
         FiveDayStripWidget()
         MonthAgendaWidget()
         FocusListWidget()
+        QuickAddEventControl()
+        QuickAddReminderControl()
     }
 }

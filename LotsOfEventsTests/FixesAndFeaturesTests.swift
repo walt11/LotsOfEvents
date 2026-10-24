@@ -126,3 +126,32 @@ final class FixesAndFeaturesTests: XCTestCase {
         XCTAssertEqual(open.first.flatMap(ReminderDates.due), Calendar.current.date(byAdding: .day, value: 1, to: today))
     }
 }
+
+final class QuickAddShortcutTests: XCTestCase {
+    func testWeekendShortcutMeansTodayOnWeekendsOtherwiseSaturday() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let saturday = calendar.date(from: DateComponents(year: 2026, month: 10, day: 24, hour: 10))!
+        let tuesday = calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 10))!
+        XCTAssertEqual(QuickAddShortcuts.days(now: saturday, calendar: calendar)[2].phrase, "today")
+        XCTAssertEqual(QuickAddShortcuts.days(now: tuesday, calendar: calendar)[2].phrase, "Saturday")
+    }
+    func testShortcutPhrasesParseAsDates() {
+        let parsed = QuickAddParser.parse("Lunch tomorrow 12pm")
+        XCTAssertEqual(parsed.title, "Lunch")
+        XCTAssertFalse(parsed.allDay)
+        XCTAssertEqual(parsed.date.map { Calendar.current.component(.hour, from: $0) }, 12)
+        XCTAssertTrue(QuickAddParser.parse("Plan trip next Monday").allDay)
+    }
+    func testAgendaDetailPrefersLocationThenDuration() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var event = AgendaItem(id: "e", title: "Sync", date: start, allDay: false, reminder: false, source: "Work", color: .blue)
+        event.eventStartDate = start
+        event.endDate = start.addingTimeInterval(5400)
+        XCTAssertEqual(event.agendaDetail, Duration.seconds(5400).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))
+        event.location = "Room 4"
+        XCTAssertEqual(event.agendaDetail, "Room 4")
+        let reminder = AgendaItem(id: "r", title: "Call", date: start, allDay: true, reminder: true, source: "Personal", color: .blue)
+        XCTAssertEqual(reminder.agendaDetail, "Personal")
+    }
+}

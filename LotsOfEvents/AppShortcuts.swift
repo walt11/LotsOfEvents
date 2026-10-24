@@ -53,6 +53,7 @@ struct AddReminderIntent: AppIntent {
 struct LotsOfEventsShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: NextEventIntent(), phrases: ["What's next in \(.applicationName)", "What's my next event in \(.applicationName)"], shortTitle: "What's Next", systemImageName: "calendar")
+        AppShortcut(intent: QuickAddIntent(), phrases: ["Quick add in \(.applicationName)", "Add to \(.applicationName)"], shortTitle: "Quick Add", systemImageName: "text.badge.plus")
         AppShortcut(intent: AddReminderIntent(), phrases: ["Add a reminder in \(.applicationName)"], shortTitle: "Add Reminder", systemImageName: "checklist")
     }
 }

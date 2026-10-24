@@ -11,7 +11,6 @@ struct LotsOfEventsApp: App {
 @MainActor
 final class AgendaModel: ObservableObject {
     let store = EKEventStore()
-    @Published var items: [AgendaItem] = []
     @Published var calendars: [EKCalendar] = []
     @Published var lists: [EKCalendar] = []
     @Published var error: String?
@@ -24,6 +23,10 @@ final class AgendaModel: ObservableObject {
     @Published var completedLoaded = false
     @Published var undo: UndoAction?
     @Published var generation = 0
+    @Published var agendaReturnToToday = 0
+    @Published var calendarReturnToToday = 0
+    var calendarCreationDate = Date.now.roundedUpToHalfHour()
+    var activeReminderList: String?
     @Published var sheet: AppSheet?
     private var revision = 0
     private var pendingRefresh: Task<Void, Never>?
@@ -43,7 +46,6 @@ final class AgendaModel: ObservableObject {
         calendars = EKEventStore.authorizationStatus(for: .event) == .fullAccess ? store.calendars(for: .event) : []
         lists = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : []
         if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
-        let result = await AgendaQuery.load(store: store)
         let wantsCompleted = includeCompleted
         var fetched: [EKReminder] = []
         if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
@@ -53,7 +55,6 @@ final class AgendaModel: ObservableObject {
             }
         }
         guard current == revision else { return }
-        items = result
         reminders = fetched
         completedLoaded = wantsCompleted
         generation += 1
@@ -80,25 +81,13 @@ struct UndoAction: Identifiable {
 }
 
 struct AgendaView: View {
+    @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    /// Each day's rows, with multi-day events repeated under every day they cover.
-    private var days: [(day: Date, items: [AgendaItem])] {
-        let rows = WidgetAgendaLayout.byDay(model.items, start: .now, days: Preferences.days)
-        return Dictionary(grouping: rows) { Calendar.current.startOfDay(for: $0.date) }
-            .sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
-    }
+    @StateObject private var agenda = ContinuousAgenda()
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
-                            .font(.caption.weight(.semibold)).foregroundStyle(.teal)
-                        Text("A little room for what’s next.").font(.title2.weight(.semibold))
-                        Text("Today + the next \(Preferences.days - 1) days · calendars & reminders")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }.padding(.vertical, 8)
-                }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
                     Section {
                         Label("Bring your calendars together", systemImage: "calendar.badge.checkmark").font(.headline)
@@ -106,121 +95,84 @@ struct AgendaView: View {
                         Button("Connect calendars") { Task { await model.request(.event) } }
                     }
                 }
-                if model.loading && model.items.isEmpty { ProgressView("Loading your agenda…") }
-                else if model.items.isEmpty {
-                    ContentUnavailableView("A clear horizon", systemImage: "sun.horizon", description: Text("No items in this date range. Choose calendars and reminder lists, or add an event."))
-                }
-                ForEach(days, id: \.day) { date, items in
-                    Section {
-                        ForEach(items) { item in
-                            Button { model.open(item) } label: {
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 3).fill(item.color).frame(width: 4)
-                                Image(systemName: item.reminder ? "circle.dashed" : "calendar").foregroundStyle(item.color)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(item.title).font(.body.weight(.medium))
-                                    Text(item.source).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text(item.timeLabel).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                            }.padding(.vertical, 5)
-                            }.buttonStyle(.plain)
-                        }
-                    } header: {
-                        Text(Calendar.current.isDateInToday(date) ? "Today" : Calendar.current.isDateInTomorrow(date) ? "Tomorrow" : date.formatted(.dateTime.weekday(.wide).month().day()))
-                    }
-                }
-            }
-            .navigationTitle("Upcoming")
-            .tint(.teal)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Sources", systemImage: "slider.horizontal.3") { model.sheet = .sources } }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Quick add", systemImage: "text.badge.plus") { model.sheet = .quickAdd }
-                    Button("New event", systemImage: "plus") { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
-                }
-            }
-            .refreshable { await model.refresh() }
-
-        }
-    }
-}
-
-struct SourcesView: View {
-    @ObservedObject var model: AgendaModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var days = Preferences.days
-    @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("widgetTheme", store: Preferences.defaults) private var themeID = AgendaTheme.selected.rawValue
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Looking ahead") {
-                    Stepper("\(days) days, including today", value: $days, in: 2...14)
-                        .onChange(of: days) { _, value in Preferences.days = value; Preferences.defaults.set(0, forKey: "page"); model.scheduleRefresh() }
-                }
-                Section {
-                    ForEach(AgendaTheme.allCases) { theme in
-                        Button {
-                            themeID = theme.rawValue
-                            WidgetCenter.shared.reloadAllTimelines()
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("TODAY").font(.system(size: 8, weight: .bold)).foregroundStyle(theme.accent(colorScheme))
-                                    HStack(spacing: 3) {
-                                        RoundedRectangle(cornerRadius: 1).fill(theme.accent(colorScheme)).frame(width: 3, height: 12)
-                                        RoundedRectangle(cornerRadius: 2).fill(theme.text(colorScheme).opacity(0.7)).frame(width: 28, height: 3)
-                                    }
-                                }
-                                .padding(8).frame(width: 64, height: 45)
-                                .background(theme.background(colorScheme), in: RoundedRectangle(cornerRadius: 9))
-                                Text(theme.title).foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: themeID == theme.rawValue ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(themeID == theme.rawValue ? theme.accent(colorScheme) : Color.secondary)
+                ForEach(ContinuousAgenda.sections(agenda.days, today: .now)) { section in
+                    switch section {
+                    case .day(let day):
+                        Section {
+                            if day.items.isEmpty {
+                                Text("Nothing scheduled").font(.caption).foregroundStyle(.secondary)
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             }
+                            ForEach(day.items) { item in itemRow(item) }
+                        } header: { Text(dayTitle(day.date)) }
+                            .id(Calendar.current.isDateInToday(day.date) ? "agenda-today" : day.date.description)
+                    case .empty(let start, let end):
+                        Section {
+                            Label(start == end ? "Nothing scheduled \(start.formatted(.dateTime.weekday(.wide).month().day()))" : "Nothing scheduled \((start..<end).formatted(.interval.month(.abbreviated).day()))", systemImage: "moon.zzz")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                         }
-                        .accessibilityLabel(theme.title)
-                        .accessibilityValue(themeID == theme.rawValue ? "Selected" : "Not selected")
                     }
-                } header: { Text("Widget theme") } footer: {
-                    Text("Seven background palettes with your original calendar colors. Black stays black in every appearance; the other themes adapt to light and dark. Your selection applies to all agenda widgets.")
                 }
-                Section("Calendars") {
-                    if model.calendars.isEmpty { Button("Allow calendar access") { Task { await model.request(.event) } } }
-                    ForEach(model.calendars, id: \.calendarIdentifier) { source in sourceToggle(source, reminders: false) }
+                if !agenda.days.isEmpty && (model.calendarAccess || model.reminderAccess) {
+                    // Loads the next 30 days when this row scrolls into view.
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                        .listRowBackground(Color.clear)
+                        .task(id: agenda.days.last?.id) { await agenda.loadMore(store: model.store) }
                 }
-                Section {
-                    if EKEventStore.authorizationStatus(for: .reminder) != .fullAccess {
-                        Button("Connect Apple Reminders") { Task { await model.request(.reminder) } }
-                    }
-                    ForEach(model.lists, id: \.calendarIdentifier) { source in sourceToggle(source, reminders: true) }
-                } header: { Text("Reminder lists") } footer: {
-                    Text("Select the lists to include. Only incomplete reminders due in the displayed date range appear. Undated and earlier overdue reminders are excluded.")
-                }
-                Section("Your Home Screen widget") {
-                    Text("Touch and hold your Home Screen, choose Edit → Add Widget, then search for LotsOfEvents. Use the arrows to page through your agenda and + to create an event.")
-                    Text("The widget uses these same selections. iOS controls when it refreshes.").foregroundStyle(.secondary)
-                }
-            }.navigationTitle("Your agenda").toolbar { Button("Done") { dismiss() } }.tint(.teal)
+            }
+            .task(id: model.generation) { await agenda.refresh(store: model.store) }
+            .listSectionSpacing(10)
+            .environment(\.defaultMinListRowHeight, 44)
+            .navigationTitle("Agenda")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Today") { withAnimation { proxy.scrollTo("agenda-today", anchor: .top) } } }
+            }
+            .tint(accent)
+            .refreshable { await model.refresh() }
+            .onChange(of: model.agendaReturnToToday) { _, _ in
+                withAnimation { proxy.scrollTo("agenda-today", anchor: .top) }
+                model.scheduleRefresh()
+            }
+            }
         }
     }
-    private func sourceToggle(_ source: EKCalendar, reminders: Bool) -> some View {
-        Toggle(isOn: Binding(get: { Preferences.selected(source.calendarIdentifier, reminders: reminders) }, set: {
-            Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: (reminders ? model.lists : model.calendars).map(\.calendarIdentifier))
-            model.objectWillChange.send()
-            model.scheduleRefresh()
-        })) {
-            HStack {
-                Circle().fill(Color(cgColor: source.cgColor)).frame(width: 9, height: 9)
-                VStack(alignment: .leading) { Text(source.title); Text(source.source.title).font(.caption).foregroundStyle(.secondary) }
+    private func dayTitle(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today · \(date.formatted(.dateTime.weekday(.wide).month().day()))" }
+        return calendar.isDateInTomorrow(date) ? "Tomorrow" : date.formatted(.dateTime.weekday(.wide).month().day())
+    }
+    private func itemRow(_ item: AgendaItem) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 3).fill(item.color).frame(width: 4)
+            if item.reminder {
+                Button { if let reminder = model.reminder(withID: item.id) { model.toggle(reminder) } } label: {
+                    Image(systemName: "circle").font(.title3).foregroundStyle(item.color).frame(width: 28, height: 36)
+                }.buttonStyle(.borderless).accessibilityLabel("Complete \(item.title)")
             }
+            Button { model.open(item) } label: {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(.subheadline.weight(.medium))
+                        if let detail = item.agendaDetail {
+                            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Text(item.timeLabel).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
+        }
+        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
+        .swipeActions(edge: .trailing) {
+            if item.reminder, let reminder = model.reminder(withID: item.id) { SnoozeButtons(model: model, reminder: reminder) }
         }
     }
 }
 
 struct EventEditor: UIViewControllerRepresentable {
+    @AppAccent private var accent
     let store: EKEventStore
     var startDate: Date = .now
     @Environment(\.dismiss) private var dismiss
@@ -228,6 +180,7 @@ struct EventEditor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> EKEventEditViewController {
         let editor = EKEventEditViewController()
         editor.eventStore = store
+        editor.view.tintColor = UIColor(accent)
         let event = EKEvent(eventStore: store)
         event.startDate = startDate
         event.endDate = startDate.addingTimeInterval(3600)

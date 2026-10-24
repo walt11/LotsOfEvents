@@ -70,3 +70,15 @@ These five layouts support the small widget size. Selections and page positions 
 ## Widget options and Lock Screen
 
 Every widget can be edited (touch and hold → Edit Widget) to pick its own theme and limit it to specific calendars and reminder lists; leaving Calendars and Lists empty follows the app’s Sources screen. Next Up is also available as Lock Screen inline, circular, and rectangular widgets. Day tabs and highlights use the selected theme’s accent color.
+
+## Quick Add without opening the app
+
+Add **Add Event** or **Add Reminder** from Control Center (or as a Lock Screen control, or on the Action button). Tapping it shows a system prompt at the top of the screen; type a phrase like “Lunch Friday 1pm” and it is saved without opening the app. The same action is available to Siri and Shortcuts as “Quick add in LotsOfEvents”. A widget’s **+** opens the app directly into Quick Add with the keyboard up, since Home Screen widgets can’t show text input.
+
+## Agenda and settings
+
+The app opens to the Agenda tab, combining selected calendars and dated reminders into day sections. Tap the selected Agenda tab again to return to today. Calendar and Reminders retain their full editors and search. Settings groups calendar and reminder selections by account, shows selection counts, and provides a dedicated theme gallery with widget previews and a widget setup guide. Existing widget configurations, Siri actions, and quick-add controls are retained.
+
+## Layout
+
+On iPhone, the bottom bar holds Agenda, Calendar, Reminders, and Settings around a center **+**: tap it for Quick Add, or touch and hold for the full event or reminder editor. Quick Add offers one-tap day and time shortcuts and lets you pick the calendar or list. On iPad, a sidebar replaces the bottom bar. Calendar's Week view is a seven-column timeline (tap a day header to open it, or an empty slot to add an event); the month grid shows colored bars for busy days. Agenda rows show an event's location or duration, and reminder rows can be completed or snoozed in place.

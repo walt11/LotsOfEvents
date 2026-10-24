@@ -31,8 +31,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Show your selected calendars in your agenda and widget, and create events.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dictate events and reminders into the Quick Add text box.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Show reminders from the lists you select in your agenda and widget.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn your spoken words into editable Quick Add text.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -51,11 +51,13 @@ enum CalendarDates {
 }
 
 struct CalendarHome: View {
+    @AppAccent private var accent
     @ObservedObject var model: AgendaModel
     @State private var date = Date.now
     @State private var mode = CalendarDisplay.month
     @State private var events: [EKEvent] = []
     @State private var search = ""
+    @State private var gridWidth: CGFloat = 0
     /// `search` after a short pause, so typing doesn't refilter on every keystroke.
     @State private var query = ""
     /// Events within a year of `searchAnchor`, fetched once per search rather than per keystroke.
@@ -95,20 +97,21 @@ struct CalendarHome: View {
                     }.listStyle(.insetGrouped)
                 } else {
                     if mode == .month { monthGrid }
-                    if mode == .day { daySchedule }
+                    if mode == .day || mode == .week { timeline(mode == .week ? days : [calendar.startOfDay(for: date)]) }
                     else { agendaList }
                 }
             }
+            // One background for the controls and the content below them.
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Calendar")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search, prompt: "Search titles, places, and notes")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Sources", systemImage: "slider.horizontal.3") { model.sheet = .sources } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button("Today") { date = .now }
-                    Button("New event", systemImage: "plus") { model.sheet = .newEvent(newEventDate) }
                 }
             }
+            .tint(accent)
             .onAppear(perform: reload)
             .onChange(of: date) { _, _ in
                 reload()
@@ -121,6 +124,7 @@ struct CalendarHome: View {
                 if !search.isEmpty && searchAnchor.map({ !calendar.isDate($0, inSameDayAs: date) }) ?? true { loadSearchPool() }
                 query = search
             }
+            .onChange(of: model.calendarReturnToToday) { _, _ in date = .now }
             .onChange(of: model.generation) { _, _ in
                 reload()
                 if query.isEmpty { searchAnchor = nil } else { loadSearchPool() }
@@ -168,15 +172,21 @@ struct CalendarHome: View {
                     Button { date = day } label: {
                         VStack(spacing: 3) {
                             Text(day.formatted(.dateTime.day())).font(.system(.body, design: .rounded, weight: selected ? .bold : .regular))
-                                .foregroundStyle(selected ? Color.white : calendar.isDateInToday(day) ? Color.teal : Color.primary)
-                            HStack(spacing: 2) {
-                                ForEach(Array(dayEvents.prefix(3).enumerated()), id: \.offset) { _, event in
-                                    Circle().fill(selected ? .white : Color(cgColor: event.calendar.cgColor)).frame(width: 4, height: 4)
+                                .foregroundStyle(selected ? _accent.contrastingText : calendar.isDateInToday(day) ? accent : Color.primary)
+                            // Up to two colored bars per day, then a count, so busy days stand out.
+                            VStack(spacing: 2) {
+                                ForEach(Array(dayEvents.prefix(2).enumerated()), id: \.offset) { _, event in
+                                    Capsule().fill(selected ? _accent.contrastingText : Color(cgColor: event.calendar.cgColor)).frame(height: 3).padding(.horizontal, 7)
                                 }
-                            }.frame(height: 4)
+                                if dayEvents.count > 2 {
+                                    Text("+\(dayEvents.count - 2)").font(.system(size: 8, weight: .semibold))
+                                        .foregroundStyle(selected ? _accent.contrastingText : .secondary)
+                                }
+                            }.frame(height: 20, alignment: .top)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 35)
-                        .background(selected ? Color.teal : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(selected ? accent : Color.clear, in: RoundedRectangle(cornerRadius: 9))
                         .opacity(calendar.isDate(day, equalTo: date, toGranularity: .month) ? 1 : 0.4)
                     }.buttonStyle(.plain)
                         .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(dayEvents.count) events")
@@ -209,90 +219,172 @@ struct CalendarHome: View {
         let parts = calendar.dateComponents([.hour, .minute], from: time)
         return (CGFloat(parts.hour ?? 0) + CGFloat(parts.minute ?? 0) / 60) * hourHeight
     }
-    private var daySchedule: some View {
-        let dayStart = calendar.startOfDay(for: date)
-        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
-        let dayEvents = eventsOn(date)
-        let allDay = dayEvents.filter(\.isAllDay)
-        let timed = dayEvents.filter { !$0.isAllDay }
+    /// One day's events prepared for the timeline.
+    private struct DayColumn {
+        let day: Date
+        let allDay: [EKEvent]
+        let timed: [EKEvent]
+        let spans: [DateInterval]
+        let layout: [(column: Int, count: Int)]
+    }
+    private func dayColumn(_ day: Date) -> DayColumn {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let events = eventsOn(day)
+        let timed = events.filter { !$0.isAllDay }
         // Short and zero-length events still take 15 minutes, so they stay readable and tappable.
         let spans = timed.map { event -> DateInterval in
-            let start = max(event.startDate, dayStart)
-            return DateInterval(start: start, end: max(start, min(max(event.endDate, start.addingTimeInterval(900)), dayEnd)))
+            let begin = max(event.startDate, start)
+            return DateInterval(start: begin, end: max(begin, min(max(event.endDate, begin.addingTimeInterval(900)), end)))
         }
-        let layout = CalendarDates.columns(spans)
+        return DayColumn(day: start, allDay: events.filter(\.isAllDay), timed: timed, spans: spans, layout: CalendarDates.columns(spans))
+    }
+    private func hourLabel(_ hour: Int) -> String {
+        (calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date) ?? date).formatted(.dateTime.hour())
+    }
+    private func addEvent(hour: Int, on day: Date) {
+        model.sheet = .newEvent(calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day)
+    }
+    /// The Day view (one column) and Week view (seven columns) share this hour grid.
+    private func timeline(_ days: [Date]) -> some View {
+        let columns = days.map(dayColumn)
+        let compact = columns.count > 1
+        let columnWidth = max(0, (gridWidth - gutter) / CGFloat(columns.count))
         return VStack(spacing: 0) {
-            if !allDay.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("ALL DAY").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(allDay, id: \.self) { eventRow($0).fixedSize(horizontal: false, vertical: true) }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal).padding(.vertical, 6)
+            if compact { weekHeader(columns) }
+            if columns.contains(where: { !$0.allDay.isEmpty }) {
+                if compact { weekAllDay(columns) }
+                else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("ALL DAY").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(columns[0].allDay, id: \.self) { eventRow($0).fixedSize(horizontal: false, vertical: true) }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal).padding(.vertical, 6)
+                }
                 Divider()
             }
             ScrollViewReader { proxy in
                 ScrollView {
                     ZStack(alignment: .topLeading) {
-                        VStack(spacing: 0) {
-                            ForEach(0..<24, id: \.self) { hour in
-                                let hourDate = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: dayStart) ?? dayStart
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text(hourDate.formatted(.dateTime.hour())).font(.caption2).foregroundStyle(.secondary)
-                                        .frame(width: gutter - 6, alignment: .trailing).offset(y: -7)
-                                    VStack(spacing: 0) { Divider(); Spacer(minLength: 0) }
-                                }
-                                .frame(height: hourHeight)
-                                .contentShape(Rectangle())
-                                .onTapGesture { model.sheet = .newEvent(hourDate) }
-                                .accessibilityElement()
-                                .accessibilityLabel("Add event at \(hourDate.formatted(date: .omitted, time: .shortened))")
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityAction { model.sheet = .newEvent(hourDate) }
-                                .id(hour)
+                        hourGrid(columns, columnWidth: columnWidth)
+                        if compact {
+                            ForEach(1..<columns.count, id: \.self) { index in
+                                Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 0.5, height: hourHeight * 24)
+                                    .offset(x: gutter + CGFloat(index) * columnWidth)
                             }
                         }
-                        GeometryReader { geometry in
-                            let width = geometry.size.width - gutter - 4
-                            ForEach(Array(timed.enumerated()), id: \.offset) { index, event in
-                                let top = hourOffset(spans[index].start, dayStart: dayStart)
-                                let columnWidth = width / CGFloat(layout[index].count)
-                                eventBlock(event)
-                                    .frame(width: max(0, columnWidth - 2), height: max(22, hourOffset(spans[index].end, dayStart: dayStart) - top - 2))
-                                    .offset(x: gutter + CGFloat(layout[index].column) * columnWidth, y: top + 1)
-                            }
+                        ForEach(Array(columns.enumerated()), id: \.offset) { index, column in
+                            eventLayer(column, x: gutter + CGFloat(index) * columnWidth, width: columnWidth, compact: compact)
                         }
-                        if calendar.isDateInToday(date) {
+                        if let today = columns.firstIndex(where: { calendar.isDateInToday($0.day) }) {
                             TimelineView(.periodic(from: .now, by: 60)) { context in
                                 HStack(spacing: 0) {
                                     Circle().fill(.red).frame(width: 8, height: 8)
                                     Rectangle().fill(.red).frame(height: 1.5)
                                 }
-                                .padding(.leading, gutter - 4)
-                                .offset(y: hourOffset(context.date, dayStart: dayStart) - 4)
+                                .frame(width: compact ? columnWidth + 4 : nil)
+                                .padding(.leading, gutter - 4 + CGFloat(today) * columnWidth)
+                                .offset(y: hourOffset(context.date, dayStart: columns[today].day) - 4)
                             }
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                         }
                     }
                     .frame(height: hourHeight * 24)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { gridWidth = $0 }
                     .padding(.top, 8).padding(.trailing, 8)
                 }
                 .onAppear {
-                    let hour = calendar.isDateInToday(date) ? calendar.component(.hour, from: .now) - 1 : 7
+                    let hour = columns.contains(where: { calendar.isDateInToday($0.day) }) ? calendar.component(.hour, from: .now) - 1 : 7
                     proxy.scrollTo(max(0, hour), anchor: .top)
                 }
                 .refreshable { await model.refresh() }
             }
         }
     }
-    private func eventBlock(_ event: EKEvent) -> some View {
+    private func hourGrid(_ columns: [DayColumn], columnWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            ForEach(0..<24, id: \.self) { hour in
+                HStack(alignment: .top, spacing: 6) {
+                    Text(hourLabel(hour)).font(.caption2).foregroundStyle(.secondary)
+                        .frame(width: gutter - 6, alignment: .trailing).offset(y: -7)
+                    VStack(spacing: 0) { Divider(); Spacer(minLength: 0) }
+                }
+                .frame(height: hourHeight)
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    // Tap an empty slot to add an event at that hour on that day.
+                    let index = columnWidth > 0 ? Int((location.x - gutter) / columnWidth) : 0
+                    addEvent(hour: hour, on: columns[min(columns.count - 1, max(0, index))].day)
+                }
+                .accessibilityElement()
+                .accessibilityLabel(hourLabel(hour))
+                .accessibilityActions {
+                    ForEach(columns, id: \.day) { column in
+                        Button(columns.count > 1 ? "Add event \(column.day.formatted(.dateTime.weekday(.wide))) at \(hourLabel(hour))" : "Add event at \(hourLabel(hour))") {
+                            addEvent(hour: hour, on: column.day)
+                        }
+                    }
+                }
+                .id(hour)
+            }
+        }
+    }
+    private func eventLayer(_ column: DayColumn, x: CGFloat, width: CGFloat, compact: Bool) -> some View {
+        ForEach(Array(column.timed.enumerated()), id: \.offset) { index, event in
+            let top = hourOffset(column.spans[index].start, dayStart: column.day)
+            let slot = width / CGFloat(column.layout[index].count)
+            eventBlock(event, compact: compact)
+                .frame(width: max(0, slot - 2), height: max(22, hourOffset(column.spans[index].end, dayStart: column.day) - top - 2))
+                .offset(x: x + CGFloat(column.layout[index].column) * slot + 1, y: top + 1)
+        }
+    }
+    private func weekHeader(_ columns: [DayColumn]) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: gutter, height: 1)
+            ForEach(columns, id: \.day) { column in
+                let today = calendar.isDateInToday(column.day)
+                Button { date = column.day; mode = .day } label: {
+                    VStack(spacing: 2) {
+                        Text(column.day.formatted(.dateTime.weekday(.narrow))).font(.caption2).foregroundStyle(.secondary)
+                        Text(column.day.formatted(.dateTime.day())).font(.subheadline.weight(today ? .bold : .regular))
+                            .foregroundStyle(today ? _accent.contrastingText : .primary)
+                            .frame(width: 28, height: 28).background(today ? accent : .clear, in: Circle())
+                    }.frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(column.day.formatted(date: .complete, time: .omitted))
+                .accessibilityHint("Opens this day")
+            }
+        }.padding(.trailing, 8).padding(.vertical, 6)
+    }
+    private func weekAllDay(_ columns: [DayColumn]) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            Text("all-day").font(.system(size: 9)).foregroundStyle(.secondary).frame(width: gutter - 6, alignment: .trailing).padding(.trailing, 6)
+            ForEach(columns, id: \.day) { column in
+                VStack(spacing: 2) {
+                    ForEach(column.allDay.prefix(2), id: \.self) { event in
+                        Button { model.sheet = .event(event) } label: {
+                            Text(event.title ?? "Untitled event").font(.system(size: 9, weight: .medium)).lineLimit(1)
+                                .padding(.horizontal, 3).frame(maxWidth: .infinity, alignment: .leading).frame(height: 16)
+                                .background(Color(cgColor: event.calendar.cgColor).opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
+                        }.buttonStyle(.plain)
+                    }
+                    if column.allDay.count > 2 { Text("+\(column.allDay.count - 2)").font(.system(size: 9)).foregroundStyle(.secondary) }
+                }.frame(maxWidth: .infinity).padding(.horizontal, 1)
+            }
+        }.padding(.trailing, 8).padding(.vertical, 4)
+    }
+    private func eventBlock(_ event: EKEvent, compact: Bool = false) -> some View {
         let color = Color(cgColor: event.calendar.cgColor)
         return Button { model.sheet = .event(event) } label: {
             VStack(alignment: .leading, spacing: 1) {
-                Text(event.title ?? "Untitled event").font(.caption.weight(.semibold)).lineLimit(2)
-                Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(event.title ?? "Untitled event").font(compact ? .system(size: 10, weight: .semibold) : .caption.weight(.semibold)).lineLimit(compact ? 3 : 2)
+                if !compact {
+                    Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
-            .padding(.leading, 8).padding(.trailing, 4).padding(.vertical, 3)
+            .padding(.leading, compact ? 5 : 8).padding(.trailing, compact ? 2 : 4).padding(.vertical, 3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(color.opacity(0.2))
             .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
@@ -326,6 +418,7 @@ struct CalendarHome: View {
         date = calendar.date(byAdding: component, value: direction * amount, to: date)!
     }
     private func reload() {
+        model.calendarCreationDate = newEventDate
         events = model.events(in: DateInterval(start: days.first!, end: calendar.date(byAdding: .day, value: 1, to: days.last!)!))
     }
     private func loadSearchPool() {

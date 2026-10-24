@@ -264,7 +264,7 @@ struct DashboardView: View {
         HStack(spacing: 2) {
             Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(secondary).lineLimit(1)
             Spacer(minLength: 0)
-            Link(destination: URL(string: addReminder ? "lotsofevents://new-reminder" : "lotsofevents://new")!) {
+            Link(destination: URL(string: addReminder ? "lotsofevents://quick-add?type=reminder" : "lotsofevents://quick-add")!) {
                 Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 22, height: 18)
             }.accessibilityLabel(addReminder ? "New reminder" : "New event")
         }.frame(height: 18)

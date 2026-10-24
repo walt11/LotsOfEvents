@@ -15,6 +15,16 @@ struct AgendaItem: Identifiable {
     var endDate: Date? = nil
     /// The original item's ID when this row repeats a multi-day event on a later day.
     var sourceID: String? = nil
+    var location: String? = nil
+    /// The Agenda's second line: the list for reminders, otherwise where or how long. The color bar already identifies the calendar.
+    var agendaDetail: String? {
+        if reminder { return source }
+        if let location, !location.isEmpty { return location }
+        guard !allDay, !continuation, let endDate else { return nil }
+        let seconds = endDate.timeIntervalSince(eventStartDate ?? date)
+        guard seconds >= 60 else { return nil }
+        return Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+    }
     /// True when this row shows an event that began before the row's day.
     var continuation: Bool { sourceID != nil || (eventStartDate.map { $0 < date } ?? false) }
     private var continuationLabel: String {
@@ -110,7 +120,7 @@ enum AgendaQuery {
             let calendars = store.calendars(for: .event).filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
             if !calendars.isEmpty {
                 items += store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars)).map {
-                    AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate)
+                    AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate, location: $0.location)
                 }
             }
         }
@@ -181,7 +191,7 @@ enum WidgetAgendaLayout {
             let day = calendar.date(byAdding: .day, value: offset, to: first)!
             return self.items(on: day, from: items, calendar: calendar).map { item in
                 guard item.date < day else { return item }
-                return AgendaItem(id: "\(item.sourceID ?? item.id)@\(day.timeIntervalSince1970)", title: item.title, date: day, allDay: item.allDay, reminder: item.reminder, source: item.source, color: item.color, notes: item.notes, eventIdentifier: item.eventIdentifier, eventStartDate: item.eventStartDate, endDate: item.endDate, sourceID: item.sourceID ?? item.id)
+                return AgendaItem(id: "\(item.sourceID ?? item.id)@\(day.timeIntervalSince1970)", title: item.title, date: day, allDay: item.allDay, reminder: item.reminder, source: item.source, color: item.color, notes: item.notes, eventIdentifier: item.eventIdentifier, eventStartDate: item.eventStartDate, endDate: item.endDate, sourceID: item.sourceID ?? item.id, location: item.location)
             }
         }
     }

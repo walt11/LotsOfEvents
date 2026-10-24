@@ -27,6 +27,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.walt.LotsOfEvents
         INFOPLIST_KEY_CFBundleDisplayName: LotsOfEvents
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: LotsOfEvents/Info.plist
       properties:
@@ -35,6 +36,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSCalendarsFullAccessUsageDescription: Show your selected calendars in your agenda and widget, and create events.
         NSRemindersFullAccessUsageDescription: Show reminders from the lists you select in your agenda and widget.
+        NSMicrophoneUsageDescription: Dictate events and reminders into the Quick Add text box.
+        NSSpeechRecognitionUsageDescription: Turn your spoken words into editable Quick Add text.
         CFBundleURLTypes:
           - CFBundleURLSchemes: [lotsofevents]
         UIApplicationSceneManifest:

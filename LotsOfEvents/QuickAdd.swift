@@ -1,44 +1,24 @@
 import SwiftUI
 import EventKit
 
-struct QuickAddParse: Equatable {
-    var title: String
-    var date: Date?
-    var duration: TimeInterval?
-    /// True when the text named a day but no time.
-    var allDay = false
-}
-
-/// Pulls a date or time out of phrases such as "Lunch with Sam Friday 1pm".
-enum QuickAddParser {
-    private static let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-    private static let timeWords = try! NSRegularExpression(pattern: #"\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)|\d{1,2}:\d{2}|\b(noon|midnight|morning|afternoon|evening|tonight)\b"#, options: .caseInsensitive)
-    static func parse(_ text: String, calendar: Calendar = .current) -> QuickAddParse {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let all = NSRange(trimmed.startIndex..., in: trimmed)
-        guard let match = detector.firstMatch(in: trimmed, range: all), let date = match.date, let range = Range(match.range, in: trimmed) else {
-            return QuickAddParse(title: trimmed)
-        }
-        let phrase = String(trimmed[range])
-        // NSDataDetector doesn't report whether a time was given, so look for one in the matched words.
-        let timed = timeWords.firstMatch(in: phrase, range: NSRange(phrase.startIndex..., in: phrase)) != nil
-        var title = trimmed.replacingCharacters(in: range, with: " ")
-            .components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
-        for suffix in [" at", " on", " by", " due", " from"] where title.lowercased().hasSuffix(suffix) {
-            title = String(title.dropLast(suffix.count))
-        }
-        return QuickAddParse(title: title, date: timed ? date : calendar.startOfDay(for: date), duration: match.duration > 0 ? match.duration : nil, allDay: !timed)
-    }
-}
-
 struct QuickAddView: View {
+    @AppAccent private var accent
     @ObservedObject var model: AgendaModel
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var reminder = false
+    @StateObject private var dictation = QuickAddDictation()
+    @State private var dictationPrefix = ""
+    @Environment(\.scenePhase) private var phase
+    @State var reminder = false
     @State private var error: String?
+    @State private var dayPhrase: String?
+    @State private var timePhrase: String?
+    /// The chosen calendar or list; empty means the account default.
+    @State private var targetID = ""
     @FocusState private var focused: Bool
-    private var parsed: QuickAddParse { QuickAddParser.parse(text) }
+    private var parsed: QuickAddParse { QuickAddParser.parse([text, dayPhrase, timePhrase].compactMap { $0 }.joined(separator: " ")) }
+    private var targets: [EKCalendar] { (reminder ? model.lists : model.calendars).filter(\.allowsContentModifications) }
+    private var defaultTargetName: String { (reminder ? model.store.defaultCalendarForNewReminders()?.title : model.store.defaultCalendarForNewEvents?.title) ?? "None" }
     private var canSave: Bool { !parsed.title.isEmpty && (reminder ? model.reminderAccess : model.calendarAccess) }
     var body: some View {
         NavigationStack {
@@ -46,16 +26,42 @@ struct QuickAddView: View {
                 Section {
                     TextField(reminder ? "Call the pharmacy tomorrow 10am" : "Lunch with Sam Friday 1pm", text: $text)
                         .focused($focused).submitLabel(.done).onSubmit(save)
+                        .disabled(dictation.active)
+                    Button {
+                        if dictation.active { dictation.stop() }
+                        else {
+                            focused = false
+                            dictationPrefix = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task { await dictation.start() }
+                        }
+                    } label: {
+                        Label(dictation.active ? (dictation.listening ? "Listening… Tap to stop" : "Cancel dictation") : "Dictate", systemImage: dictation.active ? "stop.circle.fill" : "mic.fill")
+                            .foregroundStyle(dictation.active ? Color.red : accent)
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(QuickAddShortcuts.days(), id: \.label) { chip in
+                                shortcut(chip.label, selected: dayPhrase == chip.phrase) { dayPhrase = dayPhrase == chip.phrase ? nil : chip.phrase }
+                            }
+                            Divider().frame(height: 20)
+                            ForEach(QuickAddShortcuts.times, id: \.label) { chip in
+                                shortcut(chip.label, selected: timePhrase == chip.phrase) { timePhrase = timePhrase == chip.phrase ? nil : chip.phrase }
+                            }
+                        }
+                    }.scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     Picker("Add as", selection: $reminder) {
                         Text("Event").tag(false)
                         Text("Reminder").tag(true)
                     }.pickerStyle(.segmented)
-                } footer: { Text("Type a title with a day or time, like “tomorrow 3pm” or “next Tuesday”.") }
+                } footer: { Text("Type or dictate a title with a day or time, or tap a shortcut.") }
                 if !parsed.title.isEmpty {
                     Section("Preview") {
                         LabeledContent("Title", value: parsed.title)
                         LabeledContent(reminder ? "Due" : "Starts", value: whenText)
-                        LabeledContent(reminder ? "List" : "Calendar", value: (reminder ? model.store.defaultCalendarForNewReminders()?.title : model.store.defaultCalendarForNewEvents?.title) ?? "None")
+                        Picker(reminder ? "List" : "Calendar", selection: $targetID) {
+                            Text("Default (\(defaultTargetName))").tag("")
+                            ForEach(targets, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
+                        }
                     }
                 }
                 if reminder ? !model.reminderAccess : !model.calendarAccess {
@@ -69,16 +75,35 @@ struct QuickAddView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Add", action: save).fontWeight(.semibold).disabled(!canSave) }
             }
             .alert("Unable to add", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK", role: .cancel) {} } message: { Text(error ?? "") }
-            .task {
-                // Focusing during the sheet's presentation animation is ignored, so wait for it to settle.
-                try? await Task.sleep(for: .milliseconds(450))
-                focused = true
-            }
+        }
+        .onChange(of: dictation.transcript) { _, words in
+            guard !words.isEmpty else { return }
+            text = dictationPrefix.isEmpty ? words : dictationPrefix + " " + words
+        }
+        .onChange(of: dictation.error) { _, message in if let message { error = message } }
+        .onChange(of: reminder) { _, _ in targetID = "" }
+        .onChange(of: phase) { _, value in if value == .background { dictation.stop() } }
+        .onDisappear { dictation.stop() }
+        .task {
+            // Focusing during the sheet's presentation animation is ignored, so wait for it to settle.
+            try? await Task.sleep(for: .milliseconds(450))
+            focused = true
         }
         .presentationDetents([.medium, .large])
-        .tint(.teal)
+        .presentationDragIndicator(.hidden)
+        .presentationContentInteraction(.scrolls)
+        .tint(accent)
     }
-    private var eventStart: Date { parsed.date ?? Date.now.roundedUpToHalfHour() }
+    private func shortcut(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label).font(.footnote.weight(.medium)).padding(.horizontal, 11).frame(minHeight: 30)
+                .foregroundStyle(selected ? _accent.contrastingText : .primary)
+                .background(selected ? accent : Color(uiColor: .tertiarySystemFill), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+    private var eventStart: Date { QuickAddSaver.eventStart(parsed) }
     private var whenText: String {
         if reminder && parsed.date == nil { return "No date" }
         let date = reminder ? parsed.date! : eventStart
@@ -86,27 +111,9 @@ struct QuickAddView: View {
     }
     private func save() {
         guard canSave else { return }
+        dictation.stop()
         do {
-            if reminder {
-                guard let list = model.store.defaultCalendarForNewReminders() else { error = "Choose a default list in the Reminders app."; return }
-                let item = EKReminder(eventStore: model.store)
-                item.title = parsed.title
-                item.calendar = list
-                if let due = parsed.date {
-                    item.dueDateComponents = ReminderDates.components(due, timed: !parsed.allDay)
-                    if !parsed.allDay { item.addAlarm(EKAlarm(absoluteDate: due)) }
-                }
-                try model.store.save(item, commit: true)
-            } else {
-                guard let calendar = model.store.defaultCalendarForNewEvents else { error = "Choose a default calendar in Settings → Calendar."; return }
-                let event = EKEvent(eventStore: model.store)
-                event.title = parsed.title
-                event.calendar = calendar
-                event.isAllDay = parsed.allDay
-                event.startDate = eventStart
-                event.endDate = eventStart.addingTimeInterval(parsed.allDay ? 0 : parsed.duration ?? 3600)
-                try model.store.save(event, span: .thisEvent, commit: true)
-            }
+            try QuickAddSaver.save(parsed, as: reminder ? .reminder : .event, in: model.store, calendarID: targetID.isEmpty ? nil : targetID)
             model.scheduleRefresh()
             dismiss()
         } catch { self.error = error.localizedDescription }

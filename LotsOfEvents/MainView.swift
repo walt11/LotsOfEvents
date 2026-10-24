@@ -4,7 +4,7 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case sources, newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd
+    case sources, newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool)
     var id: String {
         switch self {
         case .sources: return "sources"
@@ -17,16 +17,17 @@ enum AppSheet: Identifiable {
 }
 
 struct MainView: View {
+    @AppAccent private var accent
     @StateObject private var model = AgendaModel()
     @Environment(\.scenePhase) private var phase
     @State private var tab = 0
+    @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
-        TabView(selection: $tab) {
-            CalendarHome(model: model).tabItem { Label("Calendar", systemImage: "calendar") }.tag(0)
-            AgendaView(model: model).tabItem { Label("Upcoming", systemImage: "list.bullet.rectangle") }.tag(1)
-            RemindersHome(model: model).tabItem { Label("Reminders", systemImage: "checklist") }.tag(2)
+        Group {
+            if sizeClass == .regular { sidebarLayout } else { phoneLayout }
         }
-        .tint(.teal)
+        .background(Color(uiColor: .systemGroupedBackground))
+        .tint(accent)
         .task { await model.refresh() }
         .onChange(of: phase) { _, phase in
             if phase == .active { model.scheduleRefresh() }
@@ -35,7 +36,10 @@ struct MainView: View {
         .onOpenURL { url in
             guard url.scheme == "lotsofevents" else { return }
             if url.host == "new" { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
-            else if url.host == "quick-add" { tab = 1; model.sheet = .quickAdd }
+            else if url.host == "quick-add" {
+                // The widget's + opens straight into Quick Add; `?type=reminder` starts in reminder mode.
+                model.sheet = .quickAdd(reminder: url.query?.contains("type=reminder") == true)
+            }
             else if url.host == "reminders" { tab = 2 }
             else if url.host == "new-reminder" {
                 tab = 2
@@ -44,7 +48,7 @@ struct MainView: View {
                     if model.reminderAccess { model.sheet = .reminder(nil, nil) }
                 }
             }
-            else { tab = 1 }
+            else { tab = 0 }
         }
         .sheet(item: $model.sheet, onDismiss: { model.scheduleRefresh() }) { sheet in
             switch sheet {
@@ -52,17 +56,19 @@ struct MainView: View {
             case .newEvent(let date): EventEditor(store: model.store, startDate: date)
             case .event(let event): EventDetails(event: event)
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
-            case .quickAdd: QuickAddView(model: model)
+            case .quickAdd(let reminder): QuickAddView(model: model, reminder: reminder)
             }
         }
         .overlay(alignment: .bottom) {
             if let undo = model.undo {
                 UndoToast(undo: undo) { model.undo = nil }
-                    .padding(.bottom, 60)
+                    .padding(.bottom, 90)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.snappy, value: model.undo?.id)
+        // A light confirmation whenever a reminder is completed, reopened, snoozed, or deleted.
+        .sensoryFeedback(.success, trigger: model.undo?.id) { _, new in new != nil }
         .alert("Unable to complete action", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil; model.errorOffersSettings = false } })) {
             Button("OK", role: .cancel) {}
             if model.errorOffersSettings {
@@ -72,6 +78,94 @@ struct MainView: View {
             }
         } message: { Text(model.error ?? "") }
     }
+    private static let sections: [(title: String, symbol: String)] = [("Agenda", "list.bullet.rectangle"), ("Calendar", "calendar"), ("Reminders", "checklist"), ("Settings", "gearshape")]
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            AgendaView(model: model).toolbar(.hidden, for: .tabBar).tag(0)
+            CalendarHome(model: model).toolbar(.hidden, for: .tabBar).tag(1)
+            RemindersHome(model: model).toolbar(.hidden, for: .tabBar).tag(2)
+            SourcesView(model: model, embedded: true).toolbar(.hidden, for: .tabBar).tag(3)
+        }
+    }
+    private var phoneLayout: some View {
+        VStack(spacing: 0) {
+            tabs
+            HStack(spacing: 0) {
+                bottomTab(index: 0)
+                bottomTab(index: 1)
+                addButton.frame(maxWidth: .infinity)
+                bottomTab(index: 2)
+                bottomTab(index: 3)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
+            .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
+        }
+    }
+    private var sidebarLayout: some View {
+        NavigationSplitView {
+            List(selection: Binding<Int?>(get: { tab }, set: { if let index = $0 { select(index) } })) {
+                ForEach(Self.sections.indices, id: \.self) { index in
+                    Label(Self.sections[index].title, systemImage: Self.sections[index].symbol).tag(index)
+                }
+            }
+            .navigationTitle("LotsOfEvents")
+            .safeAreaInset(edge: .bottom) {
+                Button { quickAdd() } label: {
+                    Label("Quick Add", systemImage: "plus").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent).foregroundStyle(_accent.contrastingText)
+                .contextMenu { fullEditorButtons }
+                .padding()
+            }
+        } detail: {
+            // A paged TabView inside the detail column hides each section's navigation bar, so show the section directly.
+            switch tab {
+            case 0: AgendaView(model: model)
+            case 1: CalendarHome(model: model)
+            case 2: RemindersHome(model: model)
+            default: SourcesView(model: model, embedded: true)
+            }
+        }
+        // Keep the sidebar beside the content in portrait too, instead of floating over a dimmed view.
+        .navigationSplitViewStyle(.balanced)
+    }
+    /// Tap opens Quick Add; touch and hold offers the full editors.
+    private var addButton: some View {
+        Button { quickAdd() } label: {
+            Image(systemName: "plus").font(.title2.weight(.semibold)).foregroundStyle(_accent.contrastingText)
+                .frame(width: 50, height: 50).background(accent, in: Circle())
+                .shadow(color: accent.opacity(0.35), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .contextMenu { fullEditorButtons }
+        .accessibilityLabel("Quick add")
+        .accessibilityHint("Touch and hold for the full event or reminder editor.")
+    }
+    @ViewBuilder private var fullEditorButtons: some View {
+        Button("New Event…", systemImage: "calendar.badge.plus") { model.sheet = .newEvent(tab == 1 ? model.calendarCreationDate : Date.now.roundedUpToHalfHour()) }
+        Button("New Reminder…", systemImage: "checklist") { model.sheet = .reminder(nil, model.activeReminderList) }
+    }
+    private func quickAdd() { model.sheet = .quickAdd(reminder: tab == 2) }
+    private func select(_ index: Int) {
+        if TabReselect.returnsToToday(selecting: index, from: tab) {
+            if index == 0 { model.agendaReturnToToday += 1 } else { model.calendarReturnToToday += 1 }
+        }
+        tab = index
+    }
+    private func bottomTab(index: Int) -> some View {
+        let (title, symbol) = Self.sections[index]
+        return Button { select(index) } label: {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 19, weight: .medium))
+                Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity).frame(height: 52)
+            .foregroundStyle(tab == index ? accent : Color.secondary)
+            .background(tab == index ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 20))
+        }.buttonStyle(.plain).accessibilityAddTraits(tab == index ? .isSelected : [])
+    }
+
 }
 
 extension AgendaModel {
@@ -167,6 +261,7 @@ struct ReminderSnapshot {
 }
 
 struct UndoToast: View {
+    @AppAccent private var accent
     let undo: UndoAction
     let close: () -> Void
     var body: some View {
@@ -178,7 +273,7 @@ struct UndoToast: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(.regularMaterial, in: Capsule())
         .shadow(radius: 6, y: 2)
-        .tint(.teal)
+        .tint(accent)
         .padding(.horizontal)
         .task(id: undo.id) {
             try? await Task.sleep(for: .seconds(8))
@@ -188,12 +283,14 @@ struct UndoToast: View {
 }
 
 struct EventDetails: UIViewControllerRepresentable {
+    @AppAccent private var accent
     let event: EKEvent
     @Environment(\.dismiss) private var dismiss
     func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
     func makeUIViewController(context: Context) -> UINavigationController {
         let view = EKEventViewController()
         view.event = event
+        view.view.tintColor = UIColor(accent)
         view.allowsEditing = event.calendar.allowsContentModifications
         view.allowsCalendarPreview = true
         view.delegate = context.coordinator
@@ -220,4 +317,9 @@ struct AccessCard: View {
             Button("Connect", action: connect).buttonStyle(.borderedProminent)
         }
     }
+}
+
+/// Tapping the Agenda or Calendar tab while it is selected jumps back to today.
+enum TabReselect {
+    static func returnsToToday(selecting index: Int, from current: Int) -> Bool { index == current && index <= 1 }
 }
