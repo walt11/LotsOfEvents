@@ -6,7 +6,7 @@ struct AppAccent: DynamicProperty {
     @AppStorage("appAccentRGB") private var rgb = -1
     var wrappedValue: Color {
         get {
-            if rgb == -1 { return .teal }
+            if rgb == -1 { return .blue }
             return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255) }
         nonmutating set {
             var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
