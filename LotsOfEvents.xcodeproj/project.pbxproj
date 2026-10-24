@@ -1,0 +1,582 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
+		12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */; };
+		133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
+		15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */; };
+		4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
+		4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */; };
+		7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9673B93B2FA0CF1B2871781C /* CalendarHome.swift */; };
+		B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */; };
+		C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
+		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
+		D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */; };
+		D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
+		F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		20F9A8284788B890F18F0CC9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 11894B270E91A0B1A4189F83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 324EFF245D3D0D8FA8DBB358;
+			remoteInfo = AgendaWidget;
+		};
+		31C10D4900E6EEF6FF26DFF9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 11894B270E91A0B1A4189F83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C58AFEBE09C96E08D388355D;
+			remoteInfo = LotsOfEvents;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1468D1AF56A8536FFBE3DD6C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LotsOfEvents.entitlements; sourceTree = "<group>"; };
+		20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LotsOfEvents.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgets.swift; sourceTree = "<group>"; };
+		3CBAF9DE5613BF613814BE64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
+		635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotsOfEventsApp.swift; sourceTree = "<group>"; };
+		66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
+		6E0355C3FB63242321937C6F /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LotsOfEventsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		883A5E15068E6BD432BF3851 /* AgendaWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AgendaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8C49FDA929D6FACECC3FDD02 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		94242E0DB9C908EB386A826B /* AgendaData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaData.swift; sourceTree = "<group>"; };
+		9673B93B2FA0CF1B2871781C /* CalendarHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarHome.swift; sourceTree = "<group>"; };
+		9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreeDayAgendaWidget.swift; sourceTree = "<group>"; };
+		9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersHome.swift; sourceTree = "<group>"; };
+		A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaQueryTests.swift; sourceTree = "<group>"; };
+		BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgetTests.swift; sourceTree = "<group>"; };
+		F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndReminderTests.swift; sourceTree = "<group>"; };
+		F90BC7114F0716F452585279 /* AgendaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgendaWidget.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		22F9ADE39CEE0AF5CFC4AB35 /* LotsOfEvents */ = {
+			isa = PBXGroup;
+			children = (
+				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
+				3CBAF9DE5613BF613814BE64 /* Info.plist */,
+				09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */,
+				635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */,
+				6E0355C3FB63242321937C6F /* MainView.swift */,
+				9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */,
+			);
+			path = LotsOfEvents;
+			sourceTree = "<group>";
+		};
+		876C8C079AAF47B5142425E4 = {
+			isa = PBXGroup;
+			children = (
+				E581CA6862DD1CDD3BF0F2F3 /* AgendaWidget */,
+				22F9ADE39CEE0AF5CFC4AB35 /* LotsOfEvents */,
+				C0161C5058495A411061D04D /* LotsOfEventsTests */,
+				C49D9AF82380ABD7E2EF3761 /* Shared */,
+				987D56426C916752CAF36451 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		987D56426C916752CAF36451 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				883A5E15068E6BD432BF3851 /* AgendaWidget.appex */,
+				20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */,
+				808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C0161C5058495A411061D04D /* LotsOfEventsTests */ = {
+			isa = PBXGroup;
+			children = (
+				A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */,
+				F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */,
+				BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */,
+				54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */,
+			);
+			path = LotsOfEventsTests;
+			sourceTree = "<group>";
+		};
+		C49D9AF82380ABD7E2EF3761 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				94242E0DB9C908EB386A826B /* AgendaData.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		E581CA6862DD1CDD3BF0F2F3 /* AgendaWidget */ = {
+			isa = PBXGroup;
+			children = (
+				F90BC7114F0716F452585279 /* AgendaWidget.entitlements */,
+				66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */,
+				2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */,
+				8C49FDA929D6FACECC3FDD02 /* Info.plist */,
+				9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */,
+			);
+			path = AgendaWidget;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		324EFF245D3D0D8FA8DBB358 /* AgendaWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4FBA7F070E18748B9C892CE6 /* Build configuration list for PBXNativeTarget "AgendaWidget" */;
+			buildPhases = (
+				573773D83AFE7C7EB00B009F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AgendaWidget;
+			packageProductDependencies = (
+			);
+			productName = AgendaWidget;
+			productReference = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C58AFEBE09C96E08D388355D /* LotsOfEvents */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8832DE74E260347187B5851F /* Build configuration list for PBXNativeTarget "LotsOfEvents" */;
+			buildPhases = (
+				BC43C060E1DE359DD5EE6702 /* Sources */,
+				1468D1AF56A8536FFBE3DD6C /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B483F7E4C49D1A6DCCEB8048 /* PBXTargetDependency */,
+			);
+			name = LotsOfEvents;
+			packageProductDependencies = (
+			);
+			productName = LotsOfEvents;
+			productReference = 20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EA38F86A34D88A80331B3610 /* LotsOfEventsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E40119A35A463B7AA67C8CC9 /* Build configuration list for PBXNativeTarget "LotsOfEventsTests" */;
+			buildPhases = (
+				DC02B31F84D2B49ECE333A7B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				34DB8760C5435706444BCC21 /* PBXTargetDependency */,
+			);
+			name = LotsOfEventsTests;
+			packageProductDependencies = (
+			);
+			productName = LotsOfEventsTests;
+			productReference = 808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		11894B270E91A0B1A4189F83 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					324EFF245D3D0D8FA8DBB358 = {
+						DevelopmentTeam = 76BJCJ4Q7X;
+						ProvisioningStyle = Automatic;
+					};
+					C58AFEBE09C96E08D388355D = {
+						DevelopmentTeam = 76BJCJ4Q7X;
+						ProvisioningStyle = Automatic;
+					};
+					EA38F86A34D88A80331B3610 = {
+						DevelopmentTeam = 76BJCJ4Q7X;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = C1A78499923B0AA5A1D88950 /* Build configuration list for PBXProject "LotsOfEvents" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 876C8C079AAF47B5142425E4;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 987D56426C916752CAF36451 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C58AFEBE09C96E08D388355D /* LotsOfEvents */,
+				324EFF245D3D0D8FA8DBB358 /* AgendaWidget */,
+				EA38F86A34D88A80331B3610 /* LotsOfEventsTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		573773D83AFE7C7EB00B009F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */,
+				0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */,
+				133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */,
+				4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC43C060E1DE359DD5EE6702 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */,
+				A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */,
+				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
+				C996037E77D3B8D325EFF313 /* MainView.swift in Sources */,
+				D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DC02B31F84D2B49ECE333A7B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */,
+				15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */,
+				4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */,
+				B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		34DB8760C5435706444BCC21 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C58AFEBE09C96E08D388355D /* LotsOfEvents */;
+			targetProxy = 31C10D4900E6EEF6FF26DFF9 /* PBXContainerItemProxy */;
+		};
+		B483F7E4C49D1A6DCCEB8048 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 324EFF245D3D0D8FA8DBB358 /* AgendaWidget */;
+			targetProxy = 20F9A8284788B890F18F0CC9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		01AEAF01BA585A79AA560591 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AgendaWidget/AgendaWidget.entitlements;
+				INFOPLIST_FILE = AgendaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Upcoming Agenda";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.AgendaWidget;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0B017A25909D5670172708CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEventsTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LotsOfEvents.app/LotsOfEvents";
+			};
+			name = Release;
+		};
+		4D57DB4709559A9214A6BD0E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AgendaWidget/AgendaWidget.entitlements;
+				INFOPLIST_FILE = AgendaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Upcoming Agenda";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.AgendaWidget;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6858F7DA9B1B6CB4897D925F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = LotsOfEvents/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Lots of Events";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		820DDA73B591D04D3758135F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = LotsOfEvents/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Lots of Events";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0B3B5DD4DCC5D6CB6D396BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEventsTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LotsOfEvents.app/LotsOfEvents";
+			};
+			name = Debug;
+		};
+		A40AB6C7416375C8503758C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_GROUP = group.com.walt.LotsOfEvents;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EBEB762E806622D6309C12C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_GROUP = group.com.walt.LotsOfEvents;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4FBA7F070E18748B9C892CE6 /* Build configuration list for PBXNativeTarget "AgendaWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01AEAF01BA585A79AA560591 /* Debug */,
+				4D57DB4709559A9214A6BD0E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8832DE74E260347187B5851F /* Build configuration list for PBXNativeTarget "LotsOfEvents" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				820DDA73B591D04D3758135F /* Debug */,
+				6858F7DA9B1B6CB4897D925F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C1A78499923B0AA5A1D88950 /* Build configuration list for PBXProject "LotsOfEvents" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EBEB762E806622D6309C12C9 /* Debug */,
+				A40AB6C7416375C8503758C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E40119A35A463B7AA67C8CC9 /* Build configuration list for PBXNativeTarget "LotsOfEventsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0B3B5DD4DCC5D6CB6D396BD /* Debug */,
+				0B017A25909D5670172708CA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 11894B270E91A0B1A4189F83 /* Project object */;
+}
