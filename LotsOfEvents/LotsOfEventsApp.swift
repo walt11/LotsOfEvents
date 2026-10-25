@@ -5,6 +5,25 @@ import WidgetKit
 
 @main
 struct LotsOfEventsApp: App {
+    init() {
+        AccentStore.migrateFromAppDefaults()
+        // Adopt the redesign once; retain custom artwork and every per-widget override.
+        if !Preferences.defaults.bool(forKey: "galleryAppearanceInstalled") {
+            let previous = Preferences.defaults.string(forKey: "widgetTheme")
+            if previous != "custom" {
+                Preferences.defaults.set(previous, forKey: "previousWidgetTheme")
+                Preferences.defaults.set("gallery", forKey: "widgetTheme")
+            }
+            Preferences.defaults.set(true, forKey: "galleryAppearanceInstalled")
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        if !Preferences.defaults.bool(forKey: "charcoalDefaultInstalled") {
+            Preferences.defaults.set(Preferences.defaults.string(forKey: "widgetTheme"), forKey: "themeBeforeCharcoal")
+            Preferences.defaults.set("charcoal", forKey: "widgetTheme")
+            Preferences.defaults.set(true, forKey: "charcoalDefaultInstalled")
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
     var body: some Scene { WindowGroup { MainView() } }
 }
 
@@ -100,16 +119,16 @@ struct AgendaView: View {
                     case .day(let day):
                         Section {
                             if day.items.isEmpty {
-                                Text("Nothing scheduled").font(.caption).foregroundStyle(.secondary)
+                                Text("Nothing scheduled").font(.caption).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             }
                             ForEach(day.items) { item in itemRow(item) }
-                        } header: { Text(dayTitle(day.date)) }
+                        } header: { Text(dayTitle(day.date)).font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
                             .id(Calendar.current.isDateInToday(day.date) ? "agenda-today" : day.date.description)
                     case .empty(let start, let end):
                         Section {
                             Label(start == end ? "Nothing scheduled \(start.formatted(.dateTime.weekday(.wide).month().day()))" : "Nothing scheduled \((start..<end).formatted(.interval.month(.abbreviated).day()))", systemImage: "moon.zzz")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
                                 .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                         }
                     }
@@ -125,7 +144,9 @@ struct AgendaView: View {
             .listSectionSpacing(10)
             .environment(\.defaultMinListRowHeight, 44)
             .navigationTitle("Agenda")
+            .galleryTitle("Agenda")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("Today") { withAnimation { proxy.scrollTo("agenda-today", anchor: .top) } } }
             }
@@ -164,7 +185,8 @@ struct AgendaView: View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
         }
-        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
+        .galleryRow()
+        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
         .swipeActions(edge: .trailing) {
             if item.reminder, let reminder = model.reminder(withID: item.id) { SnoozeButtons(model: model, reminder: reminder) }
         }

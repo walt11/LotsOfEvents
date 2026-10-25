@@ -30,6 +30,7 @@ struct DashboardEntry: TimelineEntry {
     var theme: AgendaTheme = .selected
     var selectedDay: Date = .now
     var page = 0
+    var accentRGB = AccentStore.rgb
 }
 
 struct DashboardProvider: AppIntentTimelineProvider {
@@ -232,7 +233,13 @@ struct DashboardView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.widgetFamily) private var family
     private var secondary: Color { entry.theme.secondary(scheme) }
-    private var accent: Color { entry.theme.accent(scheme) }
+    // Headers and highlights follow the app's accent color; the theme sets the background.
+    private var accent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB).color }
+    private var onAccent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB).onColor }
+    /// Accent-colored text. On a custom background without its own accent, the app accent may not stand out, so use the text color.
+    private var accentText: Color {
+        entry.theme == .custom && !entry.theme.widgetAccent(appRGB: entry.accentRGB).custom ? entry.theme.text(scheme) : accent
+    }
     private var today: Date { Calendar.current.startOfDay(for: entry.date) }
     @ViewBuilder var body: some View {
         switch family {
@@ -257,12 +264,12 @@ struct DashboardView: View {
         }
         .padding(12)
         .foregroundStyle(entry.theme.text(scheme))
-        .containerBackground(for: .widget) { entry.theme.background(scheme) }
+        .containerBackground(for: .widget) { entry.theme.backgroundView(scheme) }
         .widgetURL(URL(string: kind == .focus ? "lotsofevents://reminders" : "lotsofevents://agenda"))
     }
     private func header(_ title: String, addReminder: Bool = false) -> some View {
         HStack(spacing: 2) {
-            Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(secondary).lineLimit(1)
+            Text(title.uppercased()).font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(secondary).lineLimit(1)
             Spacer(minLength: 0)
             Link(destination: URL(string: addReminder ? "lotsofevents://quick-add?type=reminder" : "lotsofevents://quick-add")!) {
                 Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 22, height: 18)
@@ -316,11 +323,11 @@ struct DashboardView: View {
             else if let next = events.first {
                 let start = next.eventStartDate ?? next.date
                 if start <= entry.date {
-                    Text("HAPPENING NOW").font(.system(size: 9, weight: .bold)).foregroundStyle(accent)
+                    Text("HAPPENING NOW").font(.system(size: 9, weight: .bold)).foregroundStyle(accentText)
                 } else if Calendar.current.isDate(start, inSameDayAs: entry.date) {
-                    HStack(spacing: 3) { Text("IN"); Text(start, style: .relative) }.font(.system(size: 10, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
-                } else { Text(start.formatted(.dateTime.weekday(.abbreviated).month().day())).font(.system(size: 10)).foregroundStyle(accent) }
-                Text(next.title).font(.system(size: 15, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.85)
+                    HStack(spacing: 3) { Text("IN"); Text(start, style: .relative) }.font(.system(size: 10, weight: .semibold)).foregroundStyle(accentText).lineLimit(1)
+                } else { Text(start.formatted(.dateTime.weekday(.abbreviated).month().day())).font(.system(size: 10)).foregroundStyle(accentText) }
+                Text(next.title).font(.system(size: 15, weight: .semibold, design: entry.theme == .gallery ? .serif : .default)).lineLimit(2).minimumScaleFactor(0.85)
                 Text(next.widgetTimeLabel).font(.system(size: 10)).foregroundStyle(secondary).lineLimit(1)
                 Spacer(minLength: 0)
                 if events.count > 1 {
@@ -352,7 +359,7 @@ struct DashboardView: View {
             }
             Spacer(minLength: 2)
             Divider().padding(.vertical, 3)
-            Text("REMINDERS").font(.system(size: 9, weight: .semibold)).foregroundStyle(secondary).frame(height: 14)
+            Text("REMINDERS").font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(secondary).frame(height: 14)
             if !entry.reminderAccess { empty("Connect Reminders in the app.") }
             else if !entry.hasLists { empty("Choose reminder lists in Sources.") }
             else if tasks.isEmpty { empty("All caught up") }
@@ -375,8 +382,10 @@ struct DashboardView: View {
                         VStack(spacing: 1) {
                             Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(.system(size: 8, weight: .medium))
                             Text(day.formatted(.dateTime.day())).font(.system(size: 15, weight: .medium))
-                        }.frame(maxWidth: .infinity).frame(height: 35)
-                            .foregroundStyle(selected ? entry.theme.onAccent(scheme) : entry.theme.text(scheme))
+                        }
+                        .offset(y: DayTabMetrics.offset(weekdaySize: 8, weekdayWeight: .medium, dateSize: 15, dateWeight: .medium))
+                        .frame(maxWidth: .infinity).frame(height: 35)
+                            .foregroundStyle(selected ? onAccent : entry.theme.text(scheme))
                             .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 8))
                     }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted)).accessibilityAddTraits(selected ? .isSelected : [])
                 }
@@ -409,9 +418,9 @@ struct DashboardView: View {
                         Button(intent: DashboardDayIntent(kind: kind, date: day)) {
                             Text(day.formatted(.dateTime.day())).font(.system(size: 9, weight: selected ? .bold : .regular))
                                 .frame(maxWidth: .infinity).frame(height: cellHeight)
-                                .foregroundStyle(selected ? entry.theme.onAccent(scheme) : entry.theme.text(scheme))
+                                .foregroundStyle(selected ? onAccent : entry.theme.text(scheme))
                                 .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 4))
-                                .overlay(alignment: .bottom) { if marked { Circle().fill(selected ? entry.theme.onAccent(scheme) : accent).frame(width: 2, height: 2) } }
+                                .overlay(alignment: .bottom) { if marked { Circle().fill(selected ? onAccent : accent).frame(width: 2, height: 2) } }
                         }.buttonStyle(.plain).accessibilityLabel(day.formatted(date: .complete, time: .omitted)).accessibilityAddTraits(selected ? .isSelected : [])
                     } else { Color.clear.frame(height: cellHeight) }
                 }

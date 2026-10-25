@@ -1,6 +1,17 @@
 import SwiftUI
+import UIKit
 import WidgetKit
 import AppIntents
+
+/// Optical centering for weekday-over-date tabs. Text line boxes leave room above the weekday's capitals
+/// and below the digits for descenders they don't have, so a plainly centered stack looks high.
+enum DayTabMetrics {
+    static func offset(weekdaySize: CGFloat, weekdayWeight: UIFont.Weight, dateSize: CGFloat, dateWeight: UIFont.Weight) -> CGFloat {
+        let weekday = UIFont.systemFont(ofSize: weekdaySize, weight: weekdayWeight)
+        let date = UIFont.systemFont(ofSize: dateSize, weight: dateWeight)
+        return (-date.descender - (weekday.ascender - weekday.capHeight)) / 2
+    }
+}
 
 struct SelectWidgetDayIntent: AppIntent {
     static let title: LocalizedStringResource = "Select agenda day"
@@ -42,6 +53,7 @@ struct ThreeDayAgendaWidget: Widget {
 struct ThreeDayAgendaView: View {
     let entry: AgendaEntry
     @Environment(\.colorScheme) private var colorScheme
+    private var accent: (color: Color, onColor: Color, custom: Bool) { entry.theme.widgetAccent(appRGB: entry.accentRGB) }
     private var days: [Date] {
         let today = Calendar.current.startOfDay(for: entry.date)
         return (0..<3).map { Calendar.current.date(byAdding: .day, value: $0, to: today)! }
@@ -58,11 +70,13 @@ struct ThreeDayAgendaView: View {
                         Button(intent: SelectWidgetDayIntent(day: day)) {
                             VStack(spacing: 0) {
                                 Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(.system(size: 11, weight: .semibold))
-                                Text(day.formatted(.dateTime.day())).font(.system(size: 19, weight: .medium))
+                                Text(day.formatted(.dateTime.day())).font(.system(size: 19, weight: .medium, design: entry.theme == .gallery ? .serif : .default))
                             }
+                            .offset(y: DayTabMetrics.offset(weekdaySize: 11, weekdayWeight: .semibold, dateSize: 19, dateWeight: .medium))
                             .frame(maxWidth: .infinity).frame(height: 38)
-                            .foregroundStyle(selected ? entry.theme.onAccent(colorScheme) : entry.theme.accent(colorScheme))
-                            .background(selected ? entry.theme.accent(colorScheme) : .clear, in: RoundedRectangle(cornerRadius: 11))
+                            // On a custom background the accent can vanish, so unselected days use the readable text color.
+                            .foregroundStyle(selected ? accent.onColor : entry.theme == .custom && !accent.custom ? entry.theme.text(colorScheme) : accent.color)
+                            .background(selected ? accent.color : .clear, in: RoundedRectangle(cornerRadius: 11))
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                             .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
@@ -107,7 +121,7 @@ struct ThreeDayAgendaView: View {
         }
         .padding(12)
         .foregroundStyle(entry.theme.text(colorScheme))
-        .containerBackground(for: .widget) { entry.theme.background(colorScheme) }
+        .containerBackground(for: .widget) { entry.theme.backgroundView(colorScheme) }
         .widgetURL(URL(string: "lotsofevents://agenda"))
     }
 }

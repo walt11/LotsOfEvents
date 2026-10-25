@@ -14,7 +14,7 @@ extension AgendaModel {
     }
     func snooze(_ reminder: EKReminder, until date: Date, timed: Bool) {
         guard let current = store.calendarItem(withIdentifier: reminder.calendarItemIdentifier) as? EKReminder,
-              current.calendar.allowsContentModifications, !current.isCompleted else { error = "This reminder is no longer available to snooze."; return }
+              current.isWritable, !current.isCompleted else { error = "This reminder is no longer available to snooze."; return }
         let previous = ReminderSnapshot(current)
         ReminderSchedule.apply(to: current, due: date, timed: timed, repeatRule: .keep, alert: .keep)
         do {
@@ -38,7 +38,7 @@ struct SnoozeButtons: View {
     @ObservedObject var model: AgendaModel
     let reminder: EKReminder
     var body: some View {
-        if reminder.calendar.allowsContentModifications && !reminder.isCompleted {
+        if reminder.isWritable && !reminder.isCompleted {
             Button("Tomorrow", systemImage: "sunrise") { model.snooze(reminder, tomorrow: true) }.tint(.indigo)
             Button("1 Hour", systemImage: "clock.arrow.circlepath") { model.snooze(reminder, tomorrow: false) }.tint(.orange)
         }

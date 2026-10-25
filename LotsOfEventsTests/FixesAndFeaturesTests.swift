@@ -155,3 +155,40 @@ final class QuickAddShortcutTests: XCTestCase {
         XCTAssertEqual(reminder.agendaDetail, "Personal")
     }
 }
+
+final class CustomWidgetStyleTests: XCTestCase {
+    func testStyleRoundTripsThroughJSON() throws {
+        var style = CustomWidgetStyle()
+        style.fill = .solid
+        style.first = StoredColor(red: 0.9, green: 0.2, blue: 0.1)
+        style.borderWidth = 2.5
+        style.borderColor = StoredColor(red: 1, green: 1, blue: 1, opacity: 0.4)
+        style.direction = .across
+        let decoded = try JSONDecoder().decode(CustomWidgetStyle.self, from: JSONEncoder().encode(style))
+        XCTAssertEqual(decoded, style)
+    }
+    func testTextColorStaysReadable() {
+        var style = CustomWidgetStyle()
+        style.fill = .solid
+        style.first = StoredColor(red: 0.98, green: 0.95, blue: 0.7)
+        XCTAssertEqual(style.text, .black)
+        style.first = StoredColor(red: 0.1, green: 0.1, blue: 0.3)
+        XCTAssertEqual(style.text, .white)
+        style.fill = .gradient
+        style.second = StoredColor(red: 0.2, green: 0.2, blue: 0.5)
+        XCTAssertEqual(style.text, .white)
+    }
+}
+
+final class CustomAccentTests: XCTestCase {
+    func testStylesSavedBeforeAccentExistedStillDecode() throws {
+        let old = #"{"fill":"Solid","first":{"red":0.1,"green":0.2,"blue":0.3,"opacity":1},"second":{"red":0,"green":0,"blue":0,"opacity":1},"direction":"Top to bottom","borderWidth":0,"borderColor":{"red":1,"green":1,"blue":1,"opacity":1}}"#
+        let style = try JSONDecoder().decode(CustomWidgetStyle.self, from: Data(old.utf8))
+        XCTAssertNil(style.accent)
+        XCTAssertEqual(style.fill, .solid)
+    }
+    func testAccentTextContrast() {
+        XCTAssertEqual(CustomWidgetStyle.contrastingText(on: StoredColor(red: 1, green: 0.85, blue: 0.2)), .black)
+        XCTAssertEqual(CustomWidgetStyle.contrastingText(on: StoredColor(red: 0.1, green: 0.1, blue: 0.4)), .white)
+    }
+}

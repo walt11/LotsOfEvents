@@ -9,18 +9,20 @@ struct SourcesView: View {
     var embedded = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
     @State private var days = Preferences.days
     @AppStorage("widgetTheme", store: Preferences.defaults) private var themeID = AgendaTheme.selected.rawValue
-    private var theme: AgendaTheme { AgendaTheme(rawValue: themeID) ?? .graphite }
+    private var theme: AgendaTheme { AgendaTheme(rawValue: themeID) ?? .gallery }
+    @State private var customStyle = CustomWidgetStyle.saved
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     HStack(spacing: 14) {
                         Image(systemName: "calendar").font(.title).foregroundStyle(_accent.contrastingText)
-                            .frame(width: 56, height: 56).background(accent.gradient, in: RoundedRectangle(cornerRadius: 16))
+                            .frame(width: 56, height: 56).background(accent, in: RoundedRectangle(cornerRadius: 16))
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Make it yours").font(.title3.bold())
+                            Text("Make it yours").font(.system(.title2, design: .serif)).italic()
                             Text("Your schedule, your way.").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }.padding(.vertical, 8)
@@ -39,8 +41,12 @@ struct SourcesView: View {
                         Preferences.defaults.set(0, forKey: "page")
                         model.scheduleRefresh()
                     }
-                }
+                }.listRowBackground(GalleryPalette.card)
                 Section("Appearance") {
+                    Picker("App appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                    Text("Widgets follow your device appearance. Choose a preset or customize their colors below.").font(.caption).foregroundStyle(.secondary)
                     ColorPicker(selection: $accent, supportsOpacity: false) {
                         settingsRow("App accent", symbol: "eyedropper", color: accent, detail: "Choose any color for buttons & selections")
                     }
@@ -50,7 +56,7 @@ struct SourcesView: View {
                     } label: {
                         settingsRow("Widget theme", symbol: "paintpalette", color: .purple, detail: theme.title)
                     }
-                }
+                }.listRowBackground(GalleryPalette.card)
                 Section("Widgets") {
                     NavigationLink {
                         List {
@@ -67,11 +73,15 @@ struct SourcesView: View {
                                 Text("Use + on a widget to add an event or reminder. Add Event and Add Reminder controls are also available in Control Center.")
                             }
                         }.navigationTitle("Widget guide").navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
                     } label: { settingsRow("Widget guide", symbol: "square.grid.2x2", color: .indigo, detail: "Layouts, customization & Quick Add") }
-                }
+                }.listRowBackground(GalleryPalette.card)
             }
+            .listRowBackground(GalleryPalette.card)
             .navigationTitle("Settings")
+            .galleryTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .toolbar { if !embedded { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.fontWeight(.semibold) } } }
             .tint(accent)
         }
@@ -123,6 +133,7 @@ struct SourcesView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }.listRowBackground(Color.clear)
         }.navigationTitle(reminders ? "Reminder lists" : "Calendars").navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
     }
     private var themePicker: some View {
         ScrollView {
@@ -138,14 +149,116 @@ struct SourcesView: View {
                             previewRow("Lunch with Sam", color: .blue, theme: option)
                             HStack { Text(option.title).font(.subheadline.bold()); Spacer(); Image(systemName: themeID == option.rawValue ? "checkmark.circle.fill" : "circle") }
                                 .foregroundStyle(option.text(colorScheme))
-                        }.padding(16).background(option.background(colorScheme), in: RoundedRectangle(cornerRadius: 22))
-                            .overlay { RoundedRectangle(cornerRadius: 22).strokeBorder(themeID == option.rawValue ? accent : .clear, lineWidth: 3) }
+                        }.padding(16).background { previewBackground(option, cornerRadius: 22) }
+                            .clipShape(RoundedRectangle(cornerRadius: 22))
+                            .overlay { RoundedRectangle(cornerRadius: 22).strokeBorder(themeID == option.rawValue ? accent : .clear, lineWidth: 3).padding(-5) }
                     }.buttonStyle(.plain).accessibilityLabel(option.title).accessibilityAddTraits(themeID == option.rawValue ? .isSelected : [])
                 }
             }.padding()
-            Text("Calendar colors stay true to your sources. Themes adapt to light and dark; Black always stays black. Individual widgets can override this default.")
-                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal).padding(.bottom)
-        }.background(Color(uiColor: .systemGroupedBackground)).navigationTitle("Widget theme").navigationBarTitleDisplayMode(.inline)
+            customEditor
+            Text("Calendar colors stay true to your sources. Preset themes adapt to light and dark; Black always stays black. Individual widgets can override this default in Edit Widget.")
+                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal).padding(.vertical)
+        }
+        .background(GalleryPalette.paper).navigationTitle("Widget theme").navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
+        .onChange(of: customStyle) { _, style in
+            style.save()
+            themeID = AgendaTheme.custom.rawValue
+        }
+        // Color pickers change continuously, so wait for a pause before asking widgets to redraw.
+        .task(id: customStyle) {
+            try? await Task.sleep(for: .milliseconds(500))
+            if !Task.isCancelled { WidgetCenter.shared.reloadAllTimelines() }
+        }
+    }
+    /// Preset themes are flat colors; the custom style adds a gradient and border, previewed in a rounded card.
+    @ViewBuilder private func previewBackground(_ option: AgendaTheme, cornerRadius: CGFloat) -> some View {
+        if option == .custom {
+            customStyle.fillView.overlay {
+                if customStyle.borderWidth > 0 {
+                    RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(customStyle.borderColor.color, lineWidth: customStyle.borderWidth)
+                }
+            }
+        } else if option == .charcoal {
+            option.charcoalFill.overlay { RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(AgendaTheme.charcoalEdge, lineWidth: 0.5) }
+        } else { option.background(colorScheme) }
+    }
+    private func colorBinding(_ path: WritableKeyPath<CustomWidgetStyle, StoredColor>) -> Binding<Color> {
+        Binding(get: { customStyle[keyPath: path].color }, set: { customStyle[keyPath: path] = StoredColor($0) })
+    }
+    private var customEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("CUSTOM STYLE").font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 32)
+            // Live preview at medium-widget proportions.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("TODAY").font(.caption2.bold())
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .foregroundStyle(customStyle.accent.map(CustomWidgetStyle.contrastingText) ?? _accent.contrastingText)
+                        .background(customStyle.accent?.color ?? accent, in: Capsule())
+                    Spacer(); Image(systemName: "plus").opacity(0.65)
+                }
+                previewLine("Morning walk", time: "7:00–7:45 AM", color: .green)
+                previewLine("Lunch with Sam", time: "12:30–1:30 PM", color: .blue)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(customStyle.text)
+            .padding(16).frame(maxWidth: .infinity).frame(height: 150)
+            .background { previewBackground(.custom, cornerRadius: 24) }
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .padding(.horizontal)
+            .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                Picker("Fill", selection: $customStyle.fill) {
+                    ForEach(CustomWidgetStyle.Fill.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).padding(12)
+                Divider().padding(.leading)
+                ColorPicker(customStyle.fill == .solid ? "Color" : "First color", selection: colorBinding(\.first), supportsOpacity: false).padding(12)
+                if customStyle.fill == .gradient {
+                    Divider().padding(.leading)
+                    ColorPicker("Second color", selection: colorBinding(\.second), supportsOpacity: false).padding(12)
+                    Divider().padding(.leading)
+                    LabeledContent("Direction") {
+                        Picker("Direction", selection: $customStyle.direction) {
+                            ForEach(CustomWidgetStyle.Direction.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.labelsHidden()
+                    }.padding(.horizontal, 12).padding(.vertical, 6)
+                }
+                Divider().padding(.leading)
+                Toggle("Own accent color", isOn: Binding(get: { customStyle.accent != nil }, set: { customStyle.accent = $0 ? StoredColor(accent) : nil }))
+                    .padding(12)
+                if customStyle.accent != nil {
+                    Divider().padding(.leading)
+                    ColorPicker("Accent color", selection: Binding(get: { customStyle.accent?.color ?? accent }, set: { customStyle.accent = StoredColor($0) }), supportsOpacity: false)
+                        .padding(12)
+                }
+                Divider().padding(.leading)
+                HStack {
+                    Text("Border")
+                    Slider(value: $customStyle.borderWidth, in: 0...6, step: 0.5)
+                    Text(customStyle.borderWidth == 0 ? "None" : "\(customStyle.borderWidth.formatted()) pt").font(.footnote).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
+                }.padding(12)
+                Divider().padding(.leading)
+                // Always available; picking a color with no border yet turns on a 2 pt border so the change is visible.
+                ColorPicker("Border color", selection: Binding(get: { customStyle.borderColor.color }, set: {
+                    customStyle.borderColor = StoredColor($0)
+                    if customStyle.borderWidth == 0 { customStyle.borderWidth = 2 }
+                }), supportsOpacity: true).padding(12)
+            }
+            .background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal)
+            Text("Editing these switches your widgets to the Custom theme. The accent colors the selected day and Next Up; without its own, widgets use the app accent. Text turns black or white to stay readable.")
+                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 32)
+        }
+    }
+    private func previewLine(_ title: String, time: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Capsule().fill(color).frame(width: 3, height: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(time).font(.caption2).opacity(0.65)
+            }
+        }
     }
     private func previewRow(_ title: String, color: Color, theme: AgendaTheme) -> some View {
         HStack(spacing: 6) { Capsule().fill(color).frame(width: 3, height: 16); Text(title).font(.caption).foregroundStyle(theme.text(colorScheme)).lineLimit(1) }

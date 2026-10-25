@@ -40,6 +40,11 @@ targets:
         NSSpeechRecognitionUsageDescription: Turn your spoken words into editable Quick Add text.
         CFBundleURLTypes:
           - CFBundleURLSchemes: [lotsofevents]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
     entitlements:

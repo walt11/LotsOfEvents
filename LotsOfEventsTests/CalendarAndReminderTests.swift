@@ -46,8 +46,8 @@ final class CalendarAndReminderTests: XCTestCase {
         XCTAssertEqual(components.timeZone, calendar.timeZone)
         XCTAssertEqual(components.calendar?.date(from: components), original)
     }
-    func testAllSevenThemeIDsRemainStable() {
-        XCTAssertEqual(Set(AgendaTheme.allCases.map(\.rawValue)), ["graphite", "slate", "sage", "sand", "clay", "lavender", "black"])
+    func testExistingThemeIDsRemainAvailableAlongsideGallery() {
+        XCTAssertEqual(Set(AgendaTheme.allCases.map(\.rawValue)), ["charcoal", "gallery", "graphite", "slate", "sage", "sand", "clay", "lavender", "black", "custom"])
     }
     func testReminderDueDateEditPreservesAlertOffset() {
         let store = EKEventStore()
@@ -83,4 +83,23 @@ final class CalendarAndReminderTests: XCTestCase {
         XCTAssertEqual(reminder.recurrenceRules?.first?.recurrenceEnd?.occurrenceCount, 8)
     }
 
+}
+
+final class CompactCalendarTests: XCTestCase {
+    func testCompactMonthContainsEveryDayAndOnlyNecessaryWeeks() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        for firstWeekday in [1, 2, 7] {
+            calendar.firstWeekday = firstWeekday
+            for month in 1...12 {
+                let date = calendar.date(from: DateComponents(year: 2026, month: month, day: 1))!
+                let days = CalendarDates.compactMonthDays(containing: date, calendar: calendar)
+                XCTAssertEqual(days.count % 7, 0)
+                XCTAssertTrue((28...42).contains(days.count))
+                XCTAssertEqual(calendar.component(.weekday, from: days[0]), firstWeekday)
+                XCTAssertEqual(days.filter { calendar.isDate($0, equalTo: date, toGranularity: .month) }.count, calendar.range(of: .day, in: .month, for: date)!.count)
+                XCTAssertTrue(days.suffix(7).contains { calendar.isDate($0, equalTo: date, toGranularity: .month) })
+            }
+        }
+    }
 }

@@ -70,6 +70,7 @@ struct QuickAddView: View {
             }
             .navigationTitle("Quick Add")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Add", action: save).fontWeight(.semibold).disabled(!canSave) }

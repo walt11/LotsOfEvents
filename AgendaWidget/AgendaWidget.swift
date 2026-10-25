@@ -24,6 +24,7 @@ struct AgendaEntry: TimelineEntry {
     var selectedDay: Date = .now
     var dayPage: Int = 0
     var days: Int = Preferences.days
+    var accentRGB = AccentStore.rgb
 }
 
 struct AgendaProvider: AppIntentTimelineProvider {
@@ -77,14 +78,14 @@ struct AgendaWidgetView: View {
         .padding(12)
         .foregroundStyle(entry.theme.text(colorScheme))
         .containerBackground(for: .widget) {
-            entry.theme.background(colorScheme)
+            entry.theme.backgroundView(colorScheme)
         }
         .widgetURL(URL(string: "lotsofevents://agenda"))
     }
     private func agenda(visibleItems: [AgendaItem], page: Int, pages: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if entry.items.isEmpty {
-                Text(dayLabel(entry.date)).font(.system(size: 9, weight: .semibold)).foregroundStyle(todayColor)
+                Text(dayLabel(entry.date)).font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(todayColor)
                     .padding(.trailing, 28)
                 Spacer(minLength: 4)
                 Text(entry.connected ? "All clear ahead" : "Connect your calendars").font(.headline)
@@ -96,7 +97,7 @@ struct AgendaWidgetView: View {
                     if index > 0 { Spacer(minLength: 0) }
                     if index == 0 || !Calendar.current.isDate(visibleItems[index - 1].date, inSameDayAs: item.date) {
                         Text(dayLabel(item.date))
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default))
                             .foregroundStyle(Calendar.current.isDate(item.date, inSameDayAs: entry.date) ? todayColor : entry.theme.secondary(colorScheme))
                             .lineLimit(1)
                             .padding(.trailing, index == 0 ? 28 : 0)

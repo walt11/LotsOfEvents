@@ -31,10 +31,10 @@ struct SourceQuery: EntityQuery {
 }
 
 enum WidgetThemeOption: String, AppEnum {
-    case app, graphite, slate, sage, sand, clay, lavender, black
+    case app, charcoal, gallery, graphite, slate, sage, sand, clay, lavender, black, custom
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Theme"
     static let caseDisplayRepresentations: [WidgetThemeOption: DisplayRepresentation] = [
-        .app: "Same as app", .graphite: "Graphite", .slate: "Slate", .sage: "Sage", .sand: "Sand", .clay: "Clay", .lavender: "Lavender", .black: "Black"
+        .app: "Same as app", .charcoal: "Charcoal", .gallery: "Soft Gallery", .graphite: "Graphite", .slate: "Slate", .sage: "Sage", .sand: "Sand", .clay: "Clay", .lavender: "Lavender", .black: "Black", .custom: "Custom (from the app)"
     ]
     /// nil follows the theme chosen in the app's Sources screen.
     var theme: AgendaTheme? { AgendaTheme(rawValue: rawValue) }

@@ -52,6 +52,38 @@ extension Date {
     }
 }
 
+extension EKCalendarItem {
+    // A deleted item loses its calendar, and EventKit's implicitly unwrapped `calendar` would crash.
+    var calendarColor: Color { Color(cgColor: calendar?.cgColor ?? CGColor(gray: 0.6, alpha: 1)) }
+    var calendarTitle: String { calendar?.title ?? "" }
+    var isWritable: Bool { calendar?.allowsContentModifications ?? false }
+}
+
+/// The app accent, kept in the App Group so widgets use the same color. -1 means the default gallery rust.
+enum AccentStore {
+    static let key = "appAccentRGB"
+    static var rgb: Int { Preferences.defaults.object(forKey: key) as? Int ?? -1 }
+    static func color(_ rgb: Int) -> Color {
+        if rgb == -1 { return GalleryPalette.accent }
+        return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
+    }
+    /// Black or white, whichever reads better on the accent.
+    static func contrastingText(_ rgb: Int) -> Color {
+        if rgb == -1 { return GalleryPalette.color(0xFFFFFF, 0x342D27) }
+        let channels = [Double((rgb >> 16) & 255), Double((rgb >> 8) & 255), Double(rgb & 255)].map { value -> Double in
+            let c = value / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.179 ? .black : .white
+    }
+    /// Earlier builds kept the accent in the app's own defaults, out of the widgets' reach.
+    static func migrateFromAppDefaults() {
+        guard Preferences.defaults.object(forKey: key) == nil, let old = UserDefaults.standard.object(forKey: key) as? Int else { return }
+        Preferences.defaults.set(old, forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
+
 enum Preferences {
     // UserDefaults is documented as thread-safe.
     nonisolated(unsafe) static let defaults = UserDefaults(suiteName: Bundle.main.object(forInfoDictionaryKey: "AgendaAppGroup") as? String ?? "group.com.walt.LotsOfEvents")!
@@ -142,14 +174,18 @@ enum AgendaQuery {
 
 /// Flat, low-saturation palettes with separate light and dark variants.
 enum AgendaTheme: String, CaseIterable, Identifiable {
-    case graphite, slate, sage, sand, clay, lavender, black
+    case charcoal, gallery, graphite, slate, sage, sand, clay, lavender, black
+    /// The user's own colors, gradient, and border from Settings (`CustomWidgetStyle`).
+    case custom
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String { self == .gallery ? "Soft Gallery" : rawValue.capitalized }
     static var selected: AgendaTheme {
-        AgendaTheme(rawValue: Preferences.defaults.string(forKey: "widgetTheme") ?? "") ?? .graphite
+        AgendaTheme(rawValue: Preferences.defaults.string(forKey: "widgetTheme") ?? "") ?? .charcoal
     }
     private var colors: (light: UInt, dark: UInt, ink: UInt, accent: UInt, darkAccent: UInt) {
         switch self {
+        case .charcoal: return (0x303032, 0x303032, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF)
+        case .gallery: return (0xFFFDF8, 0x2A3038, 0x342D27, 0xB94D2C, 0xE99B7E)
         case .graphite: return (0xD2D0CC, 0x101112, 0x292B2D, 0x704B48, 0xAF8984)
         case .slate: return (0xC6CED3, 0x121920, 0x293B49, 0x3E586A, 0x829BAE)
         case .sage: return (0xC9CFC3, 0x161D17, 0x303F31, 0x445B46, 0x8FA187)
@@ -157,14 +193,43 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
         case .clay: return (0xD4C3B9, 0x201715, 0x50372E, 0x744D40, 0xB18B7A)
         case .lavender: return (0xCCC5D3, 0x1A1621, 0x41354E, 0x604D71, 0x9E8DB0)
         case .black: return (0x000000, 0x000000, 0xE0DDD7, 0xA5A19A, 0xA5A19A)
+        case .custom: return (0xD2D0CC, 0x101112, 0x292B2D, 0x704B48, 0xAF8984)
         }
     }
     func background(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.dark : colors.light) }
-    func text(_ scheme: ColorScheme) -> Color { (scheme == .dark || self == .black) ? .white : .black }
+    /// The widget background; the custom theme can be a gradient with a border, so this is a view rather than a color.
+    @ViewBuilder func backgroundView(_ scheme: ColorScheme) -> some View {
+        if self == .custom { CustomWidgetStyle.saved.background }
+        else if self == .charcoal {
+            charcoalFill.overlay { ContainerRelativeShape().strokeBorder(Self.charcoalEdge, lineWidth: 0.5) }
+        }
+        else if self == .gallery {
+            ZStack { background(scheme); ContainerRelativeShape().strokeBorder(color(scheme == .dark ? 0x454E59 : 0xDED8CB), lineWidth: 1) }
+        } else { background(scheme) }
+    }
+    /// Compensated against the side-by-side device capture for the Home Screen surface highlight.
+    var charcoalFill: LinearGradient {
+        LinearGradient(stops: [.init(color: color(0x202022), location: 0), .init(color: color(0x1E1E20), location: 0.5), .init(color: color(0x1D1D1F), location: 0.93), .init(color: color(0x1D1D1F), location: 1)], startPoint: .top, endPoint: .bottom)
+    }
+    static var charcoalEdge: LinearGradient {
+        LinearGradient(colors: [.white.opacity(0.06), .white.opacity(0.015), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
+    }
+    /// The widget accent: the custom style's own accent if it has one, otherwise the app accent.
+    func widgetAccent(appRGB: Int) -> (color: Color, onColor: Color, custom: Bool) {
+        if self == .charcoal { return (.white, .black, true) }
+        if self == .custom, let accent = CustomWidgetStyle.saved.accent {
+            return (accent.color, CustomWidgetStyle.contrastingText(on: accent), true)
+        }
+        return (AccentStore.color(appRGB), AccentStore.contrastingText(appRGB), false)
+    }
+    func text(_ scheme: ColorScheme) -> Color {
+        if self == .charcoal { return .white }
+        if self == .gallery { return color(scheme == .dark ? 0xEEE7DB : 0x342D27) }
+        if self == .custom { return CustomWidgetStyle.saved.text }
+        return (scheme == .dark || self == .black) ? .white : .black
+    }
     func secondary(_ scheme: ColorScheme) -> Color { text(scheme).opacity(0.6) }
     func accent(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.darkAccent : colors.accent) }
-    /// Text drawn on top of `accent`.
-    func onAccent(_ scheme: ColorScheme) -> Color { (scheme == .dark || self == .black) ? .black : .white }
     private func color(_ hex: UInt) -> Color {
         Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
     }
