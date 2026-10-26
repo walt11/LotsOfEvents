@@ -7,6 +7,7 @@ import WidgetKit
 struct LotsOfEventsApp: App {
     init() {
         AccentStore.migrateFromAppDefaults()
+        AppTheme.migrateFromAppearance()
         // Adopt the redesign once; retain custom artwork and every per-widget override.
         if !Preferences.defaults.bool(forKey: "galleryAppearanceInstalled") {
             let previous = Preferences.defaults.string(forKey: "widgetTheme")
@@ -40,12 +41,18 @@ final class AgendaModel: ObservableObject {
     /// Completed reminders are fetched only while a view shows them; accounts can have years of history.
     @Published var includeCompleted = false { didSet { if includeCompleted != oldValue { scheduleRefresh() } } }
     @Published var completedLoaded = false
+    /// Reminders completed since midnight, always fetched (a small query) for the Focus view's progress and Done list.
+    @Published var completedToday: [EKReminder] = []
     @Published var undo: UndoAction?
     @Published var generation = 0
     @Published var agendaReturnToToday = 0
     @Published var calendarReturnToToday = 0
     var calendarCreationDate = Date.now.roundedUpToHalfHour()
     var activeReminderList: String?
+    /// The list just made in New List, so the Reminders tab can bring it into view.
+    @Published var lastCreatedListID: String?
+    /// Whether Settings is showing the App Theme gallery; lives here so it survives the rebuild a theme change causes.
+    @Published var showingThemePicker = false
     @Published var sheet: AppSheet?
     private var revision = 0
     private var pendingRefresh: Task<Void, Never>?
@@ -67,14 +74,17 @@ final class AgendaModel: ObservableObject {
         if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
         let wantsCompleted = includeCompleted
         var fetched: [EKReminder] = []
+        var doneToday: [EKReminder] = []
         if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
             fetched = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil))
+            doneToday = await store.reminders(matching: store.predicateForCompletedReminders(withCompletionDateStarting: Calendar.current.startOfDay(for: .now), ending: nil, calendars: nil))
             if wantsCompleted {
                 fetched += await store.reminders(matching: store.predicateForCompletedReminders(withCompletionDateStarting: nil, ending: nil, calendars: nil))
             }
         }
         guard current == revision else { return }
         reminders = fetched
+        completedToday = doneToday
         completedLoaded = wantsCompleted
         generation += 1
         loading = false
@@ -207,6 +217,8 @@ struct EventEditor: UIViewControllerRepresentable {
         event.startDate = startDate
         event.endDate = startDate.addingTimeInterval(3600)
         event.calendar = store.defaultCalendarForNewEvents
+        // Prefill the default alert; Apple's editor shows it and it can be changed there.
+        AlertDefaults.apply(to: event)
         editor.event = event
         editor.editViewDelegate = context.coordinator
         return editor

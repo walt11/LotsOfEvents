@@ -43,6 +43,11 @@ enum QuickAddParser {
         rest.title = ([String(trimmed[..<space])] + (rest.title.isEmpty ? [] : [rest.title])).joined(separator: " ")
         return rest
     }
+    /// Whether the text mentions a day (as opposed to only a time), e.g. "Friday" or "tomorrow 3pm".
+    static func namesDay(_ text: String) -> Bool {
+        let pattern = #"\b(today|tonight|tomorrow|yesterday|mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\d{1,2}/\d{1,2}|\bnext\b"#
+        return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
     private static func extract(_ trimmed: String, calendar: Calendar) -> QuickAddParse {
         let all = NSRange(trimmed.startIndex..., in: trimmed)
         guard let match = detector.firstMatch(in: trimmed, range: all), let date = match.date, let range = Range(match.range, in: trimmed) else {
@@ -103,7 +108,7 @@ enum QuickAddSaver {
             item.calendar = list
             if let due = parsed.date {
                 item.dueDateComponents = ReminderDates.components(due, timed: !parsed.allDay)
-                if !parsed.allDay { item.addAlarm(EKAlarm(absoluteDate: due)) }
+                AlertDefaults.apply(to: item, due: due, timed: !parsed.allDay)
             }
             try store.save(item, commit: true)
             guard let due = parsed.date else { return "Added “\(parsed.title)” to \(list.title)." }
@@ -118,6 +123,7 @@ enum QuickAddSaver {
             event.isAllDay = parsed.allDay
             event.startDate = start
             event.endDate = start.addingTimeInterval(parsed.allDay ? 0 : parsed.duration ?? 3600)
+            AlertDefaults.apply(to: event)
             try store.save(event, span: .thisEvent, commit: true)
             return "Added “\(parsed.title)” \(describe(start, allDay: parsed.allDay))."
         }

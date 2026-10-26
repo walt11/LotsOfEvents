@@ -28,6 +28,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: LotsOfEvents
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Light AppIcon-Dark AppIcon-Midnight AppIcon-Forest AppIcon-Studio
     info:
       path: LotsOfEvents/Info.plist
       properties:

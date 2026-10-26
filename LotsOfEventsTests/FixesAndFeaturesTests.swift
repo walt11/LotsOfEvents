@@ -192,3 +192,192 @@ final class CustomAccentTests: XCTestCase {
         XCTAssertEqual(CustomWidgetStyle.contrastingText(on: StoredColor(red: 0.1, green: 0.1, blue: 0.4)), .white)
     }
 }
+
+final class ReminderFocusTests: XCTestCase {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Chicago")!
+        return c
+    }
+    private func date(_ day: Int, _ hour: Int = 0, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+    func testTodayBuckets() {
+        let now = date(26, 13)
+        XCTAssertEqual(FocusGrouping.bucket(due: date(25), timed: false, now: now, calendar: calendar), .overdue)
+        XCTAssertEqual(FocusGrouping.bucket(due: date(26, 9), timed: true, now: now, calendar: calendar), .overdue)
+        XCTAssertEqual(FocusGrouping.bucket(due: date(26, 15), timed: true, now: now, calendar: calendar), .afternoon)
+        XCTAssertEqual(FocusGrouping.bucket(due: date(26, 19), timed: true, now: now, calendar: calendar), .tonight)
+        XCTAssertEqual(FocusGrouping.bucket(due: date(26), timed: false, now: now, calendar: calendar), .anytime)
+        XCTAssertNil(FocusGrouping.bucket(due: date(27, 8), timed: true, now: now, calendar: calendar))
+        XCTAssertNil(FocusGrouping.bucket(due: nil, timed: false, now: now, calendar: calendar))
+        XCTAssertEqual(FocusGrouping.bucket(due: date(26, 10), timed: true, now: date(26, 8), calendar: calendar), .morning)
+    }
+    func testProgress() {
+        XCTAssertEqual(FocusGrouping.progress(done: 3, open: 5), 0.375)
+        XCTAssertEqual(FocusGrouping.progress(done: 0, open: 0), 0)
+    }
+    func testDueLabels() {
+        let now = date(26, 13)
+        XCTAssertEqual(ReminderDueText.label(due: date(26), timed: false, now: now, calendar: calendar), "Today")
+        XCTAssertEqual(ReminderDueText.label(due: date(25), timed: false, now: now, calendar: calendar), "Yesterday")
+        XCTAssertEqual(ReminderDueText.label(due: date(27), timed: false, now: now, calendar: calendar), "Tomorrow")
+        XCTAssertTrue(ReminderDueText.label(due: date(27, 9), timed: true, now: now, calendar: calendar).hasPrefix("Tomorrow "))
+    }
+}
+
+final class NewListTests: XCTestCase {
+    /// Runs where Reminders access is granted (e.g. `simctl privacy grant reminders`); cleans up after itself.
+    @MainActor
+    func testCreateListAddsWritableReminderList() async throws {
+        try XCTSkipUnless(EKEventStore.authorizationStatus(for: .reminder) == .fullAccess, "Needs Reminders access")
+        let model = AgendaModel()
+        await model.refresh()
+        let source = try XCTUnwrap(model.store.defaultCalendarForNewReminders()?.source)
+        let name = "LotsOfEvents test \(UUID().uuidString.prefix(6))"
+        let id = try model.createList(named: name, color: ListColors.presets[1].color, in: source)
+        defer { if let list = model.store.calendar(withIdentifier: id) { try? model.store.removeCalendar(list, commit: true) } }
+        let list = try XCTUnwrap(model.store.calendar(withIdentifier: id))
+        XCTAssertEqual(list.title, name)
+        XCTAssertEqual(list.allowedEntityTypes, .reminder)
+        XCTAssertTrue(model.lists.contains { $0.calendarIdentifier == id })
+    }
+}
+
+final class InlineReminderDraftTests: XCTestCase {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Chicago")!
+        return c
+    }
+    private func date(_ day: Int, _ hour: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))!
+    }
+    func testTypedDateUsedWhenNoMenuChoice() {
+        let r = InlineReminderDraft().resolve("Pay rent", now: date(26, 10), calendar: calendar)
+        XCTAssertEqual(r.title, "Pay rent")
+        XCTAssertNil(r.due)
+    }
+    func testMenuDayAndTime() {
+        var draft = InlineReminderDraft()
+        draft.day = .tomorrow
+        draft.time = DateComponents(hour: 9, minute: 0)
+        let r = draft.resolve("Call bank", now: date(26, 10), calendar: calendar)
+        XCTAssertEqual(r.due, date(27, 9))
+        XCTAssertTrue(r.timed)
+    }
+    func testWeekendAndNextWeek() {
+        var draft = InlineReminderDraft()
+        draft.day = .weekend
+        // Monday Oct 26 → Saturday Oct 31; Saturday stays today.
+        XCTAssertEqual(draft.resolve("x", now: date(26, 10), calendar: calendar).due, date(31))
+        XCTAssertEqual(draft.resolve("x", now: date(31, 10), calendar: calendar).due, date(31))
+        draft.day = .nextWeek
+        // Monday Oct 26 → the following Monday, Nov 2.
+        XCTAssertEqual(draft.resolve("x", now: date(26, 10), calendar: calendar).due, calendar.date(from: DateComponents(year: 2026, month: 11, day: 2))!)
+    }
+    func testTimeWithoutDayRollsToNextOccurrence() {
+        var draft = InlineReminderDraft()
+        draft.time = DateComponents(hour: 9, minute: 0)
+        XCTAssertEqual(draft.resolve("x", now: date(26, 10), calendar: calendar).due, date(27, 9))
+        XCTAssertEqual(draft.resolve("x", now: date(26, 8), calendar: calendar).due, date(26, 9))
+    }
+}
+
+final class ReminderOrderTests: XCTestCase {
+    func testUndatedKeepAddedOrderAfterDated() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        typealias Item = (title: String, due: Date?, created: Date)
+        let items: [Item] = [
+            ("Zebra notes", nil, t0),
+            ("Apple pie", nil, t0.addingTimeInterval(60)),
+            ("Dentist", t0.addingTimeInterval(86400), t0.addingTimeInterval(120)),
+            ("Book flights", nil, t0.addingTimeInterval(180))
+        ]
+        let ordered = items.sorted {
+            ReminderOrder.precedes(due: $0.due, priority: 0, created: $0.created, title: $0.title,
+                                   before: $1.due, 0, $1.created, $1.title, byPriority: false)
+        }.map(\.title)
+        XCTAssertEqual(ordered, ["Dentist", "Zebra notes", "Apple pie", "Book flights"])
+    }
+    func testPrioritySortStillWins() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertTrue(ReminderOrder.precedes(due: nil, priority: 1, created: t0.addingTimeInterval(60), title: "B",
+                                             before: nil, 0, t0, "A", byPriority: true))
+    }
+}
+
+final class AppThemeTests: XCTestCase {
+    private func contrast(_ a: UInt, _ b: UInt) -> Double {
+        func lum(_ h: UInt) -> Double {
+            [Double((h >> 16) & 255), Double((h >> 8) & 255), Double(h & 255)].map { v -> Double in
+                let c = v / 255; return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+            }.enumerated().map { [0.2126, 0.7152, 0.0722][$0.offset] * $0.element }.reduce(0, +)
+        }
+        let (x, y) = (lum(a), lum(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+    func testSixThemesAllReadable() {
+        XCTAssertEqual(AppTheme.allCases.count, 6)
+        for theme in AppTheme.allCases {
+            let c = theme.colors
+            for (fg, bg, name) in [(c.ink, c.card, "ink/card"), (c.muted, c.card, "muted/card"), (c.muted, c.paper, "muted/paper"),
+                                   (c.accent, c.card, "accent/card"), (c.accent, c.paper, "accent/paper"), (c.onAccent, c.accent, "onAccent")] {
+                XCTAssertGreaterThanOrEqual(contrast(fg, bg), 4.5, "\(theme.title) \(name)")
+            }
+        }
+    }
+}
+
+final class ThemeIconTests: XCTestCase {
+    func testEveryThemeHasABundledIcon() throws {
+        XCTAssertNil(AppTheme.graphite.iconName)
+        let alternates = (Bundle(for: AgendaModel.self).object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any])?["CFBundleAlternateIcons"] as? [String: Any]
+        for theme in AppTheme.allCases where theme != .graphite {
+            let name = try XCTUnwrap(theme.iconName)
+            XCTAssertNotNil(alternates?[name], "\(name) missing from the app's alternate icons")
+        }
+    }
+}
+
+final class QuickAddDayTests: XCTestCase {
+    func testNamesDay() {
+        XCTAssertTrue(QuickAddParser.namesDay("Lunch Friday 1pm"))
+        XCTAssertTrue(QuickAddParser.namesDay("call tomorrow"))
+        XCTAssertTrue(QuickAddParser.namesDay("Dentist Oct 30"))
+        XCTAssertFalse(QuickAddParser.namesDay("Call mom 3pm"))
+        XCTAssertFalse(QuickAddParser.namesDay("Buy milk"))
+    }
+}
+
+final class AlertDefaultsTests: XCTestCase {
+    func testEventOffsets() {
+        XCTAssertEqual(AlertDefaults.eventOffset(allDay: false, timed: .minutes15, allDayOption: .none), -900)
+        XCTAssertEqual(AlertDefaults.eventOffset(allDay: false, timed: .atTime, allDayOption: .none), 0)
+        XCTAssertNil(AlertDefaults.eventOffset(allDay: false, timed: .none, allDayOption: .dayOf))
+        // All-day alerts count from midnight: 9 AM that day, or 9 AM the day before.
+        XCTAssertEqual(AlertDefaults.eventOffset(allDay: true, timed: .none, allDayOption: .dayOf, allDayMinute: 540), 32_400)
+        XCTAssertEqual(AlertDefaults.eventOffset(allDay: true, timed: .none, allDayOption: .dayBefore, allDayMinute: 540), -54_000)
+        XCTAssertNil(AlertDefaults.eventOffset(allDay: true, timed: .minutes15, allDayOption: .none))
+        // A custom time: 7:30 AM the day before.
+        XCTAssertEqual(AlertDefaults.eventOffset(allDay: true, timed: .none, allDayOption: .dayBefore, allDayMinute: 450), -86_400 + 27_000)
+    }
+    func testReminderAlarmDates() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let due = calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 15))!
+        XCTAssertEqual(AlertDefaults.reminderAlarmDate(due: due, timed: true, option: .minutes30, dateOnly: false, calendar: calendar), due.addingTimeInterval(-1800))
+        XCTAssertNil(AlertDefaults.reminderAlarmDate(due: due, timed: true, option: .none, dateOnly: true, calendar: calendar))
+        XCTAssertNil(AlertDefaults.reminderAlarmDate(due: due, timed: false, option: .atTime, dateOnly: false, calendar: calendar))
+        XCTAssertEqual(AlertDefaults.reminderAlarmDate(due: due, timed: false, option: .atTime, dateOnly: true, dateOnlyMinute: 510, calendar: calendar),
+                       calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 8, minute: 30)))
+    }
+    func testApplySkipsEventsThatAlreadyHaveAlerts() {
+        let event = EKEvent(eventStore: EKEventStore())
+        event.isAllDay = false
+        let existing = EKAlarm(relativeOffset: -60)
+        event.addAlarm(existing)
+        AlertDefaults.apply(to: event)
+        XCTAssertEqual(event.alarms?.count, 1)
+    }
+}

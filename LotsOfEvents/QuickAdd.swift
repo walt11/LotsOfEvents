@@ -10,13 +10,28 @@ struct QuickAddView: View {
     @State private var dictationPrefix = ""
     @Environment(\.scenePhase) private var phase
     @State var reminder = false
+    /// A day chosen before opening (a widget's +); used unless the text or a day shortcut names another.
+    var presetDay: Date? = nil
     @State private var error: String?
     @State private var dayPhrase: String?
     @State private var timePhrase: String?
     /// The chosen calendar or list; empty means the account default.
     @State private var targetID = ""
     @FocusState private var focused: Bool
-    private var parsed: QuickAddParse { QuickAddParser.parse([text, dayPhrase, timePhrase].compactMap { $0 }.joined(separator: " ")) }
+    private var parsed: QuickAddParse {
+        var result = QuickAddParser.parse([text, dayPhrase, timePhrase].compactMap { $0 }.joined(separator: " "))
+        guard let presetDay, dayPhrase == nil else { return result }
+        let calendar = Calendar.current
+        if let date = result.date, !result.allDay, !QuickAddParser.namesDay(text) {
+            // A time on its own ("3pm", or a time shortcut) lands on the preset day.
+            let time = calendar.dateComponents([.hour, .minute], from: date)
+            result.date = calendar.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: presetDay)
+        } else if result.date == nil {
+            result.date = calendar.startOfDay(for: presetDay)
+            result.allDay = true
+        }
+        return result
+    }
     private var targets: [EKCalendar] { (reminder ? model.lists : model.calendars).filter(\.allowsContentModifications) }
     private var defaultTargetName: String { (reminder ? model.store.defaultCalendarForNewReminders()?.title : model.store.defaultCalendarForNewEvents?.title) ?? "None" }
     private var canSave: Bool { !parsed.title.isEmpty && (reminder ? model.reminderAccess : model.calendarAccess) }
@@ -53,15 +68,20 @@ struct QuickAddView: View {
                         Text("Event").tag(false)
                         Text("Reminder").tag(true)
                     }.pickerStyle(.segmented)
+                    Picker(reminder ? "List" : "Calendar", selection: $targetID) {
+                        Text("Default (\(defaultTargetName))").tag("")
+                        ForEach(targets, id: \.calendarIdentifier) { target in
+                            // Menus tint SF Symbols, so draw the dot in its own color to keep each list recognizable.
+                            Label { Text(target.title) } icon: {
+                                Image(uiImage: UIImage(systemName: "circle.fill")!.withTintColor(UIColor(cgColor: target.cgColor), renderingMode: .alwaysOriginal))
+                            }.tag(target.calendarIdentifier)
+                        }
+                    }
                 } footer: { Text("Type or dictate a title with a day or time, or tap a shortcut.") }
                 if !parsed.title.isEmpty {
                     Section("Preview") {
                         LabeledContent("Title", value: parsed.title)
                         LabeledContent(reminder ? "Due" : "Starts", value: whenText)
-                        Picker(reminder ? "List" : "Calendar", selection: $targetID) {
-                            Text("Default (\(defaultTargetName))").tag("")
-                            ForEach(targets, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
-                        }
                     }
                 }
                 if reminder ? !model.reminderAccess : !model.calendarAccess {
@@ -82,7 +102,9 @@ struct QuickAddView: View {
             text = dictationPrefix.isEmpty ? words : dictationPrefix + " " + words
         }
         .onChange(of: dictation.error) { _, message in if let message { error = message } }
-        .onChange(of: reminder) { _, _ in targetID = "" }
+        // Reminders start in the list being viewed in the Reminders tab, when exactly one is shown.
+        .onChange(of: reminder) { _, isReminder in targetID = isReminder ? (model.activeReminderList ?? "") : "" }
+        .onAppear { if reminder { targetID = model.activeReminderList ?? "" } }
         .onChange(of: phase) { _, value in if value == .background { dictation.stop() } }
         .onDisappear { dictation.stop() }
         .task {

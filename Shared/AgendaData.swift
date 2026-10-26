@@ -59,7 +59,7 @@ extension EKCalendarItem {
     var isWritable: Bool { calendar?.allowsContentModifications ?? false }
 }
 
-/// The app accent, kept in the App Group so widgets use the same color. -1 means the default gallery rust.
+/// The app accent, kept in the App Group so widgets use the same color. -1 means the default graphite steel blue.
 enum AccentStore {
     static let key = "appAccentRGB"
     static var rgb: Int { Preferences.defaults.object(forKey: key) as? Int ?? -1 }
@@ -69,7 +69,7 @@ enum AccentStore {
     }
     /// Black or white, whichever reads better on the accent.
     static func contrastingText(_ rgb: Int) -> Color {
-        if rgb == -1 { return GalleryPalette.color(0xFFFFFF, 0x342D27) }
+        if rgb == -1 { return GalleryPalette.onAccent }
         let channels = [Double((rgb >> 16) & 255), Double((rgb >> 8) & 255), Double(rgb & 255)].map { value -> Double in
             let c = value / 255
             return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)

@@ -115,7 +115,15 @@ struct ThreeDayAgendaView: View {
                         }.accessibilityLabel("Next page")
                     }
                     Spacer(minLength: 0)
-                }.font(.system(size: 10, weight: .bold)).buttonStyle(.plain)
+                }
+                // Quick Add, opened on the day selected in this widget.
+                .overlay(alignment: .trailing) {
+                    Link(destination: URL(string: "lotsofevents://quick-add?day=\(Int(entry.selectedDay.timeIntervalSince1970))")!) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 22)
+                    }
+                    .accessibilityLabel("Add to \(entry.selectedDay.formatted(.dateTime.weekday(.wide)))")
+                }
+                .font(.system(size: 10, weight: .bold)).buttonStyle(.plain)
                     .foregroundStyle(entry.theme.secondary(colorScheme)).frame(height: 14)
             }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }

@@ -42,7 +42,7 @@ struct AddReminderIntent: AppIntent {
         reminder.calendar = list
         if let due {
             reminder.dueDateComponents = ReminderDates.components(due, timed: true)
-            reminder.addAlarm(EKAlarm(absoluteDate: due))
+            AlertDefaults.apply(to: reminder, due: due, timed: true)
         }
         try store.save(reminder, commit: true)
         WidgetCenter.shared.reloadAllTimelines()

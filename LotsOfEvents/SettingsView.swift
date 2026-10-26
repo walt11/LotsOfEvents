@@ -9,11 +9,15 @@ struct SourcesView: View {
     var embedded = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AppTheme.key, store: Preferences.defaults) private var appThemeID = AppTheme.graphite.rawValue
+    private var appTheme: AppTheme { AppTheme(rawValue: appThemeID) ?? .graphite }
     @State private var days = Preferences.days
     @AppStorage("widgetTheme", store: Preferences.defaults) private var themeID = AgendaTheme.selected.rawValue
     private var theme: AgendaTheme { AgendaTheme(rawValue: themeID) ?? .gallery }
     @State private var customStyle = CustomWidgetStyle.saved
+    // Default alerts; the same keys and defaults as AlertDefaults, in the shared App Group.
+    @AppStorage("alertEvent", store: Preferences.defaults) private var eventAlert = EventAlertOption.minutes15.rawValue
+    @AppStorage("alertReminder", store: Preferences.defaults) private var reminderAlert = ReminderAlertOption.atTime.rawValue
     var body: some View {
         NavigationStack {
             List {
@@ -43,10 +47,14 @@ struct SourcesView: View {
                     }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Appearance") {
-                    Picker("App appearance", selection: $appearance) {
-                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    Text("Widgets follow your device appearance. Choose a preset or customize their colors below.").font(.caption).foregroundStyle(.secondary)
+                    // Kept on the model so the gallery stays open when a new theme rebuilds the app's views.
+                    Button { model.showingThemePicker = true } label: {
+                        HStack {
+                            settingsRow("App theme", symbol: "circle.lefthalf.filled", color: GalleryPalette.accent, detail: appTheme.title)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        }.contentShape(Rectangle())
+                    }.buttonStyle(.plain)
                     ColorPicker(selection: $accent, supportsOpacity: false) {
                         settingsRow("App accent", symbol: "eyedropper", color: accent, detail: "Choose any color for buttons & selections")
                     }
@@ -55,6 +63,12 @@ struct SourcesView: View {
                         themePicker
                     } label: {
                         settingsRow("Widget theme", symbol: "paintpalette", color: .purple, detail: theme.title)
+                    }
+                }.listRowBackground(GalleryPalette.card)
+                Section("Notifications") {
+                    NavigationLink { DefaultAlertsView() } label: {
+                        settingsRow("Default alerts", symbol: "bell.badge", color: .red,
+                                    detail: "Events: \(EventAlertOption(rawValue: eventAlert)?.title ?? "None") · Reminders: \(ReminderAlertOption(rawValue: reminderAlert)?.title ?? "None")")
                     }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Widgets") {
@@ -78,6 +92,7 @@ struct SourcesView: View {
                 }.listRowBackground(GalleryPalette.card)
             }
             .listRowBackground(GalleryPalette.card)
+            .navigationDestination(isPresented: $model.showingThemePicker) { appThemePicker }
             .navigationTitle("Settings")
             .galleryTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -134,6 +149,59 @@ struct SourcesView: View {
             }.listRowBackground(Color.clear)
         }.navigationTitle(reminders ? "Reminder lists" : "Calendars").navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
+    }
+    /// The app's own themes; each fixes light or dark, so the app no longer follows the device setting.
+    private var appThemePicker: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14)], spacing: 14) {
+                ForEach(AppTheme.allCases) { option in
+                    let c = option.colors
+                    Button {
+                        appThemeID = option.rawValue
+                        // The default accent comes from the theme, and widgets use it too.
+                        WidgetCenter.shared.reloadAllTimelines()
+                        // Match the Home Screen icon. iOS confirms the change with its own short alert.
+                        if UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != option.iconName {
+                            UIApplication.shared.setAlternateIconName(option.iconName)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Circle().fill(GalleryPalette.hex(c.accent)).frame(width: 10, height: 10)
+                                RoundedRectangle(cornerRadius: 2).fill(GalleryPalette.hex(c.ink)).frame(width: 54, height: 5)
+                            }
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(0..<2, id: \.self) { row in
+                                    HStack(spacing: 6) {
+                                        Circle().strokeBorder(GalleryPalette.hex(c.accent), lineWidth: 1.5).frame(width: 10, height: 10)
+                                        RoundedRectangle(cornerRadius: 2).fill(GalleryPalette.hex(row == 0 ? c.ink : c.muted)).frame(width: row == 0 ? 70 : 52, height: 4)
+                                    }
+                                }
+                            }
+                            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(GalleryPalette.hex(c.card), in: RoundedRectangle(cornerRadius: 8))
+                            HStack {
+                                Text(option.title).font(.subheadline.weight(.semibold)).foregroundStyle(GalleryPalette.hex(c.ink))
+                                Spacer()
+                                Image(systemName: appThemeID == option.rawValue ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(GalleryPalette.hex(appThemeID == option.rawValue ? c.accent : c.muted))
+                            }
+                        }
+                        .padding(12)
+                        .background(GalleryPalette.hex(c.paper), in: RoundedRectangle(cornerRadius: 18))
+                        .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(appThemeID == option.rawValue ? GalleryPalette.hex(c.accent) : GalleryPalette.line, lineWidth: appThemeID == option.rawValue ? 2.5 : 0.5) }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(option.title) theme")
+                    .accessibilityAddTraits(appThemeID == option.rawValue ? .isSelected : [])
+                }
+            }
+            .padding()
+            Text("Themes set the app’s colors and whether it looks light or dark. A custom App accent still overrides the theme’s accent. Widgets keep their own themes.")
+                .font(.footnote).foregroundStyle(GalleryPalette.muted).padding(.horizontal).padding(.bottom)
+        }
+        .background(GalleryPalette.paper)
+        .navigationTitle("App Theme").navigationBarTitleDisplayMode(.inline)
     }
     private var themePicker: some View {
         ScrollView {

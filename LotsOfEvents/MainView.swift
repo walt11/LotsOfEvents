@@ -4,10 +4,11 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case sources, newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool)
+    case sources, newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList
     var id: String {
         switch self {
         case .sources: return "sources"
+        case .newList: return "new-list"
         case .quickAdd: return "quick-add"
         case .newEvent(let date): return "new-\(date.timeIntervalSince1970)"
         case .event(let event): return "event-\(event.eventIdentifier ?? "")-\(event.startDate.timeIntervalSince1970)"
@@ -21,16 +22,19 @@ struct MainView: View {
     @StateObject private var model = AgendaModel()
     @Environment(\.scenePhase) private var phase
     @State private var tab = 0
-    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
+    @State private var keyboardShown = false
+    @AppStorage(AppTheme.key, store: Preferences.defaults) private var themeID = AppTheme.graphite.rawValue
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
         Group {
             if sizeClass == .regular { sidebarLayout } else { phoneLayout }
         }
+        // Theme colors are read when views are built, so a new theme rebuilds them.
+        .id(themeID)
         .background(GalleryPalette.paper)
         .foregroundStyle(GalleryPalette.ink)
         .scrollContentBackground(.hidden)
-        .preferredColorScheme((AppAppearance(rawValue: appearance) ?? .system).scheme)
+        .preferredColorScheme((AppTheme(rawValue: themeID) ?? .graphite).scheme)
         .tint(accent)
         .task { await model.refresh() }
         .onChange(of: phase) { _, phase in
@@ -42,7 +46,10 @@ struct MainView: View {
             if url.host == "new" { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
             else if url.host == "quick-add" {
                 // The widget's + opens straight into Quick Add; `?type=reminder` starts in reminder mode.
-                model.sheet = .quickAdd(reminder: url.query?.contains("type=reminder") == true)
+                // `day=<seconds since 1970>` comes from a widget's + and starts Quick Add on that day.
+                let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let day = items.first { $0.name == "day" }?.value.flatMap(TimeInterval.init).map(Date.init(timeIntervalSince1970:))
+                model.sheet = .quickAdd(reminder: items.contains { $0.name == "type" && $0.value == "reminder" }, day: day)
             }
             else if url.host == "reminders" { tab = 2 }
             else if url.host == "new-reminder" {
@@ -60,7 +67,8 @@ struct MainView: View {
             case .newEvent(let date): EventEditor(store: model.store, startDate: date)
             case .event(let event): EventDetails(event: event)
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
-            case .quickAdd(let reminder): QuickAddView(model: model, reminder: reminder)
+            case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
+            case .newList: NewListView(model: model)
             }
         }
         .overlay(alignment: .bottom) {
@@ -94,6 +102,8 @@ struct MainView: View {
     private var phoneLayout: some View {
         VStack(spacing: 0) {
             tabs
+            // The bar would ride up on the keyboard and cover what's being typed, so it steps aside while typing.
+            if !keyboardShown {
             HStack(spacing: 0) {
                 bottomTab(index: 0)
                 bottomTab(index: 1)
@@ -104,7 +114,10 @@ struct MainView: View {
             .padding(.horizontal, 10).padding(.vertical, 6)
             .gallerySurface(radius: 22)
             .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
+            }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardShown = false }
     }
     private var sidebarLayout: some View {
         NavigationSplitView {

@@ -2,40 +2,18 @@ import SwiftUI
 import EventKit
 import WidgetKit
 
-enum ReminderFilter: String, CaseIterable {
-    case today = "Today", scheduled = "Scheduled", all = "All", completed = "Completed"
-    var symbol: String {
-        switch self { case .today: return "calendar"; case .scheduled: return "calendar.badge.clock"; case .all: return "tray.full"; case .completed: return "checkmark.circle" }
-    }
-}
-
 struct RemindersHome: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    @State private var filter = ReminderFilter.all
+    @AppStorage("reminderLayout") private var layout = ReminderLayout.focus
+    @AppStorage("reminderFocusScope") private var scope = FocusScope.today
     /// Lists shown in the Reminders tab, saved between launches; empty means all lists.
     @AppStorage("reminderTabLists") private var savedListIDs = ""
+    @AppStorage("reminderSortByPriority") private var sortByPriority = false
     @State private var search = ""
     @State private var showingSearch = false
+    @State private var showEarlier = false
     @FocusState private var searchFocused: Bool
-    @State private var sortByPriority = false
-    @AppStorage("reminderHintViews") private var hintViews = 0
-    private var filtered: [EKReminder] {
-        model.reminders.filter { reminder in
-            if !listIDs.isEmpty, !listIDs.contains(reminder.calendar.calendarIdentifier) { return false }
-            guard matches(reminder, filter: filter) else { return false }
-            return search.isEmpty || [reminder.title, reminder.notes, reminder.calendarTitle].compactMap { $0 }.joined(separator: " ").localizedCaseInsensitiveContains(search)
-        }.sorted {
-            if $0.isCompleted != $1.isCompleted { return !$0.isCompleted }
-            if sortByPriority && $0.priority != $1.priority {
-                return ($0.priority == 0 ? 10 : $0.priority) < ($1.priority == 0 ? 10 : $1.priority)
-            }
-            let a = ReminderDates.due($0) ?? .distantFuture
-            let b = ReminderDates.due($1) ?? .distantFuture
-            if a != b { return a < b }
-            return ($0.title ?? "").localizedStandardCompare($1.title ?? "") == .orderedAscending
-        }
-    }
     /// The chosen lists that still exist, so a deleted list can't hide everything.
     private var listIDs: Set<String> {
         let chosen = Set(savedListIDs.split(separator: ",").map(String.init))
@@ -46,18 +24,20 @@ struct RemindersHome: View {
         if included { ids.insert(id) } else { ids.remove(id) }
         savedListIDs = ids.sorted().joined(separator: ",")
     }
-    private var listSummary: String {
-        switch listIDs.count {
-        case 0: return "All lists"
-        case 1: return model.lists.first(where: { listIDs.contains($0.calendarIdentifier) })?.title ?? "1 list"
-        default: return "\(listIDs.count) lists"
-        }
-    }
     /// New reminders go to the shown list when exactly one is chosen.
     private var singleListID: String? { listIDs.count == 1 ? listIDs.first : nil }
-    private var needsCompleted: Bool { filter == .completed }
+    private var shownLists: [EKCalendar] { listIDs.isEmpty ? model.lists : model.lists.filter { listIDs.contains($0.calendarIdentifier) } }
+    /// Applies the list choice and search; reminders whose list was deleted are dropped.
+    private func narrowed(_ items: [EKReminder]) -> [EKReminder] {
+        items.filter { reminder in
+            guard let id = reminder.calendar?.calendarIdentifier else { return false }
+            if !listIDs.isEmpty && !listIDs.contains(id) { return false }
+            return search.isEmpty || [reminder.title, reminder.notes, reminder.calendarTitle].compactMap { $0 }.joined(separator: " ").localizedCaseInsensitiveContains(search)
+        }
+    }
+    private var needsCompleted: Bool { layout == .focus && scope == .done && showEarlier }
     var body: some View {
-        let rows = filtered
+        let open = narrowed(model.reminders.filter { !$0.isCompleted })
         NavigationStack {
             Group {
                 if !model.reminderAccess {
@@ -75,75 +55,20 @@ struct RemindersHome: View {
                             }.padding(.leading, 12).gallerySurface(radius: 12)
                                 .padding(.horizontal, 16).padding(.bottom, 4)
                         }
-                        Picker("Reminder filter", selection: $filter) {
-                            ForEach([ReminderFilter.all, .today, .scheduled, .completed], id: \.self) { option in
-                                Text(option == .all ? "Open" : option.rawValue).tag(option)
-                            }
-                        }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 2)
-                        HStack {
-                            Menu {
-                                Button("All lists", systemImage: listIDs.isEmpty ? "checkmark" : "") { savedListIDs = "" }
-                                Divider()
-                                // Toggles stay open so several lists can be picked in one visit.
-                                ForEach(model.lists, id: \.calendarIdentifier) { list in
-                                    Toggle("\(list.title) · \(list.source.title)", isOn: Binding(
-                                        get: { listIDs.contains(list.calendarIdentifier) },
-                                        set: { setList(list.calendarIdentifier, included: $0) }))
-                                }
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "list.bullet")
-                                    Text(listSummary).lineLimit(1)
-                                    Image(systemName: "chevron.down").font(.caption2)
-                                }.font(.subheadline)
-                            }
-                            .menuActionDismissBehavior(.disabled)
-                            .accessibilityLabel("Choose reminder lists")
-                            .accessibilityValue(listSummary)
-                            Spacer()
-                            Menu {
-                                Picker("Sort", selection: $sortByPriority) {
-                                    Text("Due date").tag(false)
-                                    Text("Priority").tag(true)
-                                }
-                            } label: { Label(sortByPriority ? "Priority" : "Due date", systemImage: "arrow.up.arrow.down").font(.caption) }
-                        }.padding(.horizontal, 20).frame(minHeight: 44)
-                        List {
-                            if model.loading && (model.reminders.isEmpty || (needsCompleted && !model.completedLoaded)) {
-                                ProgressView("Loading reminders…")
-                            } else if rows.isEmpty {
-                                ContentUnavailableView(search.isEmpty ? "No reminders" : "No matches", systemImage: "checkmark.circle", description: Text(search.isEmpty ? "Choose another filter or list, or tap + to add a reminder." : "Try another title or note."))
-                            }
-                            ForEach(ReminderGroup.allCases, id: \.self) { group in
-                                let entries = rows.filter { ReminderGroup.group($0) == group }
-                                if !entries.isEmpty {
-                                    Section {
-                                        ForEach(entries, id: \.calendarItemIdentifier) { reminder in
-                                            reminderRow(reminder)
-                                                .galleryRow()
-                                                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
-                                                .swipeActions(edge: .leading) {
-                                                    Button(reminder.isCompleted ? "Reopen" : "Complete") { model.toggle(reminder) }.tint(accent)
-                                                }
-                                                .swipeActions(edge: .trailing) { SnoozeButtons(model: model, reminder: reminder) }
-                                        }
-                                    } header: {
-                                        HStack { Text(group.rawValue); Spacer(); Text("\(entries.count)") }
-                                            .font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
-                                    }
-                                }
-                            }
-                            // The how-to hint retires after a few visits.
-                            if !rows.isEmpty && hintViews < 3 {
-                                Text("Tap a circle to complete, a title to edit, or swipe left to snooze.")
-                                    .font(.caption2).foregroundStyle(.secondary).listRowBackground(Color.clear)
-                            }
-                        }.listSectionSpacing(10).environment(\.defaultMinListRowHeight, 44)
-                            .contentMargins(.top, 4, for: .scrollContent)
-                            .refreshable { await model.refresh() }
+                        switch layout {
+                        case .focus:
+                            let todayIDs = Set(model.completedToday.map(\.calendarItemIdentifier))
+                            let earlier = model.reminders.filter { $0.isCompleted && !todayIDs.contains($0.calendarItemIdentifier) }
+                                .sorted { ($0.completionDate ?? .distantPast) > ($1.completionDate ?? .distantPast) }
+                            ReminderFocusView(model: model, open: open,
+                                              doneToday: narrowed(model.completedToday).sorted { ($0.completionDate ?? .distantPast) > ($1.completionDate ?? .distantPast) },
+                                              doneEarlier: narrowed(earlier), scope: $scope, showEarlier: $showEarlier,
+                                              sortByPriority: sortByPriority, targetListID: singleListID)
+                        case .lists:
+                            ReminderCardsView(model: model, open: open, lists: shownLists, sortByPriority: sortByPriority)
+                        }
                     }
                     .background(GalleryPalette.paper)
-                    .onAppear { hintViews += 1 }
                 }
             }
             .navigationTitle("Reminders")
@@ -154,61 +79,52 @@ struct RemindersHome: View {
             .onAppear { model.includeCompleted = needsCompleted; model.activeReminderList = singleListID }
             .onChange(of: singleListID) { _, value in model.activeReminderList = value }
             .onChange(of: needsCompleted) { _, value in model.includeCompleted = value }
+            .onChange(of: scope) { _, value in if value != .done { showEarlier = false } }
+            // A new list joins an active list filter so it isn't hidden by it.
+            .onChange(of: model.lastCreatedListID) { _, id in
+                if let id, !listIDs.isEmpty { setList(id, included: true) }
+            }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("Layout", selection: $layout) {
+                            ForEach(ReminderLayout.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                        }
+                    } label: {
+                        Label("Reminder view: \(layout.title)", systemImage: layout.symbol)
+                    }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button("Search reminders", systemImage: "magnifyingglass") {
                         showingSearch = true; searchFocused = true
                     }
+                    Menu {
+                        Section("Lists") {
+                            Button("All lists", systemImage: listIDs.isEmpty ? "checkmark" : "") { savedListIDs = "" }
+                            // Toggles stay open so several lists can be picked in one visit.
+                            ForEach(model.lists, id: \.calendarIdentifier) { list in
+                                Toggle("\(list.title) · \(list.source.title)", isOn: Binding(
+                                    get: { listIDs.contains(list.calendarIdentifier) },
+                                    set: { setList(list.calendarIdentifier, included: $0) }))
+                            }
+                        }
+                        Section("Sort") {
+                            Picker("Sort", selection: $sortByPriority) {
+                                Text("Due date").tag(false)
+                                Text("Priority").tag(true)
+                            }
+                        }
+                        Section {
+                            Button("New List…", systemImage: "plus") { model.sheet = .newList }
+                        }
+                    } label: {
+                        Label("Filter and sort", systemImage: listIDs.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                    }
+                    .menuActionDismissBehavior(.disabled)
+                    .accessibilityValue(listIDs.isEmpty ? "All lists" : "\(listIDs.count) lists")
                 }
             }
-
         }
-    }
-    private func matches(_ reminder: EKReminder, filter: ReminderFilter) -> Bool {
-        switch filter {
-        case .all: return !reminder.isCompleted
-        case .completed: return reminder.isCompleted
-        case .scheduled: return !reminder.isCompleted && ReminderDates.due(reminder) != nil
-        case .today:
-            guard !reminder.isCompleted, let due = ReminderDates.due(reminder) else { return false }
-            return due < Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
-        }
-    }
-    private func reminderRow(_ reminder: EKReminder) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Button { model.toggle(reminder) } label: {
-                Image(systemName: reminder.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3).foregroundStyle(reminder.calendarColor).frame(width: 32, height: 30)
-            }.buttonStyle(.borderless).disabled(!reminder.isWritable)
-                .accessibilityLabel(reminder.isCompleted ? "Mark incomplete" : "Complete \(reminder.title ?? "reminder")")
-            Button { model.sheet = .reminder(reminder, nil) } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline) {
-                        if reminder.priority != 0 { Text(ReminderPriority.badge(reminder.priority)).foregroundStyle(.orange).fontWeight(.bold) }
-                        Text(reminder.title ?? "Reminder").font(.subheadline.weight(.medium)).strikethrough(reminder.isCompleted).foregroundStyle(reminder.isCompleted ? .secondary : .primary)
-                        Spacer(minLength: 0)
-                    }
-                    HStack(spacing: 6) {
-                        Text(reminder.calendarTitle).foregroundStyle(.secondary)
-                        if let due = ReminderDates.due(reminder) {
-                            Text(due.formatted(date: .abbreviated, time: reminder.dueDateComponents?.hour == nil ? .omitted : .shortened))
-                                .foregroundStyle(ReminderDates.isOverdue(reminder) ? Color.red : Color.secondary)
-                        }
-                        if reminder.hasRecurrenceRules { Image(systemName: "repeat").foregroundStyle(.secondary) }
-                    }.font(.caption2).lineLimit(1)
-                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-        }
-    }
-}
-
-enum ReminderGroup: String, CaseIterable {
-    case overdue = "Overdue", today = "Today", upcoming = "Upcoming", anytime = "No date", completed = "Completed"
-    static func group(_ reminder: EKReminder, now: Date = .now) -> ReminderGroup {
-        if reminder.isCompleted { return .completed }
-        guard let due = ReminderDates.due(reminder) else { return .anytime }
-        if ReminderDates.isOverdue(reminder, now: now) { return .overdue }
-        return Calendar.current.isDate(due, inSameDayAs: now) ? .today : .upcoming
     }
 }
 
@@ -230,9 +146,30 @@ enum ReminderRepeat: String, CaseIterable {
 }
 
 enum ReminderAlert: String, CaseIterable {
-    case keep = "Keep existing", none = "None", atTime = "At due time", hour = "1 hour before", day = "1 day before"
+    case keep = "Keep existing", none = "None", atTime = "At due time", minutes5 = "5 minutes before", minutes15 = "15 minutes before"
+    case minutes30 = "30 minutes before", hour = "1 hour before", day = "1 day before"
     var offset: TimeInterval? {
-        switch self { case .atTime: return 0; case .hour: return -3600; case .day: return -86400; default: return nil }
+        switch self {
+        case .atTime: return 0
+        case .minutes5: return -300
+        case .minutes15: return -900
+        case .minutes30: return -1800
+        case .hour: return -3600
+        case .day: return -86400
+        default: return nil
+        }
+    }
+    /// The editor's starting choice for a new timed reminder, from Settings → Notifications.
+    static var defaultForNew: ReminderAlert {
+        switch AlertDefaults.reminder {
+        case .none: return .none
+        case .atTime: return .atTime
+        case .minutes5: return .minutes5
+        case .minutes15: return .minutes15
+        case .minutes30: return .minutes30
+        case .hour1: return .hour
+        case .day1: return .day
+        }
     }
 }
 
@@ -280,7 +217,7 @@ struct ReminderEditor: View {
                         Toggle("Time", isOn: Binding(get: { hasTime }, set: { enabled in
                             hasTime = enabled
                             // Leave "Keep existing" alone so toggling Time doesn't replace a reminder's alarms.
-                            if alert != .keep { alert = enabled ? .atTime : .none }
+                            if alert != .keep { alert = enabled ? ReminderAlert.defaultForNew : .none }
                         }))
                         if hasTime { DatePicker("At", selection: $due, displayedComponents: .hourAndMinute) }
                         Picker("Repeat", selection: $repeatRule) {
@@ -364,6 +301,8 @@ struct ReminderEditor: View {
         target.calendar = calendar
         target.priority = priority
         ReminderSchedule.apply(to: target, due: hasDate ? due : nil, timed: hasTime, repeatRule: repeatRule, alert: alert)
+        // A new date-only reminder gets the day's alert when that's turned on in Settings.
+        if reminder == nil && hasDate && !hasTime { AlertDefaults.apply(to: target, due: due, timed: false) }
         target.isCompleted = completed
         do {
             try model.store.save(target, commit: true)
