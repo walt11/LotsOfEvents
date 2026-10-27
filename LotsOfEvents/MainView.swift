@@ -4,11 +4,11 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case sources, newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList
+    case newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar)
     var id: String {
         switch self {
-        case .sources: return "sources"
         case .newList: return "new-list"
+        case .editList(let list): return "edit-list-\(list.calendarIdentifier)"
         case .quickAdd: return "quick-add"
         case .newEvent(let date): return "new-\(date.timeIntervalSince1970)"
         case .event(let event): return "event-\(event.eventIdentifier ?? "")-\(event.startDate.timeIntervalSince1970)"
@@ -38,9 +38,13 @@ struct MainView: View {
         .tint(accent)
         .task { await model.refresh() }
         .onChange(of: phase) { _, phase in
-            if phase == .active { model.scheduleRefresh() }
+            if phase == .active && Date.now.timeIntervalSince(model.lastRefresh) > 2 { model.scheduleRefresh() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in model.scheduleRefresh() }
+        // Widgets reload only when calendar or reminder data actually changed (including the app's own saves).
+        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+            model.scheduleRefresh()
+            WidgetReloader.schedule()
+        }
         .onOpenURL { url in
             guard url.scheme == "lotsofevents" else { return }
             if url.host == "new" { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
@@ -52,23 +56,16 @@ struct MainView: View {
                 model.sheet = .quickAdd(reminder: items.contains { $0.name == "type" && $0.value == "reminder" }, day: day)
             }
             else if url.host == "reminders" { tab = 2 }
-            else if url.host == "new-reminder" {
-                tab = 2
-                Task {
-                    await model.refresh()
-                    if model.reminderAccess { model.sheet = .reminder(nil, nil) }
-                }
-            }
             else { tab = 1 }
         }
         .sheet(item: $model.sheet, onDismiss: { model.scheduleRefresh() }) { sheet in
             switch sheet {
-            case .sources: SourcesView(model: model)
             case .newEvent(let date): EventEditor(store: model.store, startDate: date)
             case .event(let event): EventDetails(event: event)
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
             case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
             case .newList: NewListView(model: model)
+            case .editList(let list): NewListView(model: model, editing: list)
             }
         }
         .overlay(alignment: .bottom) {
@@ -96,7 +93,7 @@ struct MainView: View {
             CalendarHome(model: model).toolbar(.hidden, for: .tabBar).tag(0)
             AgendaView(model: model).toolbar(.hidden, for: .tabBar).tag(1)
             RemindersHome(model: model).toolbar(.hidden, for: .tabBar).tag(2)
-            SourcesView(model: model, embedded: true).toolbar(.hidden, for: .tabBar).tag(3)
+            SourcesView(model: model).toolbar(.hidden, for: .tabBar).tag(3)
         }
     }
     private var phoneLayout: some View {
@@ -112,6 +109,8 @@ struct MainView: View {
                 bottomTab(index: 3)
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
+            // Like the system tab bar, labels stop growing at large sizes; touch and hold shows them enlarged.
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .gallerySurface(radius: 22)
             .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
             }
@@ -141,7 +140,7 @@ struct MainView: View {
             case 0: CalendarHome(model: model)
             case 1: AgendaView(model: model)
             case 2: RemindersHome(model: model)
-            default: SourcesView(model: model, embedded: true)
+            default: SourcesView(model: model)
             }
         }
         // Keep the sidebar beside the content in portrait too, instead of floating over a dimmed view.
@@ -181,6 +180,7 @@ struct MainView: View {
             .foregroundStyle(tab == index ? accent : Color.secondary)
             .background(tab == index ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 20))
         }.buttonStyle(.plain).accessibilityAddTraits(tab == index ? .isSelected : [])
+            .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
     }
 
 }
@@ -225,6 +225,31 @@ extension AgendaModel {
         }
         catch { reminder.isCompleted = previous; self.error = error.localizedDescription }
     }
+    /// Moves one occurrence of an event, keeping its length, with Undo.
+    func move(_ event: EKEvent, days: Int, minutes: Int) {
+        guard days != 0 || minutes != 0, event.isWritable else { return }
+        let calendar = Calendar.current
+        let originalStart = event.startDate!, originalEnd = event.endDate!
+        guard let shifted = calendar.date(byAdding: .day, value: days, to: originalStart)?.addingTimeInterval(TimeInterval(minutes * 60)) else { return }
+        event.startDate = shifted
+        event.endDate = shifted.addingTimeInterval(originalEnd.timeIntervalSince(originalStart))
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            let title = event.title ?? "Event"
+            undo = UndoAction(message: "Moved “\(title)” to \(shifted.formatted(.dateTime.weekday(.abbreviated).hour().minute()))") { [weak self] in
+                guard let self else { return }
+                event.startDate = originalStart
+                event.endDate = originalEnd
+                do { try self.store.save(event, span: .thisEvent, commit: true); self.scheduleRefresh() }
+                catch { self.error = error.localizedDescription }
+            }
+            scheduleRefresh()
+        } catch {
+            event.startDate = originalStart
+            event.endDate = originalEnd
+            self.error = error.localizedDescription
+        }
+    }
     /// Deletes a reminder, keeping a copy so Undo can recreate it (with a new identifier).
     func delete(_ reminder: EKReminder) throws {
         let snapshot = ReminderSnapshot(reminder)
@@ -253,7 +278,7 @@ struct ReminderSnapshot {
         title = reminder.title ?? "Reminder"
         notes = reminder.notes
         url = reminder.url
-        listID = reminder.calendar.calendarIdentifier
+        listID = reminder.calendar?.calendarIdentifier ?? ""
         priority = reminder.priority
         completed = reminder.isCompleted
         due = reminder.dueDateComponents

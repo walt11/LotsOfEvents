@@ -177,6 +177,7 @@ struct LotsOfEventsWidgets: WidgetBundle {
         FiveDayStripWidget()
         MonthAgendaWidget()
         FocusListWidget()
+        TodayRemindersWidget()
         QuickAddEventControl()
         QuickAddReminderControl()
     }

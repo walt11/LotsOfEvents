@@ -26,6 +26,12 @@ enum CalendarDates {
         let range = dayRange(day, calendar: calendar)
         return start < range.end && (end > range.start || (start == end && start >= range.start))
     }
+    /// Turns a drag on the timeline into a whole number of days and 15-minute steps.
+    static func dragShift(translation: CGSize, hourHeight: CGFloat, columnWidth: CGFloat?) -> (days: Int, minutes: Int) {
+        let minutes = Int((translation.height / hourHeight * 60 / 15).rounded()) * 15
+        let days = columnWidth.map { $0 > 0 ? Int((translation.width / $0).rounded()) : 0 } ?? 0
+        return (days, minutes)
+    }
     /// Side-by-side layout for overlapping spans: each gets a column, plus the column count of its overlap group.
     static func columns(_ spans: [DateInterval]) -> [(column: Int, count: Int)] {
         let order = spans.indices.sorted { spans[$0].start != spans[$1].start ? spans[$0].start < spans[$1].start : spans[$0].end > spans[$1].end }
@@ -59,14 +65,23 @@ enum CalendarDates {
 struct CalendarHome: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    @State private var date = Date.now
-    @State private var mode = CalendarDisplay.month
+    // Kept on the model so a theme change, which rebuilds the views, doesn't jump back to today.
+    private var date: Date {
+        get { model.calendarDate }
+        nonmutating set { model.calendarDate = newValue }
+    }
+    private var mode: CalendarDisplay {
+        get { model.calendarMode }
+        nonmutating set { model.calendarMode = newValue }
+    }
     @State private var events: [EKEvent] = []
     @State private var search = ""
     @State private var showingSearch = false
     @FocusState private var searchFocused: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var gridWidth: CGFloat = 0
+    /// The event being dragged on the Day or Week timeline, and how far.
+    @State private var drag: (key: String, translation: CGSize)?
     /// `search` after a short pause, so typing doesn't refilter on every keystroke.
     @State private var query = ""
     /// Events within a year of `searchAnchor`, fetched once per search rather than per keystroke.
@@ -102,9 +117,18 @@ struct CalendarHome: View {
                     }.padding(.leading, 12).background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 12))
                         .padding(.horizontal).padding(.bottom, 4)
                 }
-                Picker("Calendar view", selection: $mode) {
-                    ForEach(CalendarDisplay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 2)
+                // Segments can't grow with the text, so very large text sizes get a menu instead.
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        Picker("Calendar view", selection: $model.calendarMode) {
+                            ForEach(CalendarDisplay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Picker("Calendar view", selection: $model.calendarMode) {
+                            ForEach(CalendarDisplay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.segmented)
+                    }
+                }.padding(.horizontal).padding(.bottom, 2)
                 navigation
                 if !model.calendarAccess {
                     AccessCard(title: "Your calendars, together", description: "Connect Apple Calendar to browse and manage events from your synced accounts.") { Task { await model.request(.event) } }
@@ -155,7 +179,7 @@ struct CalendarHome: View {
             }
             .sheet(isPresented: $datePicker) {
                 NavigationStack {
-                    DatePicker("Jump to date", selection: $date, displayedComponents: .date).datePickerStyle(.graphical).padding()
+                    DatePicker("Jump to date", selection: $model.calendarDate, displayedComponents: .date).datePickerStyle(.graphical).padding()
                         .navigationTitle("Go to date").toolbar { Button("Done") { datePicker = false } }
                 }.presentationDetents([.medium, .large])
             }
@@ -221,7 +245,19 @@ struct CalendarHome: View {
             let displayedDays = mode == .month ? [calendar.startOfDay(for: date)] : days
             ForEach(displayedDays, id: \.self) { day in
                 let dayEvents = eventsOn(day)
-                if mode != .agenda || !dayEvents.isEmpty {
+                if mode == .month && dayEvents.isEmpty {
+                    // An empty day takes one quiet line, and the space shows what's coming up next instead.
+                    let upcoming = comingUp(after: day)
+                    Section {
+                        Label("Nothing on \(day.formatted(.dateTime.weekday(.wide).month().day()))", systemImage: "moon.zzz")
+                            .font(.subheadline).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
+                    }
+                    if !upcoming.isEmpty {
+                        Section {
+                            ForEach(upcoming, id: \.self) { event in eventRow(event, showDate: true) }
+                        } header: { Text("COMING UP").font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
+                    }
+                } else if mode != .agenda || !dayEvents.isEmpty {
                     Section {
                         if dayEvents.isEmpty { Text("No events").foregroundStyle(.secondary).listRowBackground(GalleryPalette.card) }
                         ForEach(dayEvents, id: \.self) { event in eventRow(event) }
@@ -234,6 +270,11 @@ struct CalendarHome: View {
             .contentMargins(.top, 4, for: .scrollContent)
             .environment(\.defaultMinListRowHeight, 44)
             .refreshable { await model.refresh() }
+    }
+    /// The next few events after `day`, from what's already loaded for the visible month.
+    private func comingUp(after day: Date) -> [EKEvent] {
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day))!
+        return Array(events.filter { $0.startDate >= end }.prefix(3))
     }
     private let hourHeight: CGFloat = 52
     private let gutter: CGFloat = 50
@@ -358,9 +399,29 @@ struct CalendarHome: View {
         ForEach(Array(column.timed.enumerated()), id: \.offset) { index, event in
             let top = hourOffset(column.spans[index].start, dayStart: column.day)
             let slot = width / CGFloat(column.layout[index].count)
+            let key = dragKey(event)
+            let moving = drag?.key == key
             eventBlock(event, compact: compact)
                 .frame(width: max(0, slot - 2), height: max(22, hourOffset(column.spans[index].end, dayStart: column.day) - top - 2))
                 .offset(x: x + CGFloat(column.layout[index].column) * slot + 1, y: top + 1)
+                .offset(moving ? drag!.translation : .zero)
+                .opacity(moving ? 0.85 : 1).zIndex(moving ? 1 : 0)
+                .scaleEffect(moving ? 1.03 : 1)
+                // Touch and hold, then drag to move the event; it snaps to 15 minutes (and to days in Week view).
+                .gesture(event.isWritable && !event.isAllDay ? LongPressGesture(minimumDuration: 0.3).sequenced(before: DragGesture())
+                    .onChanged { value in
+                        if case .second(true, let dragValue?) = value { drag = (key, dragValue.translation) }
+                        else if case .second(true, nil) = value { drag = (key, .zero) }
+                    }
+                    .onEnded { value in
+                        defer { drag = nil }
+                        guard case .second(true, let dragValue?) = value else { return }
+                        let shift = CalendarDates.dragShift(translation: dragValue.translation, hourHeight: hourHeight, columnWidth: compact ? width : nil)
+                        model.move(event, days: shift.days, minutes: shift.minutes)
+                    } : nil)
+                .sensoryFeedback(.selection, trigger: moving)
+                .accessibilityAction(named: "Move 15 minutes later") { model.move(event, days: 0, minutes: 15) }
+                .accessibilityAction(named: "Move 15 minutes earlier") { model.move(event, days: 0, minutes: -15) }
         }
     }
     private func weekHeader(_ columns: [DayColumn]) -> some View {
@@ -399,6 +460,7 @@ struct CalendarHome: View {
             }
         }.padding(.trailing, 8).padding(.vertical, 4)
     }
+    private func dragKey(_ event: EKEvent) -> String { "\(event.calendarItemIdentifier)-\(event.startDate.timeIntervalSince1970)" }
     private func eventBlock(_ event: EKEvent, compact: Bool = false) -> some View {
         let color = event.calendarColor
         return Button { model.sheet = .event(event) } label: {

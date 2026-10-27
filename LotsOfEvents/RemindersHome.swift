@@ -206,7 +206,7 @@ struct ReminderEditor: View {
                 }
                 Section("List") {
                     Picker("List", selection: $listID) {
-                        if readOnly, let reminder { Text(reminder.calendarTitle).tag(reminder.calendar.calendarIdentifier) }
+                        if readOnly, let reminder, let list = reminder.calendar { Text(list.title).tag(list.calendarIdentifier) }
                         ForEach(writableLists, id: \.calendarIdentifier) { Text("\($0.title) · \($0.source.title)").tag($0.calendarIdentifier) }
                     }
                 }
@@ -271,7 +271,7 @@ struct ReminderEditor: View {
         title = reminder.title ?? ""
         notes = reminder.notes ?? ""
         link = reminder.url?.absoluteString ?? ""
-        listID = reminder.calendar.calendarIdentifier
+        listID = reminder.calendar?.calendarIdentifier ?? listID
         hasDate = reminder.dueDateComponents != nil
         hasTime = reminder.dueDateComponents?.hour != nil
         due = ReminderDates.due(reminder) ?? .now

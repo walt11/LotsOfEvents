@@ -34,12 +34,21 @@ final class FixesAndFeaturesTests: XCTestCase {
         XCTAssertFalse(Preferences.selected("work", reminders: false, in: store))
         XCTAssertTrue(Preferences.selected("later", reminders: false, in: store))
     }
-    func testReminderListsRemainOptIn() {
+    func testReminderListsShownByDefaultAndKeepOlderChoices() {
         let store = makeDefaults()
-        XCTAssertFalse(Preferences.selected("list", reminders: true, in: store))
-        Preferences.setSelected("list", enabled: true, reminders: true, available: ["list"], in: store)
         XCTAssertTrue(Preferences.selected("list", reminders: true, in: store))
-        XCTAssertFalse(Preferences.selected("other", reminders: true, in: store))
+        Preferences.setSelected("list", enabled: false, reminders: true, available: ["list", "other"], in: store)
+        XCTAssertFalse(Preferences.selected("list", reminders: true, in: store))
+        XCTAssertTrue(Preferences.selected("other", reminders: true, in: store))
+        XCTAssertTrue(Preferences.selected("added-later", reminders: true, in: store))
+        // An older explicit choice still applies until it's converted.
+        let old = makeDefaults()
+        old.set(["chosen"], forKey: "reminderLists")
+        XCTAssertFalse(Preferences.selected("other", reminders: true, in: old))
+        Preferences.migrate(reminders: true, available: ["chosen", "other"], in: old)
+        XCTAssertTrue(Preferences.selected("chosen", reminders: true, in: old))
+        XCTAssertFalse(Preferences.selected("other", reminders: true, in: old))
+        XCTAssertTrue(Preferences.selected("added-later", reminders: true, in: old))
     }
     func testMultiDayEventRepeatsUnderEachDayWithUniqueIDs() {
         var trip = AgendaItem(id: "trip", title: "Trip", date: date(24), allDay: true, reminder: false, source: "", color: .blue)
@@ -379,5 +388,34 @@ final class AlertDefaultsTests: XCTestCase {
         event.addAlarm(existing)
         AlertDefaults.apply(to: event)
         XCTAssertEqual(event.alarms?.count, 1)
+    }
+}
+
+final class ReviewFeatureTests: XCTestCase {
+    func testRepeatPhrases() {
+        let gym = QuickAddParser.parse("Gym every Monday 6pm")
+        XCTAssertEqual(gym.title, "Gym")
+        XCTAssertEqual(gym.repeats, QuickAddRepeat(frequency: .weekly, weekdays: [2]))
+        XCTAssertEqual(gym.date.map { Calendar.current.component(.weekday, from: $0) }, 2)
+        XCTAssertEqual(gym.date.map { Calendar.current.component(.hour, from: $0) }, 18)
+        XCTAssertEqual(QuickAddParser.parse("Take vitamins daily").repeats, QuickAddRepeat(frequency: .daily))
+        XCTAssertEqual(QuickAddParser.parse("Standup every weekday 9am").repeats?.weekdays, [2, 3, 4, 5, 6])
+        XCTAssertEqual(QuickAddParser.parse("Pay rent every month").repeats?.frequency, .monthly)
+        XCTAssertEqual(QuickAddParser.parse("Pay rent every month").title, "Pay rent")
+        XCTAssertNil(QuickAddParser.parse("Buy milk").repeats)
+    }
+    func testDragShiftSnapsToQuarterHoursAndDays() {
+        let shift = CalendarDates.dragShift(translation: CGSize(width: 95, height: 40), hourHeight: 52, columnWidth: 48)
+        XCTAssertEqual(shift.minutes, 45)
+        XCTAssertEqual(shift.days, 2)
+        XCTAssertEqual(CalendarDates.dragShift(translation: CGSize(width: 200, height: -13), hourHeight: 52, columnWidth: nil).days, 0)
+        XCTAssertEqual(CalendarDates.dragShift(translation: CGSize(width: 0, height: -13), hourHeight: 52, columnWidth: nil).minutes, -15)
+    }
+    func testTodayReminderCountIncludesOverdueOnly() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        func d(_ day: Int, _ hour: Int = 0) -> Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))! }
+        let titles = TodayReminderCounts.dueToday([("Later", d(27, 18)), ("Tomorrow", d(28, 9)), ("Overdue", d(25)), ("Undated", nil)], now: d(27, 10), calendar: calendar)
+        XCTAssertEqual(titles, ["Overdue", "Later"])
     }
 }

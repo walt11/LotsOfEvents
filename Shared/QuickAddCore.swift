@@ -26,13 +26,77 @@ struct QuickAddParse: Equatable {
     var duration: TimeInterval?
     /// True when the text named a day but no time.
     var allDay = false
+    var repeats: QuickAddRepeat? = nil
+}
+
+/// A repeat named in Quick Add text, like "every day", "weekly", or "every Monday".
+struct QuickAddRepeat: Equatable {
+    var frequency: EKRecurrenceFrequency
+    /// Days of the week (1 = Sunday … 7 = Saturday) for "every Monday" or "every weekday"; empty otherwise.
+    var weekdays: [Int] = []
+    var title: String {
+        if weekdays == [2, 3, 4, 5, 6] { return "Every weekday" }
+        if weekdays.count == 1 { return "Every \(Calendar.current.weekdaySymbols[weekdays[0] - 1])" }
+        switch frequency {
+        case .daily: return "Every day"
+        case .weekly: return "Every week"
+        case .monthly: return "Every month"
+        case .yearly: return "Every year"
+        @unknown default: return "Repeats"
+        }
+    }
+    var rule: EKRecurrenceRule {
+        EKRecurrenceRule(recurrenceWith: frequency, interval: 1,
+                         daysOfTheWeek: weekdays.isEmpty ? nil : weekdays.compactMap { EKWeekday(rawValue: $0).map(EKRecurrenceDayOfWeek.init) },
+                         daysOfTheMonth: nil, monthsOfTheYear: nil, weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: nil)
+    }
 }
 
 /// Pulls a date or time out of phrases such as "Lunch with Sam Friday 1pm".
 enum QuickAddParser {
     private static let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
     private static let timeWords = try! NSRegularExpression(pattern: #"\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)|\d{1,2}:\d{2}|\b(noon|midnight|morning|afternoon|evening|tonight)\b"#, options: .caseInsensitive)
+    private static let weekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+    private static let repeatPattern = try! NSRegularExpression(
+        pattern: #"\b(every\s+(day|week|month|year|weekday|sunday|monday|tuesday|wednesday|thursday|friday|saturday)s?|daily|weekly|monthly|yearly|annually)\b"#,
+        options: .caseInsensitive)
+    /// Finds a repeat phrase and returns it with the phrase removed from the text.
+    static func extractRepeat(_ text: String) -> (repeats: QuickAddRepeat?, rest: String) {
+        guard let match = repeatPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text) else { return (nil, text) }
+        let phrase = text[range].lowercased()
+        var word = phrase.split(separator: " ").last.map(String.init) ?? phrase
+        if word.hasSuffix("s") { word.removeLast() }
+        let repeats: QuickAddRepeat
+        if let index = weekdayNames.firstIndex(of: word) { repeats = QuickAddRepeat(frequency: .weekly, weekdays: [index + 1]) }
+        else if word == "weekday" { repeats = QuickAddRepeat(frequency: .weekly, weekdays: [2, 3, 4, 5, 6]) }
+        else if word == "day" || word == "daily" { repeats = QuickAddRepeat(frequency: .daily) }
+        else if word == "week" || word == "weekly" { repeats = QuickAddRepeat(frequency: .weekly) }
+        else if word == "month" || word == "monthly" { repeats = QuickAddRepeat(frequency: .monthly) }
+        else { repeats = QuickAddRepeat(frequency: .yearly) }
+        let rest = text.replacingCharacters(in: range, with: " ").components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
+        return (repeats, rest)
+    }
     static func parse(_ text: String, calendar: Calendar = .current) -> QuickAddParse {
+        let (repeats, withoutRepeat) = extractRepeat(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        var result = parseDate(withoutRepeat, calendar: calendar)
+        result.repeats = repeats
+        // "every Monday" with no date starts on the next Monday (or today, if it is one).
+        if let weekday = repeats?.weekdays.first, repeats?.weekdays.count == 1 {
+            let today = calendar.startOfDay(for: .now)
+            let start = calendar.component(.weekday, from: today) == weekday ? today
+                : calendar.nextDate(after: today, matching: DateComponents(weekday: weekday), matchingPolicy: .nextTime)!
+            if let date = result.date, !result.allDay, !namesDay(withoutRepeat) {
+                let time = calendar.dateComponents([.hour, .minute], from: date)
+                result.date = calendar.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: start)
+            } else if result.date == nil {
+                result.date = start
+                result.allDay = true
+            }
+        }
+        return result
+    }
+    private static func parseDate(_ text: String, calendar: Calendar) -> QuickAddParse {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let result = extract(trimmed, calendar: calendar)
         // The detector reads words like "Lunch" or "Dinner" as times, which can swallow the whole title.
@@ -106,10 +170,13 @@ enum QuickAddSaver {
             let item = EKReminder(eventStore: store)
             item.title = parsed.title
             item.calendar = list
-            if let due = parsed.date {
-                item.dueDateComponents = ReminderDates.components(due, timed: !parsed.allDay)
-                AlertDefaults.apply(to: item, due: due, timed: !parsed.allDay)
+            // A repeating reminder needs a due date to repeat from; today if none was given.
+            if let due = parsed.date ?? (parsed.repeats == nil ? nil : Calendar.current.startOfDay(for: .now)) {
+                let timed = parsed.date != nil && !parsed.allDay
+                item.dueDateComponents = ReminderDates.components(due, timed: timed)
+                AlertDefaults.apply(to: item, due: due, timed: timed)
             }
+            if let repeats = parsed.repeats { item.addRecurrenceRule(repeats.rule) }
             try store.save(item, commit: true)
             guard let due = parsed.date else { return "Added “\(parsed.title)” to \(list.title)." }
             return "Added “\(parsed.title)”, due \(describe(due, allDay: parsed.allDay))."
@@ -124,6 +191,7 @@ enum QuickAddSaver {
             event.startDate = start
             event.endDate = start.addingTimeInterval(parsed.allDay ? 0 : parsed.duration ?? 3600)
             AlertDefaults.apply(to: event)
+            if let repeats = parsed.repeats { event.addRecurrenceRule(repeats.rule) }
             try store.save(event, span: .thisEvent, commit: true)
             return "Added “\(parsed.title)” \(describe(start, allDay: parsed.allDay))."
         }

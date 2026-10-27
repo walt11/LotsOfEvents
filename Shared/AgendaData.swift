@@ -92,29 +92,34 @@ enum Preferences {
         set { defaults.set(newValue, forKey: "days") }
     }
     /// Reminder lists are opt-in. Calendars are stored as exclusions so calendars added later appear by default.
+    /// Calendars and reminder lists are both shown unless hidden, so ones added later appear by default.
+    /// Older builds stored an explicit list of chosen ones; those choices are kept until migrated.
     static func selected(_ id: String, reminders: Bool, in store: UserDefaults = defaults) -> Bool {
-        if reminders { return store.stringArray(forKey: "reminderLists")?.contains(id) ?? false }
-        if let hidden = store.stringArray(forKey: "hiddenCalendars") { return !hidden.contains(id) }
-        return store.stringArray(forKey: "calendars")?.contains(id) ?? true
+        let (hiddenKey, legacyKey) = keys(reminders: reminders)
+        if let hidden = store.stringArray(forKey: hiddenKey) { return !hidden.contains(id) }
+        return store.stringArray(forKey: legacyKey)?.contains(id) ?? true
+    }
+    private static func keys(reminders: Bool) -> (hidden: String, legacy: String) {
+        reminders ? ("hiddenReminderLists", "reminderLists") : ("hiddenCalendars", "calendars")
     }
     static func setSelected(_ id: String, enabled: Bool, reminders: Bool, available: [String], in store: UserDefaults = defaults) {
-        if reminders {
-            var ids = Set(available.filter { selected($0, reminders: true, in: store) })
-            if enabled { ids.insert(id) } else { ids.remove(id) }
-            store.set(Array(ids), forKey: "reminderLists")
-        } else {
-            migrateCalendars(available: available, in: store)
-            var hidden = Set(store.stringArray(forKey: "hiddenCalendars") ?? [])
-            if enabled { hidden.remove(id) } else { hidden.insert(id) }
-            store.set(Array(hidden), forKey: "hiddenCalendars")
-        }
+        migrate(reminders: reminders, available: available, in: store)
+        let key = keys(reminders: reminders).hidden
+        var hidden = Set(store.stringArray(forKey: key) ?? [])
+        if enabled { hidden.remove(id) } else { hidden.insert(id) }
+        store.set(Array(hidden), forKey: key)
         store.set(0, forKey: "page")
     }
     /// Converts the original explicit calendar selection into exclusions.
     static func migrateCalendars(available: [String], in store: UserDefaults = defaults) {
-        guard store.stringArray(forKey: "hiddenCalendars") == nil, let legacy = store.stringArray(forKey: "calendars") else { return }
-        store.set(available.filter { !legacy.contains($0) }, forKey: "hiddenCalendars")
-        store.removeObject(forKey: "calendars")
+        migrate(reminders: false, available: available, in: store)
+    }
+    /// Converts an older explicit selection into exclusions.
+    static func migrate(reminders: Bool, available: [String], in store: UserDefaults = defaults) {
+        let (hiddenKey, legacyKey) = keys(reminders: reminders)
+        guard store.stringArray(forKey: hiddenKey) == nil, let legacy = store.stringArray(forKey: legacyKey) else { return }
+        store.set(available.filter { !legacy.contains($0) }, forKey: hiddenKey)
+        store.removeObject(forKey: legacyKey)
     }
 }
 
@@ -174,13 +179,21 @@ enum AgendaQuery {
 
 /// Flat, low-saturation palettes with separate light and dark variants.
 enum AgendaTheme: String, CaseIterable, Identifiable {
+    /// Uses the app theme's colors, so widgets change along with the app.
+    case matchApp
     case charcoal, gallery, graphite, slate, sage, sand, clay, lavender, black
     /// The user's own colors, gradient, and border from Settings (`CustomWidgetStyle`).
     case custom
     var id: String { rawValue }
-    var title: String { self == .gallery ? "Soft Gallery" : rawValue.capitalized }
+    var title: String {
+        switch self {
+        case .gallery: return "Soft Gallery"
+        case .matchApp: return "Match App Theme"
+        default: return rawValue.capitalized
+        }
+    }
     static var selected: AgendaTheme {
-        AgendaTheme(rawValue: Preferences.defaults.string(forKey: "widgetTheme") ?? "") ?? .charcoal
+        AgendaTheme(rawValue: Preferences.defaults.string(forKey: "widgetTheme") ?? "") ?? .matchApp
     }
     private var colors: (light: UInt, dark: UInt, ink: UInt, accent: UInt, darkAccent: UInt) {
         switch self {
@@ -194,6 +207,9 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
         case .lavender: return (0xCCC5D3, 0x1A1621, 0x41354E, 0x604D71, 0x9E8DB0)
         case .black: return (0x000000, 0x000000, 0xE0DDD7, 0xA5A19A, 0xA5A19A)
         case .custom: return (0xD2D0CC, 0x101112, 0x292B2D, 0x704B48, 0xAF8984)
+        case .matchApp:
+            let c = AppTheme.current.colors
+            return (c.card, c.card, c.ink, c.accent, c.accent)
         }
     }
     func background(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.dark : colors.light) }
@@ -202,6 +218,9 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
         if self == .custom { CustomWidgetStyle.saved.background }
         else if self == .charcoal {
             charcoalFill.overlay { ContainerRelativeShape().strokeBorder(Self.charcoalEdge, lineWidth: 0.5) }
+        }
+        else if self == .matchApp {
+            ZStack { GalleryPalette.card; ContainerRelativeShape().strokeBorder(GalleryPalette.line, lineWidth: 0.5) }
         }
         else if self == .gallery {
             ZStack { background(scheme); ContainerRelativeShape().strokeBorder(color(scheme == .dark ? 0x454E59 : 0xDED8CB), lineWidth: 1) }
@@ -226,9 +245,10 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
         if self == .charcoal { return .white }
         if self == .gallery { return color(scheme == .dark ? 0xEEE7DB : 0x342D27) }
         if self == .custom { return CustomWidgetStyle.saved.text }
+        if self == .matchApp { return GalleryPalette.ink }
         return (scheme == .dark || self == .black) ? .white : .black
     }
-    func secondary(_ scheme: ColorScheme) -> Color { text(scheme).opacity(0.6) }
+    func secondary(_ scheme: ColorScheme) -> Color { self == .matchApp ? GalleryPalette.muted : text(scheme).opacity(0.6) }
     func accent(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.darkAccent : colors.accent) }
     private func color(_ hex: UInt) -> Color {
         Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)

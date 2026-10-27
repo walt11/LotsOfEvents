@@ -80,7 +80,9 @@ struct DashboardProvider: AppIntentTimelineProvider {
         if (kind == .month || kind == .five) && !calendar.isDate(saved, inSameDayAs: entry.selectedDay) { entry.page = 0 }
         let from = kind == .month ? calendar.dateInterval(of: .month, for: now)!.start : now
         let days = kind == .month ? calendar.range(of: .day, in: .month, for: now)!.count : kind == .next ? 14 : 5
-        entry.items = await AgendaQuery.load(store: store, now: from, days: days, calendarIDs: calendarIDs, listIDs: listIDs)
+        // Events + Tasks and Focus List fetch their reminders below, so skip them here rather than fetching twice.
+        let agendaLists = kind == .split || kind == .focus ? Set<String>() : listIDs
+        entry.items = await AgendaQuery.load(store: store, now: from, days: days, calendarIDs: calendarIDs, listIDs: agendaLists)
         if entry.reminderAccess && (kind == .split || kind == .focus) {
             let lists = store.calendars(for: .reminder).filter { listIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: true) }
             entry.hasLists = !lists.isEmpty

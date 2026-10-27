@@ -117,3 +117,13 @@ enum AlertDefaults {
         reminder.addAlarm(EKAlarm(absoluteDate: date))
     }
 }
+
+/// Counts for the Today's Reminders Lock Screen widget.
+enum TodayReminderCounts {
+    /// Open reminders due by the end of `now`'s day (including overdue ones), soonest first.
+    static func dueToday(_ items: [(title: String, due: Date?)], now: Date, calendar: Calendar = .current) -> [String] {
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
+        return items.compactMap { item in item.due.map { ($0, item.title) } }
+            .filter { $0.0 < end }.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+}

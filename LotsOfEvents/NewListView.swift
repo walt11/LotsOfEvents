@@ -34,13 +34,28 @@ extension AgendaModel {
         scheduleRefresh()
         return list.calendarIdentifier
     }
+    func updateList(_ list: EKCalendar, name: String, color: StoredColor) throws {
+        list.title = name
+        list.cgColor = CGColor(red: color.red, green: color.green, blue: color.blue, alpha: 1)
+        try store.saveCalendar(list, commit: true)
+        scheduleRefresh()
+    }
+    /// Deletes a list and every reminder in it, everywhere it syncs. Can't be undone.
+    func deleteList(_ list: EKCalendar) throws {
+        try store.removeCalendar(list, commit: true)
+        scheduleRefresh()
+    }
 }
 
 struct NewListView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
+    /// A list to rename, recolor, or delete; nil creates a new one.
+    var editing: EKCalendar? = nil
     /// Called with the new list's identifier after it is saved.
     var onCreate: (String) -> Void = { _ in }
+    @State private var confirmDelete = false
+    @State private var loaded = false
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var color = ListColors.presets[4].color
@@ -86,22 +101,43 @@ struct NewListView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                if model.listSources.count > 1 {
+                if editing == nil && model.listSources.count > 1 {
                     Section("Account") {
                         Picker("Account", selection: $sourceID) {
                             ForEach(model.listSources, id: \.sourceIdentifier) { Text($0.title).tag($0.sourceIdentifier) }
                         }
                     }
                 }
+                if let editing, editing.allowsContentModifications {
+                    Section {
+                        Button("Delete List", role: .destructive) { confirmDelete = true }
+                    } footer: {
+                        Text("Deleting “\(editing.title)” also deletes its reminders on all your devices.")
+                    }
+                }
             }
-            .navigationTitle("New List")
+            .confirmationDialog("Delete “\(editing?.title ?? "")”?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete List and Reminders", role: .destructive) {
+                    guard let editing else { return }
+                    do { try model.deleteList(editing); dismiss() } catch { self.error = error.localizedDescription }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("This can’t be undone.") }
+            .navigationTitle(editing == nil ? "New List" : "Edit List")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Create", action: save).fontWeight(.semibold).disabled(trimmed.isEmpty || source == nil) }
+                ToolbarItem(placement: .confirmationAction) { Button(editing == nil ? "Create" : "Done", action: save).fontWeight(.semibold).disabled(trimmed.isEmpty || (editing == nil && source == nil)) }
             }
-            .alert("Unable to create list", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK", role: .cancel) {} } message: { Text(error ?? "") }
-            .onAppear { sourceID = source?.sourceIdentifier ?? "" }
+            .alert(editing == nil ? "Unable to create list" : "Unable to save list", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK", role: .cancel) {} } message: { Text(error ?? "") }
+            .onAppear {
+                sourceID = source?.sourceIdentifier ?? ""
+                if let editing, !loaded {
+                    loaded = true
+                    name = editing.title
+                    color = StoredColor(Color(cgColor: editing.cgColor))
+                }
+            }
             .task {
                 // Focusing during the sheet's presentation animation is ignored, so wait for it to settle.
                 try? await Task.sleep(for: .milliseconds(450))
@@ -112,7 +148,12 @@ struct NewListView: View {
         .tint(accent)
     }
     private func save() {
-        guard !trimmed.isEmpty, let source else { return }
+        guard !trimmed.isEmpty else { return }
+        if let editing {
+            do { try model.updateList(editing, name: trimmed, color: color); dismiss() } catch { self.error = error.localizedDescription }
+            return
+        }
+        guard let source else { return }
         do {
             let id = try model.createList(named: trimmed, color: color, in: source)
             onCreate(id)

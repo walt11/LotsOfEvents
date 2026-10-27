@@ -88,7 +88,13 @@ struct ReminderLine: View {
     @ObservedObject var model: AgendaModel
     let reminder: EKReminder
     var showList = true
+    /// Shows the first line of notes and the reminder's link under the title.
+    var showNotes = true
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.openURL) private var openURL
     var body: some View {
+        // At accessibility text sizes the due pill moves under the title instead of squeezing it.
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
         HStack(spacing: 4) {
             Button { model.toggle(reminder) } label: {
                 Image(systemName: reminder.isCompleted ? "checkmark.circle.fill" : "circle")
@@ -97,7 +103,7 @@ struct ReminderLine: View {
             .buttonStyle(.borderless).disabled(!reminder.isWritable)
             .accessibilityLabel(reminder.isCompleted ? "Mark \(reminder.title ?? "reminder") incomplete" : "Complete \(reminder.title ?? "reminder")")
             Button { model.sheet = .reminder(reminder, nil) } label: {
-                HStack(spacing: 8) {
+                layout {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             if reminder.priority != 0 { Text(ReminderPriority.badge(reminder.priority)).foregroundStyle(.orange).fontWeight(.bold) }
@@ -113,12 +119,15 @@ struct ReminderLine: View {
                                 if reminder.hasRecurrenceRules { Image(systemName: "repeat").accessibilityLabel("Repeats") }
                             }.font(.caption2).foregroundStyle(GalleryPalette.muted).lineLimit(1)
                         }
+                        if showNotes, let notes = reminder.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+                            Text(notes).font(.caption).foregroundStyle(GalleryPalette.muted).lineLimit(2)
+                        }
                     }
-                    Spacer(minLength: 4)
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
                     if !reminder.isCompleted, let due = ReminderDates.due(reminder) {
                         let late = ReminderDates.isOverdue(reminder)
                         Text(ReminderDueText.label(due: due, timed: reminder.dueDateComponents?.hour != nil))
-                            .font(.caption.weight(.semibold)).lineLimit(1)
+                            .font(.caption.weight(.semibold)).lineLimit(1).fixedSize()
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .foregroundStyle(late ? Color.red : GalleryPalette.ink)
                             .background(late ? Color.red.opacity(0.12) : GalleryPalette.line.opacity(0.5), in: Capsule())
@@ -127,6 +136,13 @@ struct ReminderLine: View {
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            if showNotes, let url = reminder.url {
+                Button { openURL(url) } label: {
+                    Image(systemName: "link").font(.footnote.weight(.semibold)).foregroundStyle(GalleryPalette.accent).frame(width: 36, height: 44)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Open link \(url.host() ?? url.absoluteString)")
+            }
         }
     }
 }
@@ -148,6 +164,7 @@ struct ReminderFocusView: View {
     /// Where the inline field saves; nil uses the default list.
     let targetListID: String?
     @State private var draft = ""
+    @State private var options = InlineReminderDraft()
     @State private var showDone = false
     @FocusState private var draftFocused: Bool
 
@@ -276,6 +293,7 @@ struct ReminderFocusView: View {
                     if !draft.isEmpty {
                         Button("Add", action: addDraft).font(.subheadline.weight(.semibold))
                     }
+                    ReminderOptionsButton(draft: $options, onSheetDismiss: { draftFocused = true })
                 }
                 .padding(.horizontal, 14).frame(minHeight: 50)
                 .background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 16))
@@ -301,16 +319,11 @@ struct ReminderFocusView: View {
     }
     /// Saves the inline field as a reminder. In Today, a reminder typed without a date is due today.
     private func addDraft() {
-        var parsed = QuickAddParser.parse(draft)
-        guard !parsed.title.isEmpty else { return }
-        if parsed.date == nil && scope == .today {
-            parsed.date = Calendar.current.startOfDay(for: .now)
-            parsed.allDay = true
-        }
         do {
-            try QuickAddSaver.save(parsed, as: .reminder, in: model.store, calendarID: targetListID)
-            draft = ""
-            model.scheduleRefresh()
+            if try InlineReminderSaver.save(text: draft, draft: options, defaultToToday: scope == .today, listID: targetListID, model: model) {
+                draft = ""
+                options = InlineReminderDraft()
+            }
         } catch { model.error = error.localizedDescription }
     }
 }
@@ -350,6 +363,116 @@ struct InlineReminderDraft: Equatable {
     }
 }
 
+// MARK: - Options menu for add rows
+
+/// The ••• menu on an add row: date, time, priority, and Clear/Cancel. Shared by By list cards and the Focus field.
+struct ReminderOptionsButton: View {
+    @AppAccent private var accent
+    @Binding var draft: InlineReminderDraft
+    var onCancel: (() -> Void)? = nil
+    var onSheetDismiss: () -> Void = {}
+    @State private var showCustomDate = false
+    @State private var customDate = Date.now.roundedUpToHalfHour()
+    @State private var customTimed = false
+    var body: some View {
+        Menu {
+            Section("Date") {
+                dayButton("Today", .today, symbol: "sun.max")
+                dayButton("Tomorrow", .tomorrow, symbol: "sunrise")
+                dayButton("This Weekend", .weekend, symbol: "sofa")
+                dayButton("Next Week", .nextWeek, symbol: "calendar.badge.clock")
+                Button { showCustomDate = true } label: {
+                    if case .custom(let date) = draft.day {
+                        Label(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()), systemImage: "checkmark")
+                    } else {
+                        Label("Choose Date…", systemImage: "calendar")
+                    }
+                }
+            }
+            Section("Time") {
+                timeButton("Morning · 9 AM", hour: 9)
+                timeButton("Afternoon · 1 PM", hour: 13)
+                timeButton("Evening · 6 PM", hour: 18)
+                if draft.time != nil {
+                    Button("No Time", systemImage: "clock.badge.xmark") { draft.time = nil }
+                }
+            }
+            Picker(selection: $draft.priority) {
+                Text("None").tag(0)
+                Text("Low").tag(9)
+                Text("Medium").tag(5)
+                Text("High").tag(1)
+            } label: { Label("Priority", systemImage: "exclamationmark") }
+                .pickerStyle(.menu)
+            Section {
+                if !draft.isEmpty { Button("Clear Options", systemImage: "arrow.uturn.backward") { draft = InlineReminderDraft() } }
+                if let onCancel { Button("Cancel", systemImage: "xmark", role: .destructive, action: onCancel) }
+            }
+        } label: {
+            Image(systemName: draft.isEmpty ? "ellipsis.circle" : "ellipsis.circle.fill")
+                .font(.title3).foregroundStyle(accent).frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Reminder options")
+        .sheet(isPresented: $showCustomDate, onDismiss: onSheetDismiss) { customDateSheet }
+    }
+    private func dayButton(_ title: String, _ day: InlineReminderDraft.Day, symbol: String) -> some View {
+        Button { draft.day = draft.day == day ? nil : day } label: {
+            Label(title, systemImage: draft.day == day ? "checkmark" : symbol)
+        }
+    }
+    private func timeButton(_ title: String, hour: Int) -> some View {
+        Button { draft.time = draft.time?.hour == hour ? nil : DateComponents(hour: hour, minute: 0) } label: {
+            Label(title, systemImage: draft.time?.hour == hour ? "checkmark" : "clock")
+        }
+    }
+    private var customDateSheet: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: $customDate, displayedComponents: .date).datePickerStyle(.graphical)
+                Toggle("Time", isOn: $customTimed)
+                if customTimed { DatePicker("Time", selection: $customDate, displayedComponents: .hourAndMinute) }
+            }
+            .navigationTitle("Due Date").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showCustomDate = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        draft.day = .custom(customDate)
+                        draft.time = customTimed ? Calendar.current.dateComponents([.hour, .minute], from: customDate) : nil
+                        showCustomDate = false
+                    }.fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .tint(accent)
+    }
+}
+
+/// Saves a new reminder from an add row's text and options.
+@MainActor
+enum InlineReminderSaver {
+    static func save(text: String, draft: InlineReminderDraft, defaultToToday: Bool, listID: String?, model: AgendaModel) throws -> Bool {
+        let (repeats, rest) = QuickAddParser.extractRepeat(text)
+        var resolved = draft.resolve(rest)
+        guard !resolved.title.isEmpty else { return false }
+        // A repeating reminder needs a due date to repeat from.
+        if resolved.due == nil && (defaultToToday || repeats != nil) { resolved.due = Calendar.current.startOfDay(for: .now) }
+        let item = EKReminder(eventStore: model.store)
+        item.title = resolved.title
+        item.calendar = listID.flatMap { model.store.calendar(withIdentifier: $0) } ?? model.store.defaultCalendarForNewReminders()
+        item.priority = draft.priority
+        if let due = resolved.due {
+            item.dueDateComponents = ReminderDates.components(due, timed: resolved.timed)
+            AlertDefaults.apply(to: item, due: due, timed: resolved.timed)
+        }
+        if let repeats { item.addRecurrenceRule(repeats.rule) }
+        try model.store.save(item, commit: true)
+        model.scheduleRefresh()
+        return true
+    }
+}
+
 // MARK: - By list (C)
 
 struct ReminderCardsView: View {
@@ -368,9 +491,6 @@ struct ReminderCardsView: View {
     @State private var draftText = ""
     @State private var draft = InlineReminderDraft()
     @FocusState private var draftFocused: Bool
-    @State private var showCustomDate = false
-    @State private var customDate = Date.now.roundedUpToHalfHour()
-    @State private var customTimed = false
     private let preview = 3
 
     private func items(in list: EKCalendar) -> [EKReminder] {
@@ -405,6 +525,8 @@ struct ReminderCardsView: View {
                     }
                     ForEach(shownLists, id: \.calendarIdentifier) { list in card(list) }
                 }
+                // Completed reminders slide out instead of vanishing.
+                .animation(.snappy, value: open.map(\.calendarItemIdentifier))
                 .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 20)
             }
             .refreshable { await model.refresh() }
@@ -421,7 +543,6 @@ struct ReminderCardsView: View {
         .background(GalleryPalette.paper)
         // Show a just-created list on its own; an empty new list would otherwise sit at the bottom.
         .onChange(of: model.lastCreatedListID) { _, id in if let id { withAnimation(.snappy) { focused = id } } }
-        .sheet(isPresented: $showCustomDate, onDismiss: { draftFocused = true }) { customDateSheet }
     }
 
     private func chip(title: String, color: Color?, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -448,11 +569,18 @@ struct ReminderCardsView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 10, height: 10)
-                Text(list.title).font(.headline).foregroundStyle(GalleryPalette.ink).lineLimit(1)
+                Text(list.title).font(.headline).foregroundStyle(GalleryPalette.ink).lineLimit(2)
                 Spacer()
                 Text("\(entries.count) OPEN").font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
             }
             .padding(.horizontal, 14)
+            .contentShape(Rectangle())
+            // Touch and hold a list's name to rename, recolor, or delete it.
+            .contextMenu {
+                if list.allowsContentModifications {
+                    Button("Edit or Delete List…", systemImage: "pencil") { model.sheet = .editList(list) }
+                }
+            }
             .frame(minHeight: 48)
             if entries.isEmpty && !list.allowsContentModifications {
                 Divider()
@@ -516,81 +644,9 @@ struct ReminderCardsView: View {
                 }
             }
             Spacer(minLength: 4)
-            Menu { optionsMenu } label: {
-                Image(systemName: draft.isEmpty ? "ellipsis.circle" : "ellipsis.circle.fill")
-                    .font(.title3).foregroundStyle(accent).frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Reminder options")
+            ReminderOptionsButton(draft: $draft, onCancel: stopAdding, onSheetDismiss: { draftFocused = true })
         }
         .padding(.leading, 4).padding(.trailing, 4)
-    }
-
-    @ViewBuilder private var optionsMenu: some View {
-        Section("Date") {
-            dayButton("Today", .today, symbol: "sun.max")
-            dayButton("Tomorrow", .tomorrow, symbol: "sunrise")
-            dayButton("This Weekend", .weekend, symbol: "sofa")
-            dayButton("Next Week", .nextWeek, symbol: "calendar.badge.clock")
-            Button { showCustomDate = true } label: {
-                if case .custom(let date) = draft.day {
-                    Label(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()), systemImage: "checkmark")
-                } else {
-                    Label("Choose Date…", systemImage: "calendar")
-                }
-            }
-        }
-        Section("Time") {
-            timeButton("Morning · 9 AM", hour: 9)
-            timeButton("Afternoon · 1 PM", hour: 13)
-            timeButton("Evening · 6 PM", hour: 18)
-            if draft.time != nil {
-                Button("No Time", systemImage: "clock.badge.xmark") { draft.time = nil }
-            }
-        }
-        Picker(selection: $draft.priority) {
-            Text("None").tag(0)
-            Text("Low").tag(9)
-            Text("Medium").tag(5)
-            Text("High").tag(1)
-        } label: { Label("Priority", systemImage: "exclamationmark") }
-            .pickerStyle(.menu)
-        Section {
-            if !draft.isEmpty { Button("Clear Options", systemImage: "arrow.uturn.backward") { draft = InlineReminderDraft() } }
-            Button("Cancel", systemImage: "xmark", role: .destructive) { stopAdding() }
-        }
-    }
-    private func dayButton(_ title: String, _ day: InlineReminderDraft.Day, symbol: String) -> some View {
-        Button { draft.day = draft.day == day ? nil : day } label: {
-            Label(title, systemImage: draft.day == day ? "checkmark" : symbol)
-        }
-    }
-    private func timeButton(_ title: String, hour: Int) -> some View {
-        Button { draft.time = draft.time?.hour == hour ? nil : DateComponents(hour: hour, minute: 0) } label: {
-            Label(title, systemImage: draft.time?.hour == hour ? "checkmark" : "clock")
-        }
-    }
-
-    private var customDateSheet: some View {
-        NavigationStack {
-            Form {
-                DatePicker("Date", selection: $customDate, displayedComponents: .date).datePickerStyle(.graphical)
-                Toggle("Time", isOn: $customTimed)
-                if customTimed { DatePicker("Time", selection: $customDate, displayedComponents: .hourAndMinute) }
-            }
-            .navigationTitle("Due Date").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showCustomDate = false } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        draft.day = .custom(customDate)
-                        draft.time = customTimed ? Calendar.current.dateComponents([.hour, .minute], from: customDate) : nil
-                        showCustomDate = false
-                    }.fontWeight(.semibold)
-                }
-            }
-        }
-        .presentationDetents([.large])
-        .tint(accent)
     }
 
     private func startAdding(in id: String) {
@@ -614,22 +670,12 @@ struct ReminderCardsView: View {
     /// Saves the typed reminder into the list and leaves the row open for the next one; Return on an empty row closes it.
     private func commit(to list: EKCalendar) {
         guard !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { stopAdding(); return }
-        let resolved = draft.resolve(draftText)
-        guard !resolved.title.isEmpty else { return }
-        let item = EKReminder(eventStore: model.store)
-        item.title = resolved.title
-        item.calendar = list
-        item.priority = draft.priority
-        if let due = resolved.due {
-            item.dueDateComponents = ReminderDates.components(due, timed: resolved.timed)
-            AlertDefaults.apply(to: item, due: due, timed: resolved.timed)
-        }
         do {
-            try model.store.save(item, commit: true)
-            draftText = ""
-            draft = InlineReminderDraft()
-            draftFocused = true
-            model.scheduleRefresh()
+            if try InlineReminderSaver.save(text: draftText, draft: draft, defaultToToday: false, listID: list.calendarIdentifier, model: model) {
+                draftText = ""
+                draft = InlineReminderDraft()
+                draftFocused = true
+            }
         } catch { model.error = error.localizedDescription }
     }
 }

@@ -5,9 +5,6 @@ import WidgetKit
 struct SourcesView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    /// True when shown as the Settings tab rather than a sheet, so there is nothing to dismiss.
-    var embedded = false
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(AppTheme.key, store: Preferences.defaults) private var appThemeID = AppTheme.graphite.rawValue
     private var appTheme: AppTheme { AppTheme(rawValue: appThemeID) ?? .graphite }
@@ -44,6 +41,7 @@ struct SourcesView: View {
                         Preferences.days = value
                         Preferences.defaults.set(0, forKey: "page")
                         model.scheduleRefresh()
+                        WidgetReloader.schedule()
                     }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Appearance") {
@@ -56,9 +54,12 @@ struct SourcesView: View {
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                     ColorPicker(selection: $accent, supportsOpacity: false) {
-                        settingsRow("App accent", symbol: "eyedropper", color: accent, detail: "Choose any color for buttons & selections")
+                        settingsRow("App accent", symbol: "eyedropper", color: accent,
+                                    detail: _accent.isCustom ? "Custom color · overrides the theme" : "\(appTheme.title) theme color")
                     }
-                    Button("Reset app accent") { _accent.reset() }
+                    if _accent.isCustom {
+                        Button("Use \(appTheme.title) Theme Color") { _accent.reset() }
+                    }
                     NavigationLink {
                         themePicker
                     } label: {
@@ -97,7 +98,6 @@ struct SourcesView: View {
             .galleryTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-            .toolbar { if !embedded { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.fontWeight(.semibold) } } }
             .tint(accent)
         }
     }
@@ -134,6 +134,7 @@ struct SourcesView: View {
                             Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: sources.map(\.calendarIdentifier))
                             model.objectWillChange.send()
                             model.scheduleRefresh()
+                            WidgetReloader.schedule()
                         })) {
                             HStack(spacing: 12) {
                                 Circle().fill(Color(cgColor: source.cgColor)).frame(width: 10, height: 10)
@@ -158,8 +159,10 @@ struct SourcesView: View {
                     let c = option.colors
                     Button {
                         appThemeID = option.rawValue
+                        // Picking a theme takes its accent too; a custom accent can be set again afterwards.
+                        _accent.reset()
                         // The default accent comes from the theme, and widgets use it too.
-                        WidgetCenter.shared.reloadAllTimelines()
+                        WidgetReloader.schedule()
                         // Match the Home Screen icon. iOS confirms the change with its own short alert.
                         if UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != option.iconName {
                             UIApplication.shared.setAlternateIconName(option.iconName)
@@ -197,7 +200,7 @@ struct SourcesView: View {
                 }
             }
             .padding()
-            Text("Themes set the app’s colors and whether it looks light or dark. A custom App accent still overrides the theme’s accent. Widgets keep their own themes.")
+            Text("Themes set the app’s colors, accent, and whether it looks light or dark. Choosing a theme replaces a custom App accent. Widgets set to Match App Theme follow it too.")
                 .font(.footnote).foregroundStyle(GalleryPalette.muted).padding(.horizontal).padding(.bottom)
         }
         .background(GalleryPalette.paper)
@@ -209,7 +212,7 @@ struct SourcesView: View {
                 ForEach(AgendaTheme.allCases) { option in
                     Button {
                         themeID = option.rawValue
-                        WidgetCenter.shared.reloadAllTimelines()
+                        WidgetReloader.schedule()
                     } label: {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack { Text("TODAY").font(.caption2.bold()); Spacer(); Image(systemName: "plus") }.foregroundStyle(option.secondary(colorScheme))
@@ -236,7 +239,7 @@ struct SourcesView: View {
         // Color pickers change continuously, so wait for a pause before asking widgets to redraw.
         .task(id: customStyle) {
             try? await Task.sleep(for: .milliseconds(500))
-            if !Task.isCancelled { WidgetCenter.shared.reloadAllTimelines() }
+            if !Task.isCancelled { WidgetReloader.schedule() }
         }
     }
     /// Preset themes are flat colors; the custom style adds a gradient and border, previewed in a rounded card.

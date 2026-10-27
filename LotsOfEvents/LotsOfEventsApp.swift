@@ -8,6 +8,12 @@ struct LotsOfEventsApp: App {
     init() {
         AccentStore.migrateFromAppDefaults()
         AppTheme.migrateFromAppearance()
+        // A new install starts with widgets matching the app theme and skips the earlier theme migrations.
+        if Preferences.defaults.string(forKey: "widgetTheme") == nil && !Preferences.defaults.bool(forKey: "galleryAppearanceInstalled") {
+            Preferences.defaults.set(AgendaTheme.matchApp.rawValue, forKey: "widgetTheme")
+            Preferences.defaults.set(true, forKey: "galleryAppearanceInstalled")
+            Preferences.defaults.set(true, forKey: "charcoalDefaultInstalled")
+        }
         // Adopt the redesign once; retain custom artwork and every per-widget override.
         if !Preferences.defaults.bool(forKey: "galleryAppearanceInstalled") {
             let previous = Preferences.defaults.string(forKey: "widgetTheme")
@@ -47,6 +53,8 @@ final class AgendaModel: ObservableObject {
     @Published var generation = 0
     @Published var agendaReturnToToday = 0
     @Published var calendarReturnToToday = 0
+    @Published var calendarDate = Date.now
+    @Published var calendarMode = CalendarDisplay.month
     var calendarCreationDate = Date.now.roundedUpToHalfHour()
     var activeReminderList: String?
     /// The list just made in New List, so the Reminders tab can bring it into view.
@@ -72,6 +80,7 @@ final class AgendaModel: ObservableObject {
         calendars = EKEventStore.authorizationStatus(for: .event) == .fullAccess ? store.calendars(for: .event) : []
         lists = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : []
         if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
+        if !lists.isEmpty { Preferences.migrate(reminders: true, available: lists.map(\.calendarIdentifier)) }
         let wantsCompleted = includeCompleted
         var fetched: [EKReminder] = []
         var doneToday: [EKReminder] = []
@@ -88,8 +97,10 @@ final class AgendaModel: ObservableObject {
         completedLoaded = wantsCompleted
         generation += 1
         loading = false
-        WidgetCenter.shared.reloadAllTimelines()
+        lastRefresh = .now
     }
+    /// When data was last fetched, so returning to the app right after launch doesn't fetch it all again.
+    private(set) var lastRefresh = Date.distantPast
     func request(_ type: EKEntityType) async {
         do {
             let granted = try await (type == .event ? store.requestFullAccessToEvents() : store.requestFullAccessToReminders())
@@ -113,8 +124,40 @@ struct AgendaView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
     @StateObject private var agenda = ContinuousAgenda()
+    @State private var showingSearch = false
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+                if showingSearch {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("Search events and reminders", text: $search).focused($searchFocused).submitLabel(.search)
+                        Button("Close search", systemImage: "xmark.circle.fill") { search = ""; showingSearch = false }
+                            .labelStyle(.iconOnly).foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    }.padding(.leading, 12).gallerySurface(radius: 12).padding(.horizontal, 16).padding(.bottom, 4)
+                }
+                if showingSearch && !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                    UnifiedSearchResults(model: model, query: search.trimmingCharacters(in: .whitespaces))
+                } else {
+                    agendaList
+                }
+            }
+            .background(GalleryPalette.paper)
+            .navigationTitle("Agenda")
+            .galleryTitle("Agenda")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Today") { model.agendaReturnToToday += 1 }
+                    Button("Search events and reminders", systemImage: "magnifyingglass") { showingSearch = true; searchFocused = true }
+                }
+            }
+            .tint(accent)
+        }
+    }
+    private var agendaList: some View {
             ScrollViewReader { proxy in
             List {
                 if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
@@ -153,21 +196,13 @@ struct AgendaView: View {
             .task(id: model.generation) { await agenda.refresh(store: model.store) }
             .listSectionSpacing(10)
             .environment(\.defaultMinListRowHeight, 44)
-            .navigationTitle("Agenda")
-            .galleryTitle("Agenda")
-            .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("Today") { withAnimation { proxy.scrollTo("agenda-today", anchor: .top) } } }
-            }
-            .tint(accent)
             .refreshable { await model.refresh() }
             .onChange(of: model.agendaReturnToToday) { _, _ in
                 withAnimation { proxy.scrollTo("agenda-today", anchor: .top) }
                 model.scheduleRefresh()
             }
             }
-        }
     }
     private func dayTitle(_ date: Date) -> String {
         let calendar = Calendar.current

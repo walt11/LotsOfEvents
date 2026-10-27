@@ -47,7 +47,7 @@ final class CalendarAndReminderTests: XCTestCase {
         XCTAssertEqual(components.calendar?.date(from: components), original)
     }
     func testExistingThemeIDsRemainAvailableAlongsideGallery() {
-        XCTAssertEqual(Set(AgendaTheme.allCases.map(\.rawValue)), ["charcoal", "gallery", "graphite", "slate", "sage", "sand", "clay", "lavender", "black", "custom"])
+        XCTAssertEqual(Set(AgendaTheme.allCases.map(\.rawValue)), ["charcoal", "gallery", "graphite", "slate", "sage", "sand", "clay", "lavender", "black", "custom", "matchApp"])
     }
     func testReminderDueDateEditPreservesAlertOffset() {
         let store = EKEventStore()

@@ -77,11 +77,12 @@ struct QuickAddView: View {
                             }.tag(target.calendarIdentifier)
                         }
                     }
-                } footer: { Text("Type or dictate a title with a day or time, or tap a shortcut.") }
+                } footer: { Text("Type or dictate a title with a day or time, like “Gym every Monday 6pm”, or tap a shortcut.") }
                 if !parsed.title.isEmpty {
                     Section("Preview") {
                         LabeledContent("Title", value: parsed.title)
                         LabeledContent(reminder ? "Due" : "Starts", value: whenText)
+                        if let repeats = parsed.repeats { LabeledContent("Repeats", value: repeats.title) }
                     }
                 }
                 if reminder ? !model.reminderAccess : !model.calendarAccess {
