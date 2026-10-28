@@ -23,7 +23,7 @@ struct SourcesView: View {
                         Image(systemName: "calendar").font(.title).foregroundStyle(_accent.contrastingText)
                             .frame(width: 56, height: 56).background(accent, in: RoundedRectangle(cornerRadius: 16))
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Make it yours").font(.system(.title2, design: .serif)).italic()
+                            Text("Make it yours").font(.title2.bold())
                             Text("Your schedule, your way.").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }.padding(.vertical, 8)

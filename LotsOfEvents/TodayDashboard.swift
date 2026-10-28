@@ -24,7 +24,7 @@ struct TodayDashboard: View {
 
     private func header(_ now: Date) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(now.formatted(.dateTime.weekday(.wide))).font(.system(.largeTitle, design: .serif)).foregroundStyle(GalleryPalette.ink)
+            Text(now.formatted(.dateTime.weekday(.wide))).font(.largeTitle.bold()).foregroundStyle(GalleryPalette.ink)
             Text(now.formatted(.dateTime.month(.wide).day().year())).font(.subheadline).foregroundStyle(GalleryPalette.muted)
         }
         .accessibilityElement(children: .combine)

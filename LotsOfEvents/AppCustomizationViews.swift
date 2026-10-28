@@ -53,7 +53,7 @@ struct CustomAppThemeEditor: View {
     /// A small mock of the app in the draft colors: a page, a card with rows, and an accent button.
     private var preview: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Agenda").font(.system(.title3, design: .serif)).italic().foregroundStyle(color(draft.ink))
+            Text("Agenda").font(.headline).foregroundStyle(color(draft.ink))
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(["Team stand-up", "Lunch with Sam", "Renew passport"].enumerated()), id: \.offset) { index, title in
                     if index > 0 { Rectangle().fill(color(draft.line)).frame(height: 0.5) }

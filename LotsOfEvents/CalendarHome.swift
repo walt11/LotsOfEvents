@@ -193,7 +193,7 @@ struct CalendarHome: View {
             Button("Previous \(mode.rawValue.lowercased())", systemImage: "chevron.left") { shift(-1) }.labelStyle(.iconOnly).frame(width: 44, height: 44)
             Spacer()
             Button { datePicker = true } label: {
-                Text(rangeTitle).font(.system(.headline, design: .serif)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(rangeTitle).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
                 Image(systemName: "chevron.down").font(.caption)
             }.foregroundStyle(.primary)
             Spacer()
@@ -463,21 +463,24 @@ struct CalendarHome: View {
     private func dragKey(_ event: EKEvent) -> String { "\(event.calendarItemIdentifier)-\(event.startDate.timeIntervalSince1970)" }
     private func eventBlock(_ event: EKEvent, compact: Bool = false) -> some View {
         let color = event.calendarColor
-        return Button { model.sheet = .event(event) } label: {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(event.title ?? "Untitled event").font(compact ? .system(size: 10, weight: .semibold) : .caption.weight(.semibold)).lineLimit(compact ? 3 : 2)
-                if !compact {
-                    Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
+        // A tap gesture rather than a Button: a Button claims the touch, so touch-and-hold to drag never began.
+        return VStack(alignment: .leading, spacing: 1) {
+            Text(event.title ?? "Untitled event").font(compact ? .system(size: 10, weight: .semibold) : .caption.weight(.semibold)).lineLimit(compact ? 3 : 2)
+            if !compact {
+                Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-            .padding(.leading, compact ? 5 : 8).padding(.trailing, compact ? 2 : 4).padding(.vertical, 3)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(color.opacity(0.2))
-            .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(.plain)
+        .padding(.leading, compact ? 5 : 8).padding(.trailing, compact ? 2 : 4).padding(.vertical, 3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(color.opacity(0.2))
+        .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture { model.sheet = .event(event) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { model.sheet = .event(event) }
         .accessibilityLabel("\(event.title ?? "Untitled event"), \(event.startDate.formatted(date: .omitted, time: .shortened)) to \(event.endDate.formatted(date: .omitted, time: .shortened))")
     }
     private func eventRow(_ event: EKEvent, showDate: Bool = false) -> some View {

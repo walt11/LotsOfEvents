@@ -157,7 +157,7 @@ extension View {
     func galleryTitle(_ title: String) -> some View {
         toolbar {
             ToolbarItem(placement: .principal) {
-                Text(title).font(.system(.title3, design: .serif)).italic().foregroundStyle(GalleryPalette.ink)
+                Text(title).font(.headline).foregroundStyle(GalleryPalette.ink)
                     .accessibilityAddTraits(.isHeader)
             }
         }

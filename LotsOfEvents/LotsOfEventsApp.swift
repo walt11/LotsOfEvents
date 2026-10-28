@@ -202,6 +202,8 @@ struct AgendaView: View {
             }
             .task(id: model.generation) { await agenda.refresh(store: model.store) }
             .listSectionSpacing(10)
+            // The grouped list's default top margin left a large gap under the title.
+            .contentMargins(.top, 4, for: .scrollContent)
             .appRowHeight(44)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .refreshable { await model.refresh() }
