@@ -124,37 +124,15 @@ struct AgendaView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
     @StateObject private var agenda = ContinuousAgenda()
-    @State private var showingSearch = false
-    @State private var search = ""
-    @FocusState private var searchFocused: Bool
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if showingSearch {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search events and reminders", text: $search).focused($searchFocused).submitLabel(.search)
-                        Button("Close search", systemImage: "xmark.circle.fill") { search = ""; showingSearch = false }
-                            .labelStyle(.iconOnly).foregroundStyle(.secondary).frame(width: 44, height: 44)
-                    }.padding(.leading, 12).gallerySurface(radius: 12).padding(.horizontal, 16).padding(.bottom, 4)
-                }
-                if showingSearch && !search.trimmingCharacters(in: .whitespaces).isEmpty {
-                    UnifiedSearchResults(model: model, query: search.trimmingCharacters(in: .whitespaces))
-                } else {
-                    agendaList
-                }
-            }
-            .background(GalleryPalette.paper)
-            .navigationTitle("Agenda")
-            .galleryTitle("Agenda")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Today") { model.agendaReturnToToday += 1 }
-                    Button("Search events and reminders", systemImage: "magnifyingglass") { showingSearch = true; searchFocused = true }
-                }
-            }
-            .tint(accent)
+            agendaList
+                .background(GalleryPalette.paper)
+                .navigationTitle("Agenda")
+                .galleryTitle("Agenda")
+                .navigationBarTitleDisplayMode(.inline)
+                .tabToolbar(model: model, today: { model.agendaReturnToToday += 1 }) { CalendarSetsMenu(model: model) }
+                .tint(accent)
         }
     }
     private var agendaList: some View {
@@ -184,7 +162,12 @@ struct AgendaView: View {
                                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             }
                             ForEach(day.items) { item in itemRow(item, conflict: conflicts.contains(item.id)) }
-                        } header: { Text(dayTitle(day.date)).font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
+                        } header: {
+                            HStack {
+                                SectionHeader(title: dayTitle(day.date))
+                                if let forecast = WeatherStore.shared.forecast(for: day.date) { WeatherBadge(forecast: forecast) }
+                            }
+                        }
                             .id(day.date.description)
                     case .empty(let start, let end):
                         Section {
@@ -220,30 +203,14 @@ struct AgendaView: View {
         return calendar.isDateInTomorrow(date) ? "Tomorrow" : date.formatted(.dateTime.weekday(.wide).month().day())
     }
     private func itemRow(_ item: AgendaItem, conflict: Bool = false) -> some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 3).fill(item.color).frame(width: 4)
+        EventRow(color: item.color, title: item.title, detail: item.agendaDetail, time: item.timeLabel,
+                 birthday: item.birthday, needsReply: item.needsReply, conflict: conflict,
+                 joinURL: (item.endDate ?? item.date) > .now ? item.joinURL : nil) { model.open(item) } leading: {
             if item.reminder {
                 Button { if let reminder = model.reminder(withID: item.id) { model.toggle(reminder) } } label: {
                     Image(systemName: "circle").font(.title3).foregroundStyle(item.color).frame(width: 28, height: 36)
                 }.buttonStyle(.borderless).accessibilityLabel("Complete \(item.title)")
             }
-            Button { model.open(item) } label: {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            if item.birthday { Image(systemName: "gift.fill").foregroundStyle(item.color) }
-                            Text(item.title).font(.subheadline.weight(.medium))
-                        }
-                        EventBadges(needsReply: item.needsReply, conflict: conflict)
-                        if let detail = item.agendaDetail {
-                            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                    Spacer()
-                    Text(item.timeLabel).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                }.contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            if let link = item.joinURL, (item.endDate ?? item.date) > .now { JoinButton(url: link) }
         }
         .galleryRow()
         .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))

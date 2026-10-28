@@ -36,6 +36,7 @@
 		832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB5E02F0AC8E5911D573D7C /* NewListView.swift */; };
 		83B063FC5F5EC89A70626508 /* ReminderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09769C17F8413551E8BD0D33 /* ReminderViews.swift */; };
 		859B60231D80C1B8CE73CA54 /* ContinuousAgendaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8FE968658F59115E5BA591 /* ContinuousAgendaTests.swift */; };
+		8B0C0260612BCF4F72B2EFCD /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F743E868923401A1D200EE2 /* DesignSystem.swift */; };
 		8B8951E144EFE45FEC9FEC5F /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
 		8C3497DABD279B13059FB994 /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
 		912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */; };
@@ -157,6 +158,7 @@
 		899445C71BA33F55F900627C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryStyle.swift; sourceTree = "<group>"; };
 		8C49FDA929D6FACECC3FDD02 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8F743E868923401A1D200EE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		94242E0DB9C908EB386A826B /* AgendaData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaData.swift; sourceTree = "<group>"; };
 		9673B93B2FA0CF1B2871781C /* CalendarHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarHome.swift; sourceTree = "<group>"; };
 		9821B971D23D906C622837DD /* QuickAddDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddDictation.swift; sourceTree = "<group>"; };
@@ -192,6 +194,7 @@
 				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
 				54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */,
 				193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */,
+				8F743E868923401A1D200EE2 /* DesignSystem.swift */,
 				3CBAF9DE5613BF613814BE64 /* Info.plist */,
 				09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */,
 				635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */,
@@ -488,6 +491,7 @@
 				C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */,
 				BABEF3839E2CDA7270503239 /* DashboardWidgets.swift in Sources */,
 				E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */,
+				8B0C0260612BCF4F72B2EFCD /* DesignSystem.swift in Sources */,
 				E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */,
 				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
 				C996037E77D3B8D325EFF313 /* MainView.swift in Sources */,
@@ -711,7 +715,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -788,7 +792,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

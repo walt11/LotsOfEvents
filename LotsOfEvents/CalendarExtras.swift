@@ -255,7 +255,7 @@ struct WeatherBadge: View {
 
 // MARK: - Calendar sets
 
-/// Switches between saved groups of calendars, and saves the current selection as a new one.
+/// The filter menu on Calendar and Agenda: switch calendar sets, choose calendars, and save the selection as a set.
 struct CalendarSetsMenu: View {
     @ObservedObject var model: AgendaModel
     @State private var naming = false
@@ -270,13 +270,16 @@ struct CalendarSetsMenu: View {
                 ForEach(sets) { set in Text(set.name).tag(Optional(set.id)) }
             }
             Divider()
+            Button("Choose Calendars…", systemImage: "calendar") { model.sheet = .sources(reminders: false) }
             Button("Save Current Calendars as Set…", systemImage: "plus") { name = ""; naming = true }
             if !sets.isEmpty { Button("Manage Sets…", systemImage: "slider.horizontal.3") { managing = true } }
         } label: {
-            Label(sets.first { $0.id == active }?.name ?? "Calendar sets", systemImage: active == nil ? "square.stack" : "square.stack.fill")
+            // The same filter symbol as the Reminders tab; filled while a set narrows what's shown.
+            Label("Show", systemImage: active == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                 .labelStyle(.iconOnly)
         }
-        .accessibilityLabel("Calendar sets")
+        .accessibilityLabel("Calendars shown")
+        .accessibilityValue(sets.first { $0.id == active }?.name ?? "All calendars")
         .alert("New Calendar Set", isPresented: $naming) {
             TextField("Name, like Work", text: $name)
             Button("Cancel", role: .cancel) {}

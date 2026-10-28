@@ -38,11 +38,7 @@ struct TodayDashboard: View {
 
     private func card<Content: View>(_ title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title).font(.system(.caption, design: .monospaced).weight(.semibold)).foregroundStyle(GalleryPalette.muted)
-                Spacer()
-                if let trailing { Text(trailing).font(.caption).foregroundStyle(GalleryPalette.muted) }
-            }
+            SectionHeader(title: title, trailing: trailing)
             content()
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
@@ -52,7 +48,7 @@ struct TodayDashboard: View {
     private func schedule(_ now: Date) -> some View {
         let allDay = events.filter(\.allDay)
         let timed = events.filter { !$0.allDay }
-        return card("SCHEDULE", trailing: events.isEmpty ? nil : "\(events.count) event\(events.count == 1 ? "" : "s")") {
+        return card("Schedule", trailing: events.isEmpty ? nil : "\(events.count) event\(events.count == 1 ? "" : "s")") {
             if events.isEmpty {
                 Text(model.calendarAccess ? "No events today" : "Connect calendars to see events").font(.subheadline).foregroundStyle(GalleryPalette.muted)
             }
@@ -102,7 +98,7 @@ struct TodayDashboard: View {
 
     private var tasks: some View {
         let total = overdue.count + dueToday.count + undated.count
-        return card("TASKS", trailing: total == 0 ? nil : "\(total) left") {
+        return card("Tasks", trailing: total == 0 ? nil : "\(total) left") {
             if !model.reminderAccess {
                 Text("Connect Reminders to see tasks").font(.subheadline).foregroundStyle(GalleryPalette.muted)
             } else if total == 0 {
@@ -115,7 +111,7 @@ struct TodayDashboard: View {
     }
     @ViewBuilder private func taskGroup(_ title: String, _ rows: [AgendaItem], tint: Color) -> some View {
         if !rows.isEmpty {
-            Text(title.uppercased()).font(.system(.caption2, design: .monospaced).weight(.semibold)).foregroundStyle(tint).padding(.top, 2)
+            SectionHeader(title: title, tint: tint).padding(.top, 2)
             ForEach(rows) { taskRow($0) }
         }
     }

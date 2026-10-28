@@ -4,10 +4,12 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar)
+    case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar), search, sources(reminders: Bool)
     var id: String {
         switch self {
         case .newList: return "new-list"
+        case .search: return "search"
+        case .sources(let reminders): return "sources-\(reminders)"
         case .editList(let list): return "edit-list-\(list.calendarIdentifier)"
         case .quickAdd: return "quick-add"
         case .newEvent(let date, _): return "new-\(date.timeIntervalSince1970)"
@@ -84,6 +86,12 @@ struct MainView: View {
             case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
             case .newList: NewListView(model: model)
             case .editList(let list): NewListView(model: model, editing: list)
+            case .search: SearchSheet(model: model)
+            case .sources(let reminders):
+                NavigationStack {
+                    SourcePickerView(model: model, reminders: reminders)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.sheet = nil } } }
+                }
             }
         }
         .overlay(alignment: .bottom) {

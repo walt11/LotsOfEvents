@@ -10,10 +10,7 @@ struct RemindersHome: View {
     /// Lists shown in the Reminders tab, saved between launches; empty means all lists.
     @AppStorage("reminderTabLists") private var savedListIDs = ""
     @AppStorage("reminderSortByPriority") private var sortByPriority = false
-    @State private var search = ""
-    @State private var showingSearch = false
     @State private var showEarlier = false
-    @FocusState private var searchFocused: Bool
     /// The chosen lists that still exist, so a deleted list can't hide everything.
     private var listIDs: Set<String> {
         let chosen = Set(savedListIDs.split(separator: ",").map(String.init))
@@ -27,13 +24,18 @@ struct RemindersHome: View {
     /// New reminders go to the shown list when exactly one is chosen.
     private var singleListID: String? { listIDs.count == 1 ? listIDs.first : nil }
     private var shownLists: [EKCalendar] { listIDs.isEmpty ? model.lists : model.lists.filter { listIDs.contains($0.calendarIdentifier) } }
-    /// Applies the list choice and search; reminders whose list was deleted are dropped.
+    /// Applies the list choice; reminders whose list was deleted are dropped.
     private func narrowed(_ items: [EKReminder]) -> [EKReminder] {
         items.filter { reminder in
             guard let id = reminder.calendar?.calendarIdentifier else { return false }
-            if !listIDs.isEmpty && !listIDs.contains(id) { return false }
-            return search.isEmpty || [reminder.title, reminder.notes, reminder.calendarTitle].compactMap { $0 }.joined(separator: " ").localizedCaseInsensitiveContains(search)
+            return listIDs.isEmpty || listIDs.contains(id)
         }
+    }
+    /// The chip bar's choice: one of the Focus scopes, or the By List cards.
+    private var mode: Binding<ReminderMode> {
+        Binding(get: { layout == .lists ? .lists : ReminderMode(scope) }, set: { mode in
+            if let scope = mode.scope { self.scope = scope; layout = .focus } else { layout = .lists }
+        })
     }
     private var needsCompleted: Bool { layout == .focus && scope == .done && showEarlier }
     var body: some View {
@@ -44,17 +46,7 @@ struct RemindersHome: View {
                     AccessCard(title: "Make room for what matters", description: "Connect Apple Reminders to manage all your lists, including undated and overdue tasks.") { Task { await model.request(.reminder) } }
                 } else {
                     VStack(spacing: 0) {
-                        if showingSearch {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                                TextField("Search reminders and notes", text: $search).focused($searchFocused)
-                                    .submitLabel(.search).onSubmit { searchFocused = false }
-                                Button("Close search", systemImage: "xmark.circle.fill") {
-                                    search = ""; showingSearch = false
-                                }.labelStyle(.iconOnly).foregroundStyle(.secondary).frame(width: 44, height: 44)
-                            }.padding(.leading, 12).gallerySurface(radius: 12)
-                                .padding(.horizontal, 16).padding(.bottom, 4)
-                        }
+                        ChipBar(options: ReminderMode.allCases, selection: mode) { $0.rawValue }
                         switch layout {
                         case .focus:
                             let todayIDs = Set(model.completedToday.map(\.calendarItemIdentifier))
@@ -84,20 +76,7 @@ struct RemindersHome: View {
             .onChange(of: model.lastCreatedListID) { _, id in
                 if let id, !listIDs.isEmpty { setList(id, included: true) }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker("Layout", selection: $layout) {
-                            ForEach(ReminderLayout.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
-                        }
-                    } label: {
-                        Label("Reminder view: \(layout.title)", systemImage: layout.symbol)
-                    }
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Search reminders", systemImage: "magnifyingglass") {
-                        showingSearch = true; searchFocused = true
-                    }
+            .tabToolbar(model: model) {
                     Menu {
                         Section("Lists") {
                             Button("All lists", systemImage: listIDs.isEmpty ? "checkmark" : "") { savedListIDs = "" }
@@ -118,11 +97,11 @@ struct RemindersHome: View {
                             Button("New List…", systemImage: "plus") { model.sheet = .newList }
                         }
                     } label: {
-                        Label("Filter and sort", systemImage: listIDs.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        Label("Lists shown and sort", systemImage: listIDs.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                            .labelStyle(.iconOnly)
                     }
                     .menuActionDismissBehavior(.disabled)
                     .accessibilityValue(listIDs.isEmpty ? "All lists" : "\(listIDs.count) lists")
-                }
             }
         }
     }

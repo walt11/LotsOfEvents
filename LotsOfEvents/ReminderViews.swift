@@ -14,16 +14,23 @@ enum FocusScope: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// The Reminders tab's chip bar: the Focus scopes, then the By List cards.
+enum ReminderMode: String, CaseIterable {
+    case today = "Today", upcoming = "Upcoming", anytime = "Anytime", done = "Done", lists = "Lists"
+    init(_ scope: FocusScope) { self = ReminderMode(rawValue: scope.rawValue) ?? .today }
+    var scope: FocusScope? { FocusScope(rawValue: rawValue) }
+}
+
 /// Sections of the Focus view's Today scope, in display order.
 enum FocusBucket: Int, CaseIterable {
     case overdue, morning, afternoon, tonight, anytime
     var title: String {
         switch self {
-        case .overdue: return "OVERDUE"
-        case .morning: return "THIS MORNING"
-        case .afternoon: return "THIS AFTERNOON"
-        case .tonight: return "TONIGHT"
-        case .anytime: return "ANY TIME TODAY"
+        case .overdue: return "Overdue"
+        case .morning: return "This morning"
+        case .afternoon: return "This afternoon"
+        case .tonight: return "Tonight"
+        case .anytime: return "Any time today"
         }
     }
 }
@@ -190,16 +197,16 @@ struct ReminderFocusView: View {
             let future = open.filter { (ReminderDates.due($0) ?? .distantPast) >= tomorrow }
             let byDay = Dictionary(grouping: future) { calendar.startOfDay(for: ReminderDates.due($0)!) }
             return byDay.keys.sorted().map { day in
-                let title = calendar.isDate(day, inSameDayAs: tomorrow) ? "TOMORROW" : day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()).uppercased()
+                let title = calendar.isDate(day, inSameDayAs: tomorrow) ? "Tomorrow" : day.formatted(.dateTime.weekday(.wide).month().day())
                 return (day.description, title, sorted(byDay[day]!), false)
             }
         case .anytime:
             let undated = open.filter { ReminderDates.due($0) == nil }
-            return undated.isEmpty ? [] : [("anytime", "NO DATE", sorted(undated), false)]
+            return undated.isEmpty ? [] : [("anytime", "No date", sorted(undated), false)]
         case .done:
             var result: [(String, String, [EKReminder], Bool)] = []
-            if !doneToday.isEmpty { result.append(("today", "DONE TODAY", doneToday, false)) }
-            if showEarlier && !doneEarlier.isEmpty { result.append(("earlier", "EARLIER", doneEarlier, false)) }
+            if !doneToday.isEmpty { result.append(("today", "Done today", doneToday, false)) }
+            if showEarlier && !doneEarlier.isEmpty { result.append(("earlier", "Earlier", doneEarlier, false)) }
             return result
         }
     }
@@ -227,9 +234,7 @@ struct ReminderFocusView: View {
                             .swipeActions(edge: .trailing) { SnoozeButtons(model: model, reminder: reminder) }
                     }
                 } header: {
-                    HStack { Text(section.title); Spacer(); Text("\(section.items.count)") }
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(section.late ? Color.red : GalleryPalette.muted)
+                    SectionHeader(title: section.title, trailing: "\(section.items.count)", tint: section.late ? .red : GalleryPalette.muted)
                 }
             }
             if scope == .today && !doneToday.isEmpty {
@@ -240,7 +245,7 @@ struct ReminderFocusView: View {
                                 .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 12))
                         }
                     } label: {
-                        Text("DONE TODAY · \(doneToday.count)").font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
+                        SectionHeader(title: "Done today", trailing: "\(doneToday.count)")
                     }
                 }.listRowBackground(GalleryPalette.card)
             }
@@ -250,6 +255,8 @@ struct ReminderFocusView: View {
             }
         }
         .listStyle(.insetGrouped).listSectionSpacing(12)
+        // The grouped list's default top margin left a gap under the chip bar, as in the Agenda.
+        .contentMargins(.top, 4, for: .scrollContent)
         .scrollContentBackground(.hidden).background(GalleryPalette.paper)
         .appRowHeight(48)
         .refreshable { await model.refresh() }
@@ -258,8 +265,8 @@ struct ReminderFocusView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .bottom) {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()).uppercased())
-                    .font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(GalleryPalette.muted)
                 Spacer()
                 let done = doneToday.count, total = doneToday.count + dueByToday.count
                 VStack(alignment: .trailing, spacing: 5) {
@@ -270,20 +277,6 @@ struct ReminderFocusView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(done) of \(total) reminders due today are done")
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(FocusScope.allCases) { option in
-                        Button { scope = option } label: {
-                            Text(option.rawValue).font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14).frame(minHeight: 36)
-                                .foregroundStyle(scope == option ? GalleryPalette.paper : GalleryPalette.ink)
-                                .background(scope == option ? GalleryPalette.ink : GalleryPalette.card, in: Capsule())
-                                .overlay { Capsule().strokeBorder(GalleryPalette.line, lineWidth: scope == option ? 0 : 0.5) }
-                        }
-                        .buttonStyle(.plain).accessibilityAddTraits(scope == option ? .isSelected : [])
-                    }
-                }
-            }.scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             if scope != .done {
                 HStack(spacing: 10) {
                     Image(systemName: "plus.circle").font(.title3).foregroundStyle(accent).accessibilityHidden(true)
@@ -478,13 +471,11 @@ enum InlineReminderSaver {
 struct ReminderCardsView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    /// Open reminders already narrowed by search.
+    /// Open reminders in the shown lists.
     let open: [EKReminder]
     /// The lists to show, in order.
     let lists: [EKCalendar]
     let sortByPriority: Bool
-    /// One list to show in full; nil shows every list's card.
-    @State private var focused: String?
     @State private var expanded: Set<String> = []
     /// The list whose add row is being typed in.
     @State private var addingIn: String?
@@ -499,24 +490,11 @@ struct ReminderCardsView: View {
     }
     /// Lists with open reminders first, then empty ones, each group in the account's order.
     private var shownLists: [EKCalendar] {
-        let visible = focused.map { id in lists.filter { $0.calendarIdentifier == id } } ?? lists
-        return visible.filter { !items(in: $0).isEmpty } + visible.filter { items(in: $0).isEmpty }
+        lists.filter { !items(in: $0).isEmpty } + lists.filter { items(in: $0).isEmpty }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    chip(title: "All · \(open.filter { item in lists.contains { $0.calendarIdentifier == item.calendar?.calendarIdentifier } }.count)", color: nil, selected: focused == nil) { focused = nil }
-                    ForEach(lists, id: \.calendarIdentifier) { list in
-                        chip(title: list.title, color: Color(cgColor: list.cgColor), selected: focused == list.calendarIdentifier) {
-                            focused = focused == list.calendarIdentifier ? nil : list.calendarIdentifier
-                        }
-                    }
-                }.padding(.horizontal, 16)
-            }
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .padding(.vertical, 6)
             ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -541,29 +519,14 @@ struct ReminderCardsView: View {
             }
         }
         .background(GalleryPalette.paper)
-        // Show a just-created list on its own; an empty new list would otherwise sit at the bottom.
-        .onChange(of: model.lastCreatedListID) { _, id in if let id { withAnimation(.snappy) { focused = id } } }
-    }
-
-    private func chip(title: String, color: Color?, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let color { Circle().fill(color).frame(width: 8, height: 8) }
-                Text(title).lineLimit(1)
-            }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 12).frame(minHeight: 36)
-            .foregroundStyle(selected ? GalleryPalette.paper : GalleryPalette.ink)
-            .background(selected ? GalleryPalette.ink : GalleryPalette.card, in: Capsule())
-            .overlay { Capsule().strokeBorder(GalleryPalette.line, lineWidth: selected ? 0 : 0.5) }
-        }
-        .buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+        // Open a just-created list's card in full.
+        .onChange(of: model.lastCreatedListID) { _, id in if let id { withAnimation(.snappy) { _ = expanded.insert(id) } } }
     }
 
     private func card(_ list: EKCalendar) -> some View {
         let entries = items(in: list)
         let id = list.calendarIdentifier
-        let showAll = focused == id || expanded.contains(id)
+        let showAll = expanded.contains(id)
         let visible = showAll ? entries : Array(entries.prefix(preview))
         let color = Color(cgColor: list.cgColor)
         return VStack(spacing: 0) {
@@ -571,7 +534,7 @@ struct ReminderCardsView: View {
                 Circle().fill(color).frame(width: 10, height: 10)
                 Text(list.title).font(.headline).foregroundStyle(GalleryPalette.ink).lineLimit(2)
                 Spacer()
-                Text("\(entries.count) OPEN").font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
+                Text("\(entries.count) open").font(.footnote.weight(.semibold)).foregroundStyle(GalleryPalette.muted)
             }
             .padding(.horizontal, 14)
             .contentShape(Rectangle())
@@ -599,7 +562,7 @@ struct ReminderCardsView: View {
                     if addingIn == id { editRow(list, color: color) } else { addRow(list, color: color) }
                 }.id("add-\(id)")
             }
-            if entries.count > preview && focused != id {
+            if entries.count > preview {
                 Divider()
                 Button(showAll ? "Show less" : "Show all \(entries.count)") {
                     withAnimation(.snappy) { if showAll { expanded.remove(id) } else { expanded.insert(id) } }

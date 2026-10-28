@@ -1,7 +1,7 @@
 import SwiftUI
 import EventKit
 
-/// Search results across events (a year either side of today) and open reminders, shown in the Agenda tab.
+/// Search results across events (a year either side of today) and open reminders, shown in the search sheet.
 struct UnifiedSearchResults: View {
     @ObservedObject var model: AgendaModel
     let query: String
@@ -22,25 +22,18 @@ struct UnifiedSearchResults: View {
                     ForEach(reminders, id: \.calendarItemIdentifier) { reminder in
                         ReminderLine(model: model, reminder: reminder).listRowBackground(GalleryPalette.card)
                     }
-                } header: { header("REMINDERS", count: reminders.count) }
+                } header: { SectionHeader(title: "Reminders", trailing: "\(reminders.count)") }
             }
             if !events.isEmpty {
                 Section {
                     ForEach(events, id: \.self) { event in
-                        Button { model.sheet = .event(event) } label: {
-                            HStack(spacing: 10) {
-                                RoundedRectangle(cornerRadius: 2).fill(event.calendarColor).frame(width: 4)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(event.title ?? "Untitled event").font(.subheadline.weight(.medium))
-                                    Text(event.isAllDay ? event.startDate.formatted(date: .abbreviated, time: .omitted) : event.startDate.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption).foregroundStyle(GalleryPalette.muted)
-                                }
-                                Spacer(minLength: 0)
-                            }.contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain).listRowBackground(GalleryPalette.card)
+                        EventRow(color: event.calendarColor, title: event.title ?? "Untitled event",
+                                 detail: [event.startDate.formatted(date: .abbreviated, time: .omitted), event.location].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
+                                 time: event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened),
+                                 birthday: event.isBirthday) { model.sheet = .event(event) }
+                            .listRowBackground(GalleryPalette.card)
                     }
-                } header: { header("EVENTS", count: events.count) }
+                } header: { SectionHeader(title: "Events", trailing: "\(events.count)") }
             }
         }
         .listStyle(.insetGrouped)
@@ -51,9 +44,6 @@ struct UnifiedSearchResults: View {
             let calendar = Calendar.current
             pool = model.events(in: DateInterval(start: calendar.date(byAdding: .year, value: -1, to: .now)!, end: calendar.date(byAdding: .year, value: 1, to: .now)!))
         }
-    }
-    private func header(_ title: String, count: Int) -> some View {
-        HStack { Text(title); Spacer(); Text("\(count)") }.font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
     }
 }
 

@@ -1,10 +1,9 @@
 import SwiftUI
 import EventKit
 
+/// The Calendar tab's views, in the order of its chip bar. A running list of upcoming days is the Agenda tab's job.
 enum CalendarDisplay: String, CaseIterable {
-    case year = "Year", month = "Month", week = "Week", threeDay = "3 Day", day = "Day", agenda = "Agenda"
-    /// Year opens from the button beside the month, like Apple's Calendar, so it isn't a segment.
-    static let segments: [CalendarDisplay] = [.month, .week, .threeDay, .day, .agenda]
+    case year = "Year", month = "Month", week = "Week", threeDay = "3 Day", day = "Day"
     var isTimeline: Bool { self == .week || self == .threeDay || self == .day }
 }
 
@@ -108,9 +107,6 @@ struct CalendarHome: View {
         nonmutating set { model.calendarMode = newValue }
     }
     @State private var events: [EKEvent] = []
-    @State private var search = ""
-    @State private var showingSearch = false
-    @FocusState private var searchFocused: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var gridWidth: CGFloat = 0
     /// The event being dragged on the timeline: the start it would drop at, or with `resize`, its new end.
@@ -127,11 +123,6 @@ struct CalendarHome: View {
     /// An optional second time zone, shown beside the hours on the timeline.
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
     @ObservedObject private var weather = WeatherStore.shared
-    /// `search` after a short pause, so typing doesn't refilter on every keystroke.
-    @State private var query = ""
-    /// Events within a year of `searchAnchor`, fetched once per search rather than per keystroke.
-    @State private var searchPool: [EKEvent] = []
-    @State private var searchAnchor: Date?
     @State private var datePicker = false
     private var calendar: Calendar { .current }
     private var days: [Date] {
@@ -146,49 +137,15 @@ struct CalendarHome: View {
             let start = calendar.dateInterval(of: .year, for: date)!.start
             let count = calendar.range(of: .day, in: .year, for: date)?.count ?? 365
             return (0..<count).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
-        case .agenda: return (0..<30).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: date)) }
         }
-    }
-    private var matchingEvents: [EKEvent] {
-        guard !query.isEmpty else { return events }
-        return searchPool.filter { [ $0.title, $0.location, $0.notes, $0.calendarTitle ].compactMap { $0 }.joined(separator: " ").localizedCaseInsensitiveContains(query) }
     }
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if showingSearch {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search titles, places, and notes", text: $search).focused($searchFocused)
-                            .submitLabel(.search).onSubmit { searchFocused = false }
-                        Button("Close search", systemImage: "xmark.circle.fill") {
-                            search = ""; query = ""; showingSearch = false
-                        }.labelStyle(.iconOnly).foregroundStyle(.secondary).frame(width: 44, height: 44)
-                    }.padding(.leading, 12).background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 12))
-                        .padding(.horizontal).padding(.bottom, 4)
-                }
-                // Segments can't grow with the text, so very large text sizes get a menu instead.
-                Group {
-                    if typeSize.isAccessibilitySize {
-                        Picker("Calendar view", selection: $model.calendarMode) {
-                            ForEach(CalendarDisplay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }.pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Picker("Calendar view", selection: $model.calendarMode) {
-                            ForEach(CalendarDisplay.segments, id: \.self) { Text($0.rawValue).tag($0) }
-                        }.pickerStyle(.segmented)
-                    }
-                }.padding(.horizontal).padding(.bottom, 2)
+                ChipBar(options: CalendarDisplay.allCases, selection: $model.calendarMode) { $0.rawValue }
                 navigation
                 if !model.calendarAccess {
                     AccessCard(title: "Your calendars, together", description: "Connect Apple Calendar to browse and manage events from your synced accounts.") { Task { await model.request(.event) } }
-                } else if !query.isEmpty {
-                    List {
-                        Section("Search · one year before and after selected date") {
-                            ForEach(matchingEvents, id: \.self) { event in eventRow(event, showDate: true) }
-                            if matchingEvents.isEmpty { Text("No matching events").foregroundStyle(.secondary) }
-                        }
-                    }.listStyle(.insetGrouped)
                 } else {
                     if mode == .year { yearGrid }
                     else if mode.isTimeline { timeline(days) }
@@ -204,48 +161,13 @@ struct CalendarHome: View {
             .galleryTitle("Calendar")
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-            .toolbar {
-                // Like Apple's Calendar: the year button above Month opens the Year view, and Year goes back to Month.
-                ToolbarItem(placement: .topBarLeading) {
-                    if mode == .month || mode == .year {
-                        Button {
-                            withAnimation(.snappy) { mode = mode == .year ? .month : .year }
-                        } label: {
-                            // An HStack rather than a Label, which the toolbar would show as the icon alone.
-                            HStack(spacing: 3) {
-                                Image(systemName: "chevron.left").fontWeight(.semibold)
-                                Text(mode == .year ? "Month" : date.formatted(.dateTime.year()))
-                            }
-                        }
-                        .accessibilityLabel(mode == .year ? "Back to month" : "Year view")
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) { CalendarSetsMenu(model: model) }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Today") { date = .now }
-                    Button("Search calendar", systemImage: "magnifyingglass") {
-                        showingSearch = true; searchFocused = true
-                    }
-                }
-            }
+            .tabToolbar(model: model, today: { date = .now }) { CalendarSetsMenu(model: model) }
             .tint(accent)
             .onAppear(perform: reload)
-            .onChange(of: date) { _, _ in
-                reload()
-                if !query.isEmpty { loadSearchPool() }
-            }
+            .onChange(of: date) { _, _ in reload() }
             .onChange(of: mode) { _, _ in reload() }
-            .task(id: search) {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard !Task.isCancelled else { return }
-                if !search.isEmpty && searchAnchor.map({ !calendar.isDate($0, inSameDayAs: date) }) ?? true { loadSearchPool() }
-                query = search
-            }
             .onChange(of: model.calendarReturnToToday) { _, _ in date = .now }
-            .onChange(of: model.generation) { _, _ in
-                reload()
-                if query.isEmpty { searchAnchor = nil } else { loadSearchPool() }
-            }
+            .onChange(of: model.generation) { _, _ in reload() }
             .sheet(isPresented: $datePicker) {
                 NavigationStack {
                     DatePicker("Jump to date", selection: $model.calendarDate, displayedComponents: .date).datePickerStyle(.graphical).padding()
@@ -263,7 +185,7 @@ struct CalendarHome: View {
             Spacer()
             Button { datePicker = true } label: {
                 Text(rangeTitle).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-                if weekNumbers && mode != .year && mode != .agenda {
+                if weekNumbers && mode != .year {
                     Text("W\(calendar.component(.weekOfYear, from: date))").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 if mode == .day, let forecast = weather.forecast(for: date) { WeatherBadge(forecast: forecast) }
@@ -278,7 +200,7 @@ struct CalendarHome: View {
         case .day: return date.formatted(.dateTime.month().day().year())
         case .month: return date.formatted(.dateTime.month(.wide).year())
         case .year: return date.formatted(.dateTime.year())
-        case .week, .threeDay, .agenda: return (days.first!..<days.last!).formatted(.interval.month(.abbreviated).day().year())
+        case .week, .threeDay: return (days.first!..<days.last!).formatted(.interval.month(.abbreviated).day().year())
         }
     }
     private var monthGrid: some View {
@@ -375,12 +297,12 @@ struct CalendarHome: View {
             Label("Tinted days have events", systemImage: "circle.fill").font(.caption2).foregroundStyle(.secondary).padding(.bottom)
         }
     }
+    /// The chosen day's events under the month grid, or what's coming up when it's empty.
     private var agendaList: some View {
         List {
-            let displayedDays = mode == .month ? [calendar.startOfDay(for: date)] : days
-            ForEach(displayedDays, id: \.self) { day in
+            ForEach([calendar.startOfDay(for: date)], id: \.self) { day in
                 let dayEvents = eventsOn(day)
-                if mode == .month && dayEvents.isEmpty {
+                if dayEvents.isEmpty {
                     // An empty day takes one quiet line, and the space shows what's coming up next instead.
                     let upcoming = comingUp(after: day)
                     Section {
@@ -390,23 +312,20 @@ struct CalendarHome: View {
                     if !upcoming.isEmpty {
                         Section {
                             ForEach(upcoming, id: \.self) { event in eventRow(event, showDate: true) }
-                        } header: { Text("COMING UP").font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
+                        } header: { SectionHeader(title: "Coming up") }
                     }
-                } else if mode != .agenda || !dayEvents.isEmpty {
+                } else {
                     let conflicts = Conflicts.ids(dayEvents.filter { !$0.isAllDay }.map { (dragKey($0), $0.startDate, $0.endDate) })
                     Section {
-                        if dayEvents.isEmpty { Text("No events").foregroundStyle(.secondary).listRowBackground(GalleryPalette.card) }
                         ForEach(dayEvents, id: \.self) { event in eventRow(event, conflict: conflicts.contains(dragKey(event))) }
                     } header: {
                         HStack {
-                            Text(day.formatted(.dateTime.weekday(.wide).month().day())).font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted)
-                            Spacer()
+                            SectionHeader(title: day.formatted(.dateTime.weekday(.wide).month().day()))
                             if let forecast = weather.forecast(for: day) { WeatherBadge(forecast: forecast) }
                         }
                     }
                 }
             }
-            if mode == .agenda && matchingEvents.isEmpty { ContentUnavailableView("No upcoming events", systemImage: "calendar", description: Text("Nothing scheduled in these 30 days.")) }
         }.listStyle(.insetGrouped)
             .listSectionSpacing(10)
             .contentMargins(.top, 4, for: .scrollContent)
@@ -734,52 +653,33 @@ struct CalendarHome: View {
         .accessibilityLabel("\(event.title ?? "Untitled event"), \(event.startDate.formatted(date: .omitted, time: .shortened)) to \(event.endDate.formatted(date: .omitted, time: .shortened))")
     }
     private func eventRow(_ event: EKEvent, showDate: Bool = false, conflict: Bool = false) -> some View {
-        HStack(spacing: 8) {
-            Button { model.sheet = .event(event) } label: {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2).fill(event.calendarColor).frame(width: 4)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            if event.isBirthday { Image(systemName: "gift.fill").foregroundStyle(event.calendarColor) }
-                            Text(event.isBirthday ? BirthdayAges.title(for: event) : event.title ?? "Untitled event").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
-                        }
-                        EventBadges(needsReply: event.needsReply, conflict: conflict)
-                        HStack(spacing: 5) {
-                            Text(event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened))–\(event.endDate.formatted(date: .omitted, time: .shortened))")
-                            if let location = event.location, !location.isEmpty { Text("· " + location).lineLimit(1) }
-                            if event.hasRecurrenceRules { Image(systemName: "repeat") }
-                        }.font(.caption2).foregroundStyle(.secondary)
-                        if showDate { Text(event.startDate.formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(.secondary) }
-                    }
-                    Spacer(minLength: 0)
-                }.frame(minHeight: 34).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            // Separate from the row's button so each can be tapped.
-            if let link = MeetingLink.url(for: event), !event.isAllDay, event.endDate > .now { JoinButton(url: link) }
-        }
-        .contextMenu {
-            Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
-            if let link = MeetingLink.url(for: event) { Link(destination: link) { Label("Join \(MeetingLink.service(link))", systemImage: "video") } }
-        }
-        .galleryRow()
-        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+        let date = showDate ? event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) : nil
+        let place = event.location.flatMap { $0.isEmpty || MeetingLink.url(url: nil, location: $0, notes: nil) != nil ? nil : $0 }
+        let detail = [date, place, event.hasRecurrenceRules ? "Repeats" : nil].compactMap { $0 }.joined(separator: " · ")
+        return EventRow(color: event.calendarColor, title: event.isBirthday ? BirthdayAges.title(for: event) : event.title ?? "Untitled event",
+                        detail: detail.isEmpty ? nil : detail,
+                        time: event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened))\n\(event.endDate.formatted(date: .omitted, time: .shortened))",
+                        birthday: event.isBirthday, needsReply: event.needsReply, conflict: conflict,
+                        joinURL: !event.isAllDay && event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.sheet = .event(event) }
+            .contextMenu {
+                Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
+                if let link = MeetingLink.url(for: event) { Link(destination: link) { Label("Join \(MeetingLink.service(link))", systemImage: "video") } }
+            }
+            .galleryRow()
+            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
     }
     private func eventsOn(_ day: Date) -> [EKEvent] {
-        matchingEvents.filter { CalendarDates.overlaps(start: $0.startDate, end: $0.endDate, day: day) }
+        events.filter { CalendarDates.overlaps(start: $0.startDate, end: $0.endDate, day: day) }
             .sorted { if $0.isAllDay != $1.isAllDay { return $0.isAllDay }; return $0.startDate < $1.startDate }
     }
     private func shift(_ direction: Int) {
         let component: Calendar.Component = mode == .month ? .month : mode == .year ? .year : .day
-        let amount = mode == .week ? 7 : mode == .threeDay ? 3 : mode == .agenda ? 30 : 1
+        let amount = mode == .week ? 7 : mode == .threeDay ? 3 : 1
         date = calendar.date(byAdding: component, value: direction * amount, to: date)!
     }
     private func reload() {
         model.calendarCreationDate = newEventDate
         events = model.events(in: DateInterval(start: days.first!, end: calendar.date(byAdding: .day, value: 1, to: days.last!)!))
-    }
-    private func loadSearchPool() {
-        searchAnchor = date
-        searchPool = model.events(in: DateInterval(start: calendar.date(byAdding: .year, value: -1, to: date)!, end: calendar.date(byAdding: .year, value: 1, to: date)!))
     }
 }
 

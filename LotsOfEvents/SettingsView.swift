@@ -36,30 +36,23 @@ struct SourcesView: View {
                         }
                     }.padding(.vertical, 8)
                 }.listRowBackground(Color.clear)
-                Section("Your agenda") {
-                    NavigationLink { sourcePicker(reminders: false) } label: {
+                Section {
+                    NavigationLink { SourcePickerView(model: model, reminders: false) } label: {
                         settingsRow("Calendars", symbol: "calendar", color: .blue, detail: selectionSummary(reminders: false))
                     }
-                    NavigationLink { sourcePicker(reminders: true) } label: {
+                    NavigationLink { SourcePickerView(model: model, reminders: true) } label: {
                         settingsRow("Reminder lists", symbol: "checklist", color: .orange, detail: selectionSummary(reminders: true))
                     }
                     NavigationLink { TodayListsView(model: model) } label: {
                         settingsRow("Undated tasks in Today", symbol: "sun.max", color: .yellow, detail: TodayListsView.summary(model))
                     }
-                    Stepper(value: $days, in: 2...14) {
-                        settingsRow("Widget look ahead", symbol: "arrow.right", color: accent, detail: "\(days) days · agenda scrolls continuously")
-                    }.onChange(of: days) { _, value in
-                        Preferences.days = value
-                        Preferences.defaults.set(0, forKey: "page")
-                        model.scheduleRefresh()
-                        WidgetReloader.schedule()
-                    }
-                }.listRowBackground(GalleryPalette.card)
-                Section {
                     NavigationLink { CalendarSetsView(model: model) } label: {
-                        settingsRow("Calendar sets", symbol: "square.stack", color: .blue,
-                                    detail: CalendarSet.saved.isEmpty ? "Groups like Work and Personal · Focus filters" : "\(CalendarSet.saved.count) saved · switch from the Calendar tab")
+                        settingsRow("Calendar sets", symbol: "line.3.horizontal.decrease.circle", color: .indigo,
+                                    detail: CalendarSet.saved.isEmpty ? "Groups like Work and Personal · Focus filters" : "\(CalendarSet.saved.count) saved · switch with the filter button")
                     }
+                } header: { SectionHeader(title: "Calendars & Lists") }
+                .listRowBackground(GalleryPalette.card)
+                Section {
                     Toggle(isOn: $weekNumbers) { settingsRow("Week numbers", symbol: "number", color: .gray, detail: "In Month view and beside dates") }
                     NavigationLink { TimeZonePicker(selection: $secondZoneID) } label: {
                         settingsRow("Second time zone", symbol: "globe", color: .cyan,
@@ -71,7 +64,7 @@ struct SourcesView: View {
                         .onChange(of: birthdayAges) { _, on in
                             if on { Task { _ = try? await CNContactStore().requestAccess(for: .contacts); model.objectWillChange.send() } }
                         }
-                } header: { Text("Calendar") } footer: {
+                } header: { SectionHeader(title: "Calendar View") } footer: {
                     if showWeather, let problem = weather.problem {
                         Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                     } else if showWeather, let attribution = weather.attribution {
@@ -83,7 +76,7 @@ struct SourcesView: View {
                         Text("Birthdays come from the Birthdays calendar; turn it on under Calendars.")
                     }
                 }.listRowBackground(GalleryPalette.card)
-                Section("Appearance") {
+                Section {
                     // Kept on the model so the gallery stays open when a new theme rebuilds the app's views.
                     Button { model.showingThemePicker = true } label: {
                         HStack {
@@ -112,13 +105,8 @@ struct SourcesView: View {
                     NavigationLink { TabsSettingsView() } label: {
                         settingsRow("Tabs", symbol: "dock.rectangle", color: .gray, detail: "Order and the tab the app opens to")
                     }
-                    NavigationLink {
-                        WidgetEditorView()
-                    } label: {
-                        settingsRow("Widget editor", symbol: "paintpalette", color: .purple, detail: "\(theme.title) · colors, text, layout, preview")
-                    }
-                }.listRowBackground(GalleryPalette.card)
-                Section("Notifications") {
+                } header: { SectionHeader(title: "Appearance") }.listRowBackground(GalleryPalette.card)
+                Section {
                     NavigationLink { DefaultAlertsView() } label: {
                         settingsRow("Default alerts", symbol: "bell.badge", color: .red,
                                     detail: "Events: \(EventAlertOption(rawValue: eventAlert)?.title ?? "None") · Reminders: \(ReminderAlertOption(rawValue: reminderAlert)?.title ?? "None")")
@@ -132,8 +120,21 @@ struct SourcesView: View {
                         }
                     Toggle(isOn: $liveActivity) { settingsRow("Next event countdown", symbol: "timer", color: .purple, detail: "Live Activity on the Lock Screen and Dynamic Island") }
                         .onChange(of: liveActivity) { _, _ in model.scheduleRefresh() }
-                }.listRowBackground(GalleryPalette.card)
-                Section("Widgets") {
+                } header: { SectionHeader(title: "Notifications") }.listRowBackground(GalleryPalette.card)
+                Section {
+                    NavigationLink {
+                        WidgetEditorView()
+                    } label: {
+                        settingsRow("Widget editor", symbol: "paintpalette", color: .purple, detail: "\(theme.title) · colors, text, layout, preview")
+                    }
+                    Stepper(value: $days, in: 2...14) {
+                        settingsRow("Days ahead", symbol: "arrow.right", color: accent, detail: "\(days) days in agenda widgets")
+                    }.onChange(of: days) { _, value in
+                        Preferences.days = value
+                        Preferences.defaults.set(0, forKey: "page")
+                        model.scheduleRefresh()
+                        WidgetReloader.schedule()
+                    }
                     NavigationLink {
                         List {
                             Section("Add a widget") {
@@ -151,7 +152,7 @@ struct SourcesView: View {
                         }.navigationTitle("Widget guide").navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
                     } label: { settingsRow("Widget guide", symbol: "square.grid.2x2", color: .indigo, detail: "Layouts, customization & Quick Add") }
-                }.listRowBackground(GalleryPalette.card)
+                } header: { SectionHeader(title: "Widgets") }.listRowBackground(GalleryPalette.card)
             }
             .listRowBackground(GalleryPalette.card)
             .navigationDestination(isPresented: $model.showingThemePicker) { appThemePicker }
@@ -177,40 +178,6 @@ struct SourcesView: View {
         let access = reminders ? model.reminderAccess : model.calendarAccess
         if !access { return "Connect Apple \(reminders ? "Reminders" : "Calendar")" }
         return "\(sources.filter { Preferences.selected($0.calendarIdentifier, reminders: reminders) }.count) of \(sources.count) selected"
-    }
-    private func sourcePicker(reminders: Bool) -> some View {
-        let sources = reminders ? model.lists : model.calendars
-        let access = reminders ? model.reminderAccess : model.calendarAccess
-        let accounts = Dictionary(grouping: sources, by: { $0.source.title }).sorted { $0.key < $1.key }
-        return List {
-            if !access {
-                Section {
-                    Button("Connect Apple \(reminders ? "Reminders" : "Calendar")") { Task { await model.request(reminders ? .reminder : .event) } }
-                }
-            } else if sources.isEmpty { ContentUnavailableView("No \(reminders ? "lists" : "calendars") yet", systemImage: reminders ? "checklist" : "calendar") }
-            ForEach(accounts, id: \.key) { account, entries in
-                Section(account) {
-                    ForEach(entries, id: \.calendarIdentifier) { source in
-                        Toggle(isOn: Binding(get: { Preferences.selected(source.calendarIdentifier, reminders: reminders) }, set: {
-                            Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: sources.map(\.calendarIdentifier))
-                            model.objectWillChange.send()
-                            model.scheduleRefresh()
-                            WidgetReloader.schedule()
-                        })) {
-                            HStack(spacing: 12) {
-                                Circle().fill(Color(cgColor: source.cgColor)).frame(width: 10, height: 10)
-                                Text(source.title)
-                            }
-                        }
-                    }
-                }
-            }
-            Section {
-                Text(reminders ? "Selected lists appear in your agenda and widgets. Only incomplete reminders due within the displayed date range are included." : "Selected calendars appear in your agenda, calendar views, and widgets.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }.listRowBackground(Color.clear)
-        }.navigationTitle(reminders ? "Reminder lists" : "Calendars").navigationBarTitleDisplayMode(.inline)
-            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
     }
     /// The app's own themes; each fixes light or dark, so the app no longer follows the device setting.
     private var appThemePicker: some View {
@@ -314,6 +281,49 @@ struct TimeZonePicker: View {
         }
         .searchable(text: $search, prompt: "City or region")
         .navigationTitle("Second Time Zone").navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden).background(GalleryPalette.paper)
+    }
+}
+
+/// Turns calendars or reminder lists on and off for the app and widgets, grouped by account.
+/// Opened from Settings and from the filter menu on Calendar and Agenda.
+struct SourcePickerView: View {
+    @ObservedObject var model: AgendaModel
+    let reminders: Bool
+    var body: some View {
+        let sources = reminders ? model.lists : model.calendars
+        let access = reminders ? model.reminderAccess : model.calendarAccess
+        let accounts = Dictionary(grouping: sources, by: { $0.source.title }).sorted { $0.key < $1.key }
+        List {
+            if !access {
+                Section {
+                    Button("Connect Apple \(reminders ? "Reminders" : "Calendar")") { Task { await model.request(reminders ? .reminder : .event) } }
+                }
+            } else if sources.isEmpty { ContentUnavailableView("No \(reminders ? "lists" : "calendars") yet", systemImage: reminders ? "checklist" : "calendar") }
+            ForEach(accounts, id: \.key) { account, entries in
+                Section {
+                    ForEach(entries, id: \.calendarIdentifier) { source in
+                        Toggle(isOn: Binding(get: { Preferences.selected(source.calendarIdentifier, reminders: reminders) }, set: {
+                            Preferences.setSelected(source.calendarIdentifier, enabled: $0, reminders: reminders, available: sources.map(\.calendarIdentifier))
+                            model.objectWillChange.send()
+                            model.scheduleRefresh()
+                            WidgetReloader.schedule()
+                        })) {
+                            HStack(spacing: 12) {
+                                Circle().fill(Color(cgColor: source.cgColor)).frame(width: 10, height: 10)
+                                Text(source.title)
+                            }
+                        }
+                    }
+                } header: { SectionHeader(title: account) }
+            }
+            Section {
+                Text(reminders ? "Selected lists appear in your agenda and widgets. Only incomplete reminders due within the displayed date range are included." : "Selected calendars appear in your agenda, calendar views, and widgets. Calendar sets save a selection to switch back to.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }.listRowBackground(Color.clear)
+        }
+        .listRowBackground(GalleryPalette.card)
+        .navigationTitle(reminders ? "Reminder Lists" : "Calendars").navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden).background(GalleryPalette.paper)
     }
 }
