@@ -251,7 +251,7 @@ struct ReminderFocusView: View {
         }
         .listStyle(.insetGrouped).listSectionSpacing(12)
         .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-        .environment(\.defaultMinListRowHeight, 48)
+        .appRowHeight(48)
         .refreshable { await model.refresh() }
     }
 

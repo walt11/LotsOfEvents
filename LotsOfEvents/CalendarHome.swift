@@ -268,7 +268,7 @@ struct CalendarHome: View {
         }.listStyle(.insetGrouped)
             .listSectionSpacing(10)
             .contentMargins(.top, 4, for: .scrollContent)
-            .environment(\.defaultMinListRowHeight, 44)
+            .appRowHeight(44)
             .refreshable { await model.refresh() }
     }
     /// The next few events after `day`, from what's already loaded for the visible month.

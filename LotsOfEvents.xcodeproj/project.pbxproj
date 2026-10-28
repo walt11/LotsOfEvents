@@ -12,9 +12,12 @@
 		12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */; };
 		133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
 		15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */; };
+		207305F308E774F2BBF08D78 /* WidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C82927FA5473572B5085650 /* WidgetBundle.swift */; };
 		245DD2421833CEC41F6D6DE1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
 		275F3E28B4FAF0DED76F207C /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
+		2CACC4FAC18782F63920D998 /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		3504124C79FFA8C62F200503 /* QuickAddControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */; };
+		3C36A071D0B6E39E06D01E2D /* TodayDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1F163AD383754C42373941 /* TodayDashboard.swift */; };
 		435428210F389CFA42A6DFAB /* QuickAddDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9821B971D23D906C622837DD /* QuickAddDictation.swift */; };
 		4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		477B86515969537E0EB1D0AD /* UnifiedSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DE288F6D9EBC66175DAB67 /* UnifiedSearch.swift */; };
@@ -23,6 +26,7 @@
 		5F4B339A127C6B1A7F4AD3A1 /* TodayRemindersWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */; };
 		626E6619AFFB33D3FFAD389B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 822EF3079EA48BD159AAC26B /* Assets.xcassets */; };
 		64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */; };
+		6ABE3EF592318AAEEA7312B6 /* AppCustomizationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */; };
 		7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB5E02F0AC8E5911D573D7C /* NewListView.swift */; };
 		83B063FC5F5EC89A70626508 /* ReminderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09769C17F8413551E8BD0D33 /* ReminderViews.swift */; };
@@ -32,24 +36,31 @@
 		912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */; };
 		A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9673B93B2FA0CF1B2871781C /* CalendarHome.swift */; };
 		A23430DF01684011450429B0 /* SnoozeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C030AA4A5C60BA97D67967 /* SnoozeTests.swift */; };
+		A3E0E2277B4B5F9DC4A7B684 /* TodayLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5F03C89BEF58BE14D27246 /* TodayLists.swift */; };
 		A6473C7F7F96EC3412C7042B /* AlertDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237CDB66730A8EF85953929 /* AlertDefaults.swift */; };
 		B020B5D5B7487C2FE28904D2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899445C71BA33F55F900627C /* SettingsView.swift */; };
 		B2D31BC7229D7B0D9D29D054 /* WidgetReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF4B9693A4693C660AD04C6 /* WidgetReloader.swift */; };
 		B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */; };
 		BA408E39C1490A95CC22B832 /* AlertDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237CDB66730A8EF85953929 /* AlertDefaults.swift */; };
+		BABEF3839E2CDA7270503239 /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
 		BBE15E6161448D8620D0BD2D /* AppAccent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */; };
 		BEF42BEDD940B3CBDFF1D64C /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
 		C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */; };
 		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
-		D15E2C569B02878EBAF8017B /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */; };
+		CB776DF48C36FAE6DEC2E5F3 /* TodayDashboardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C051342E55B835AB128881 /* TodayDashboardWidget.swift */; };
+		D131D584D22E405E9E82EDC5 /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */; };
 		D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */; };
 		D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */; };
 		DA0BE228740CEE146A1794D1 /* GalleryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */; };
+		DDB3214DC52172670388D9E9 /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */; };
+		DE8FBE49EA3E7A607F4C9059 /* TodayDashboardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C051342E55B835AB128881 /* TodayDashboardWidget.swift */; };
+		E568F1FFFDA575B4F8F1C283 /* WidgetEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 890B42F875E8FE0B144EFD0C /* WidgetEditorView.swift */; };
 		E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */; };
 		E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */; };
 		EF1C716AE3DE20158E2B13DE /* Snooze.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C51F47226373F1925E9ABBA /* Snooze.swift */; };
+		F013A9C1B2BDA401090F1303 /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
 		F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -90,15 +101,20 @@
 		0AB5E02F0AC8E5911D573D7C /* NewListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewListView.swift; sourceTree = "<group>"; };
 		0C51F47226373F1925E9ABBA /* Snooze.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snooze.swift; sourceTree = "<group>"; };
 		193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultAlertsView.swift; sourceTree = "<group>"; };
+		1C82927FA5473572B5085650 /* WidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBundle.swift; sourceTree = "<group>"; };
 		1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixesAndFeaturesTests.swift; sourceTree = "<group>"; };
 		20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LotsOfEvents.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgets.swift; sourceTree = "<group>"; };
+		34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
 		3CBAF9DE5613BF613814BE64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCustomizationViews.swift; sourceTree = "<group>"; };
+		49C051342E55B835AB128881 /* TodayDashboardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboardWidget.swift; sourceTree = "<group>"; };
 		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
 		54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousAgenda.swift; sourceTree = "<group>"; };
 		635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotsOfEventsApp.swift; sourceTree = "<group>"; };
 		6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
+		6A1F163AD383754C42373941 /* TodayDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboard.swift; sourceTree = "<group>"; };
 		6E0355C3FB63242321937C6F /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddControls.swift; sourceTree = "<group>"; };
 		7BF4B9693A4693C660AD04C6 /* WidgetReloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetReloader.swift; sourceTree = "<group>"; };
@@ -106,6 +122,7 @@
 		808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LotsOfEventsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		822EF3079EA48BD159AAC26B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		883A5E15068E6BD432BF3851 /* AgendaWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AgendaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		890B42F875E8FE0B144EFD0C /* WidgetEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetEditorView.swift; sourceTree = "<group>"; };
 		899445C71BA33F55F900627C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryStyle.swift; sourceTree = "<group>"; };
 		8C49FDA929D6FACECC3FDD02 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -123,12 +140,12 @@
 		ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCore.swift; sourceTree = "<group>"; };
 		B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccent.swift; sourceTree = "<group>"; };
 		BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgetTests.swift; sourceTree = "<group>"; };
+		DD5F03C89BEF58BE14D27246 /* TodayLists.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayLists.swift; sourceTree = "<group>"; };
 		ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStyle.swift; sourceTree = "<group>"; };
 		F237CDB66730A8EF85953929 /* AlertDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertDefaults.swift; sourceTree = "<group>"; };
 		F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndReminderTests.swift; sourceTree = "<group>"; };
 		F6C030AA4A5C60BA97D67967 /* SnoozeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnoozeTests.swift; sourceTree = "<group>"; };
 		F90BC7114F0716F452585279 /* AgendaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgendaWidget.entitlements; sourceTree = "<group>"; };
-		FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -136,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */,
+				41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */,
 				6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */,
 				822EF3079EA48BD159AAC26B /* Assets.xcassets */,
 				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
@@ -152,7 +170,10 @@
 				09769C17F8413551E8BD0D33 /* ReminderViews.swift */,
 				899445C71BA33F55F900627C /* SettingsView.swift */,
 				0C51F47226373F1925E9ABBA /* Snooze.swift */,
+				6A1F163AD383754C42373941 /* TodayDashboard.swift */,
+				DD5F03C89BEF58BE14D27246 /* TodayLists.swift */,
 				A9DE288F6D9EBC66175DAB67 /* UnifiedSearch.swift */,
+				890B42F875E8FE0B144EFD0C /* WidgetEditorView.swift */,
 				7BF4B9693A4693C660AD04C6 /* WidgetReloader.swift */,
 			);
 			path = LotsOfEvents;
@@ -197,6 +218,7 @@
 		C49D9AF82380ABD7E2EF3761 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */,
 				94242E0DB9C908EB386A826B /* AgendaData.swift */,
 				F237CDB66730A8EF85953929 /* AlertDefaults.swift */,
 				8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */,
@@ -210,14 +232,15 @@
 		E581CA6862DD1CDD3BF0F2F3 /* AgendaWidget */ = {
 			isa = PBXGroup;
 			children = (
-				FE63EB5268DBBADF9090852F /* AgendaConfiguration.swift */,
 				F90BC7114F0716F452585279 /* AgendaWidget.entitlements */,
 				66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */,
 				2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */,
 				8C49FDA929D6FACECC3FDD02 /* Info.plist */,
 				6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */,
 				9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */,
+				49C051342E55B835AB128881 /* TodayDashboardWidget.swift */,
 				A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */,
+				1C82927FA5473572B5085650 /* WidgetBundle.swift */,
 			);
 			path = AgendaWidget;
 			sourceTree = "<group>";
@@ -350,7 +373,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D15E2C569B02878EBAF8017B /* AgendaConfiguration.swift in Sources */,
+				D131D584D22E405E9E82EDC5 /* AgendaConfiguration.swift in Sources */,
 				C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */,
 				0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */,
 				BA408E39C1490A95CC22B832 /* AlertDefaults.swift in Sources */,
@@ -359,7 +382,9 @@
 				3504124C79FFA8C62F200503 /* QuickAddControls.swift in Sources */,
 				BEF42BEDD940B3CBDFF1D64C /* QuickAddCore.swift in Sources */,
 				4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */,
+				CB776DF48C36FAE6DEC2E5F3 /* TodayDashboardWidget.swift in Sources */,
 				5F4B339A127C6B1A7F4AD3A1 /* TodayRemindersWidget.swift in Sources */,
+				207305F308E774F2BBF08D78 /* WidgetBundle.swift in Sources */,
 				8C3497DABD279B13059FB994 /* WidgetStyle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -368,12 +393,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DDB3214DC52172670388D9E9 /* AgendaConfiguration.swift in Sources */,
 				D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */,
+				F013A9C1B2BDA401090F1303 /* AgendaWidget.swift in Sources */,
 				A6473C7F7F96EC3412C7042B /* AlertDefaults.swift in Sources */,
 				BBE15E6161448D8620D0BD2D /* AppAccent.swift in Sources */,
+				6ABE3EF592318AAEEA7312B6 /* AppCustomizationViews.swift in Sources */,
 				912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */,
 				A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */,
 				C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */,
+				BABEF3839E2CDA7270503239 /* DashboardWidgets.swift in Sources */,
 				E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */,
 				E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */,
 				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
@@ -386,7 +415,12 @@
 				D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */,
 				B020B5D5B7487C2FE28904D2 /* SettingsView.swift in Sources */,
 				EF1C716AE3DE20158E2B13DE /* Snooze.swift in Sources */,
+				2CACC4FAC18782F63920D998 /* ThreeDayAgendaWidget.swift in Sources */,
+				3C36A071D0B6E39E06D01E2D /* TodayDashboard.swift in Sources */,
+				DE8FBE49EA3E7A607F4C9059 /* TodayDashboardWidget.swift in Sources */,
+				A3E0E2277B4B5F9DC4A7B684 /* TodayLists.swift in Sources */,
 				477B86515969537E0EB1D0AD /* UnifiedSearch.swift in Sources */,
+				E568F1FFFDA575B4F8F1C283 /* WidgetEditorView.swift in Sources */,
 				B2D31BC7229D7B0D9D29D054 /* WidgetReloader.swift in Sources */,
 				8B8951E144EFE45FEC9FEC5F /* WidgetStyle.swift in Sources */,
 			);
@@ -567,7 +601,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -632,7 +666,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

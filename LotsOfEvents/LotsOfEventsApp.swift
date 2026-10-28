@@ -169,6 +169,13 @@ struct AgendaView: View {
                 }
                 ForEach(ContinuousAgenda.sections(agenda.days, today: .now)) { section in
                     switch section {
+                    case .day(let day) where Calendar.current.isDateInToday(day.date):
+                        let extras = model.todayExtras()
+                        Section {
+                            TodayDashboard(model: model, items: day.items, overdue: extras.overdue, undated: extras.undated)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                        }.id("agenda-today")
                     case .day(let day):
                         Section {
                             if day.items.isEmpty {
@@ -177,7 +184,7 @@ struct AgendaView: View {
                             }
                             ForEach(day.items) { item in itemRow(item) }
                         } header: { Text(dayTitle(day.date)).font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
-                            .id(Calendar.current.isDateInToday(day.date) ? "agenda-today" : day.date.description)
+                            .id(day.date.description)
                     case .empty(let start, let end):
                         Section {
                             Label(start == end ? "Nothing scheduled \(start.formatted(.dateTime.weekday(.wide).month().day()))" : "Nothing scheduled \((start..<end).formatted(.interval.month(.abbreviated).day()))", systemImage: "moon.zzz")
@@ -195,7 +202,7 @@ struct AgendaView: View {
             }
             .task(id: model.generation) { await agenda.refresh(store: model.store) }
             .listSectionSpacing(10)
-            .environment(\.defaultMinListRowHeight, 44)
+            .appRowHeight(44)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .refreshable { await model.refresh() }
             .onChange(of: model.agendaReturnToToday) { _, _ in

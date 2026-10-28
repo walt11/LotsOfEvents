@@ -5,13 +5,13 @@ import WidgetKit
 struct SourcesView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(AppTextSize.key, store: Preferences.defaults) private var textSizeID = AppTextSize.automatic.rawValue
+    @AppStorage(AppDensity.key, store: Preferences.defaults) private var densityID = AppDensity.standard.rawValue
     @AppStorage(AppTheme.key, store: Preferences.defaults) private var appThemeID = AppTheme.graphite.rawValue
     private var appTheme: AppTheme { AppTheme(rawValue: appThemeID) ?? .graphite }
     @State private var days = Preferences.days
     @AppStorage("widgetTheme", store: Preferences.defaults) private var themeID = AgendaTheme.selected.rawValue
     private var theme: AgendaTheme { AgendaTheme(rawValue: themeID) ?? .gallery }
-    @State private var customStyle = CustomWidgetStyle.saved
     // Default alerts; the same keys and defaults as AlertDefaults, in the shared App Group.
     @AppStorage("alertEvent", store: Preferences.defaults) private var eventAlert = EventAlertOption.minutes15.rawValue
     @AppStorage("alertReminder", store: Preferences.defaults) private var reminderAlert = ReminderAlertOption.atTime.rawValue
@@ -34,6 +34,9 @@ struct SourcesView: View {
                     }
                     NavigationLink { sourcePicker(reminders: true) } label: {
                         settingsRow("Reminder lists", symbol: "checklist", color: .orange, detail: selectionSummary(reminders: true))
+                    }
+                    NavigationLink { TodayListsView(model: model) } label: {
+                        settingsRow("Undated tasks in Today", symbol: "sun.max", color: .yellow, detail: TodayListsView.summary(model))
                     }
                     Stepper(value: $days, in: 2...14) {
                         settingsRow("Widget look ahead", symbol: "arrow.right", color: accent, detail: "\(days) days · agenda scrolls continuously")
@@ -60,10 +63,23 @@ struct SourcesView: View {
                     if _accent.isCustom {
                         Button("Use \(appTheme.title) Theme Color") { _accent.reset() }
                     }
-                    NavigationLink {
-                        themePicker
+                    Picker(selection: $textSizeID) {
+                        ForEach(AppTextSize.allCases) { Text($0.title).tag($0.rawValue) }
                     } label: {
-                        settingsRow("Widget theme", symbol: "paintpalette", color: .purple, detail: theme.title)
+                        settingsRow("Text size", symbol: "textformat.size", color: .teal, detail: "Automatic follows your iPhone")
+                    }
+                    Picker(selection: $densityID) {
+                        ForEach(AppDensity.allCases) { Text($0.title).tag($0.rawValue) }
+                    } label: {
+                        settingsRow("Row spacing", symbol: "rectangle.compress.vertical", color: .mint, detail: "Space between list rows")
+                    }
+                    NavigationLink { TabsSettingsView() } label: {
+                        settingsRow("Tabs", symbol: "dock.rectangle", color: .gray, detail: "Order and the tab the app opens to")
+                    }
+                    NavigationLink {
+                        WidgetEditorView()
+                    } label: {
+                        settingsRow("Widget editor", symbol: "paintpalette", color: .purple, detail: "\(theme.title) · colors, text, layout, preview")
                     }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Notifications") {
@@ -163,8 +179,8 @@ struct SourcesView: View {
                         _accent.reset()
                         // The default accent comes from the theme, and widgets use it too.
                         WidgetReloader.schedule()
-                        // Match the Home Screen icon. iOS confirms the change with its own short alert.
-                        if UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != option.iconName {
+                        // Match the Home Screen icon. iOS confirms the change with its own short alert. Custom keeps the current icon.
+                        if option != .custom, UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != option.iconName {
                             UIApplication.shared.setAlternateIconName(option.iconName)
                         }
                     } label: {
@@ -200,138 +216,22 @@ struct SourcesView: View {
                 }
             }
             .padding()
+            NavigationLink {
+                CustomAppThemeEditor {
+                    appThemeID = AppTheme.custom.rawValue
+                    _accent.reset()
+                    WidgetReloader.schedule()
+                }
+            } label: {
+                Label("Customize Colors", systemImage: "paintbrush")
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(.horizontal)
             Text("Themes set the app’s colors, accent, and whether it looks light or dark. Choosing a theme replaces a custom App accent. Widgets set to Match App Theme follow it too.")
                 .font(.footnote).foregroundStyle(GalleryPalette.muted).padding(.horizontal).padding(.bottom)
         }
         .background(GalleryPalette.paper)
         .navigationTitle("App Theme").navigationBarTitleDisplayMode(.inline)
-    }
-    private var themePicker: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 16)], spacing: 16) {
-                ForEach(AgendaTheme.allCases) { option in
-                    Button {
-                        themeID = option.rawValue
-                        WidgetReloader.schedule()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack { Text("TODAY").font(.caption2.bold()); Spacer(); Image(systemName: "plus") }.foregroundStyle(option.secondary(colorScheme))
-                            previewRow("Morning walk", color: .green, theme: option)
-                            previewRow("Lunch with Sam", color: .blue, theme: option)
-                            HStack { Text(option.title).font(.subheadline.bold()); Spacer(); Image(systemName: themeID == option.rawValue ? "checkmark.circle.fill" : "circle") }
-                                .foregroundStyle(option.text(colorScheme))
-                        }.padding(16).background { previewBackground(option, cornerRadius: 22) }
-                            .clipShape(RoundedRectangle(cornerRadius: 22))
-                            .overlay { RoundedRectangle(cornerRadius: 22).strokeBorder(themeID == option.rawValue ? accent : .clear, lineWidth: 3).padding(-5) }
-                    }.buttonStyle(.plain).accessibilityLabel(option.title).accessibilityAddTraits(themeID == option.rawValue ? .isSelected : [])
-                }
-            }.padding()
-            customEditor
-            Text("Calendar colors stay true to your sources. Preset themes adapt to light and dark; Black always stays black. Individual widgets can override this default in Edit Widget.")
-                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal).padding(.vertical)
-        }
-        .background(GalleryPalette.paper).navigationTitle("Widget theme").navigationBarTitleDisplayMode(.inline)
-            .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-        .onChange(of: customStyle) { _, style in
-            style.save()
-            themeID = AgendaTheme.custom.rawValue
-        }
-        // Color pickers change continuously, so wait for a pause before asking widgets to redraw.
-        .task(id: customStyle) {
-            try? await Task.sleep(for: .milliseconds(500))
-            if !Task.isCancelled { WidgetReloader.schedule() }
-        }
-    }
-    /// Preset themes are flat colors; the custom style adds a gradient and border, previewed in a rounded card.
-    @ViewBuilder private func previewBackground(_ option: AgendaTheme, cornerRadius: CGFloat) -> some View {
-        if option == .custom {
-            customStyle.fillView.overlay {
-                if customStyle.borderWidth > 0 {
-                    RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(customStyle.borderColor.color, lineWidth: customStyle.borderWidth)
-                }
-            }
-        } else if option == .charcoal {
-            option.charcoalFill.overlay { RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(AgendaTheme.charcoalEdge, lineWidth: 0.5) }
-        } else { option.background(colorScheme) }
-    }
-    private func colorBinding(_ path: WritableKeyPath<CustomWidgetStyle, StoredColor>) -> Binding<Color> {
-        Binding(get: { customStyle[keyPath: path].color }, set: { customStyle[keyPath: path] = StoredColor($0) })
-    }
-    private var customEditor: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("CUSTOM STYLE").font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 32)
-            // Live preview at medium-widget proportions.
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("TODAY").font(.caption2.bold())
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .foregroundStyle(customStyle.accent.map(CustomWidgetStyle.contrastingText) ?? _accent.contrastingText)
-                        .background(customStyle.accent?.color ?? accent, in: Capsule())
-                    Spacer(); Image(systemName: "plus").opacity(0.65)
-                }
-                previewLine("Morning walk", time: "7:00–7:45 AM", color: .green)
-                previewLine("Lunch with Sam", time: "12:30–1:30 PM", color: .blue)
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(customStyle.text)
-            .padding(16).frame(maxWidth: .infinity).frame(height: 150)
-            .background { previewBackground(.custom, cornerRadius: 24) }
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .padding(.horizontal)
-            .accessibilityHidden(true)
-            VStack(spacing: 0) {
-                Picker("Fill", selection: $customStyle.fill) {
-                    ForEach(CustomWidgetStyle.Fill.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).padding(12)
-                Divider().padding(.leading)
-                ColorPicker(customStyle.fill == .solid ? "Color" : "First color", selection: colorBinding(\.first), supportsOpacity: false).padding(12)
-                if customStyle.fill == .gradient {
-                    Divider().padding(.leading)
-                    ColorPicker("Second color", selection: colorBinding(\.second), supportsOpacity: false).padding(12)
-                    Divider().padding(.leading)
-                    LabeledContent("Direction") {
-                        Picker("Direction", selection: $customStyle.direction) {
-                            ForEach(CustomWidgetStyle.Direction.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }.labelsHidden()
-                    }.padding(.horizontal, 12).padding(.vertical, 6)
-                }
-                Divider().padding(.leading)
-                Toggle("Own accent color", isOn: Binding(get: { customStyle.accent != nil }, set: { customStyle.accent = $0 ? StoredColor(accent) : nil }))
-                    .padding(12)
-                if customStyle.accent != nil {
-                    Divider().padding(.leading)
-                    ColorPicker("Accent color", selection: Binding(get: { customStyle.accent?.color ?? accent }, set: { customStyle.accent = StoredColor($0) }), supportsOpacity: false)
-                        .padding(12)
-                }
-                Divider().padding(.leading)
-                HStack {
-                    Text("Border")
-                    Slider(value: $customStyle.borderWidth, in: 0...6, step: 0.5)
-                    Text(customStyle.borderWidth == 0 ? "None" : "\(customStyle.borderWidth.formatted()) pt").font(.footnote).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
-                }.padding(12)
-                Divider().padding(.leading)
-                // Always available; picking a color with no border yet turns on a 2 pt border so the change is visible.
-                ColorPicker("Border color", selection: Binding(get: { customStyle.borderColor.color }, set: {
-                    customStyle.borderColor = StoredColor($0)
-                    if customStyle.borderWidth == 0 { customStyle.borderWidth = 2 }
-                }), supportsOpacity: true).padding(12)
-            }
-            .background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal)
-            Text("Editing these switches your widgets to the Custom theme. The accent colors the selected day and Next Up; without its own, widgets use the app accent. Text turns black or white to stay readable.")
-                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 32)
-        }
-    }
-    private func previewLine(_ title: String, time: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Capsule().fill(color).frame(width: 3, height: 28)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(time).font(.caption2).opacity(0.65)
-            }
-        }
-    }
-    private func previewRow(_ title: String, color: Color, theme: AgendaTheme) -> some View {
-        HStack(spacing: 6) { Capsule().fill(color).frame(width: 3, height: 16); Text(title).font(.caption).foregroundStyle(theme.text(colorScheme)).lineLimit(1) }
     }
 }

@@ -29,6 +29,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Show your selected calendars in your agenda and widget, and create events.</string>
 	<key>NSMicrophoneUsageDescription</key>

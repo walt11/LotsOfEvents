@@ -37,6 +37,11 @@ struct AgendaItem: Identifiable {
         guard !reminder, let endDate, endDate > start else { return start.formatted(date: .omitted, time: .shortened) }
         return "\(start.formatted(date: .omitted, time: .shortened))–\(endDate.formatted(date: .omitted, time: .shortened))"
     }
+    /// Just the start time, for one-line widget rows.
+    var widgetStartLabel: String {
+        if continuation && !allDay { return continuationLabel }
+        return (eventStartDate ?? date).formatted(date: .omitted, time: .shortened)
+    }
     var timeLabel: String {
         if continuation && !allDay { return continuationLabel }
         return allDay ? (reminder ? "Due" : "All day") : date.formatted(date: .omitted, time: .shortened)
@@ -120,6 +125,23 @@ enum Preferences {
         guard store.stringArray(forKey: hiddenKey) == nil, let legacy = store.stringArray(forKey: legacyKey) else { return }
         store.set(available.filter { !legacy.contains($0) }, forKey: hiddenKey)
         store.removeObject(forKey: legacyKey)
+    }
+}
+
+/// What the Today views (the Agenda's Today section and the Events + Tasks widget) show: reminders that are overdue
+/// or due today from the shown lists, plus undated reminders from the lists chosen for Today.
+enum TodayTasks {
+    static let key = "todayUndatedLists"
+    static var undatedLists: Set<String> {
+        get { Set(Preferences.defaults.stringArray(forKey: key) ?? []) }
+        set { Preferences.defaults.set(Array(newValue), forKey: key) }
+    }
+    /// `shown` is whether the reminder's list is shown in the agenda; undated reminders only need their list chosen for Today.
+    /// Dated reminders count through `days` days from today, including overdue ones.
+    static func includes(due: Date?, listID: String, shown: Bool, now: Date, days: Int = 1, undatedLists: Set<String> = undatedLists,
+                         calendar: Calendar = .current) -> Bool {
+        guard let due else { return undatedLists.contains(listID) }
+        return shown && due < calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now))!
     }
 }
 
@@ -233,8 +255,9 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
     static var charcoalEdge: LinearGradient {
         LinearGradient(colors: [.white.opacity(0.06), .white.opacity(0.015), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
     }
-    /// The widget accent: the custom style's own accent if it has one, otherwise the app accent.
-    func widgetAccent(appRGB: Int) -> (color: Color, onColor: Color, custom: Bool) {
+    /// The widget accent: the widget's own choice, then the custom style's own accent, otherwise the app accent.
+    func widgetAccent(appRGB: Int, chosen: WidgetAccentOption = .app) -> (color: Color, onColor: Color, custom: Bool) {
+        if let rgb = chosen.rgb { return (AccentStore.color(rgb), AccentStore.contrastingText(rgb), true) }
         if self == .charcoal { return (.white, .black, true) }
         if self == .custom, let accent = CustomWidgetStyle.saved.accent {
             return (accent.color, CustomWidgetStyle.contrastingText(on: accent), true)
@@ -248,7 +271,10 @@ enum AgendaTheme: String, CaseIterable, Identifiable {
         if self == .matchApp { return GalleryPalette.ink }
         return (scheme == .dark || self == .black) ? .white : .black
     }
-    func secondary(_ scheme: ColorScheme) -> Color { self == .matchApp ? GalleryPalette.muted : text(scheme).opacity(0.6) }
+    func secondary(_ scheme: ColorScheme) -> Color {
+        if self == .custom { return CustomWidgetStyle.saved.secondary }
+        return self == .matchApp ? GalleryPalette.muted : text(scheme).opacity(0.6)
+    }
     func accent(_ scheme: ColorScheme) -> Color { color(scheme == .dark ? colors.darkAccent : colors.accent) }
     private func color(_ hex: UInt) -> Color {
         Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
@@ -280,18 +306,19 @@ enum WidgetAgendaLayout {
             }
         }
     }
-    static func pages(items: [AgendaItem], height: CGFloat, headings: Bool, calendar: Calendar = .current) -> [[AgendaItem]] {
+    static func pages(items: [AgendaItem], height: CGFloat, headings: Bool, rowHeight: CGFloat = 27, allDayHeight: CGFloat = 15,
+                      headingHeight: CGFloat = 15, calendar: Calendar = .current) -> [[AgendaItem]] {
         var pages: [[AgendaItem]] = []
         var current: [AgendaItem] = []
         var used: CGFloat = 0
         for item in items {
-            var header: CGFloat = headings && (current.last.map { !calendar.isDate($0.date, inSameDayAs: item.date) } ?? true) ? 15 : 0
-            let row: CGFloat = item.allDay ? 15 : 27
+            var header: CGFloat = headings && (current.last.map { !calendar.isDate($0.date, inSameDayAs: item.date) } ?? true) ? headingHeight : 0
+            let row: CGFloat = item.allDay ? allDayHeight : rowHeight
             if !current.isEmpty && used + header + row > height {
                 pages.append(current)
                 current = []
                 used = 0
-                header = headings ? 15 : 0
+                header = headings ? headingHeight : 0
             }
             current.append(item)
             used += header + row
@@ -299,6 +326,50 @@ enum WidgetAgendaLayout {
         if !current.isEmpty { pages.append(current) }
         return pages.isEmpty ? [[]] : pages
     }
+}
+
+/// Fits rows of varying heights into a widget without paging.
+enum WidgetFit {
+    /// How many leading rows fit in `height`, leaving room for a "+N more" line whenever some rows don't fit.
+    static func count(_ heights: [CGFloat], in height: CGFloat, moreLine: CGFloat = 14) -> Int {
+        if heights.reduce(0, +) <= height { return heights.count }
+        var used: CGFloat = 0
+        var fits = 0
+        for row in heights {
+            guard used + row + moreLine <= height else { break }
+            used += row
+            fits += 1
+        }
+        return fits
+    }
+}
+
+/// Widgets can't scroll, so the Events + Tasks widget fakes it: it shows a window of rows starting at a saved
+/// offset, and its up/down buttons move that offset.
+enum WidgetScroll {
+    /// How many rows from `start` fit in `height`.
+    static func visible(_ heights: [CGFloat], from start: Int, in height: CGFloat) -> Int {
+        var used: CGFloat = 0
+        var count = 0
+        for row in heights.dropFirst(start) {
+            guard used + row <= height else { break }
+            used += row
+            count += 1
+        }
+        return count
+    }
+    /// The furthest offset worth scrolling to: the first row of the last screenful.
+    static func maxStart(_ heights: [CGFloat], in height: CGFloat) -> Int {
+        var used: CGFloat = 0
+        var start = heights.count
+        while start > 0, used + heights[start - 1] <= height {
+            used += heights[start - 1]
+            start -= 1
+        }
+        return start
+    }
+    /// Scrolling moves by a screenful less one row, so the last row stays in view for context.
+    static func step(visible: Int) -> Int { max(1, visible - 1) }
 }
 
 struct WidgetTask: Identifiable {
@@ -310,6 +381,13 @@ struct WidgetTask: Identifiable {
     let color: Color
     let writable: Bool
     let priority: Int
+    var overdue = false
+    /// "Overdue", a time for timed reminders due today, or nil.
+    var trailingLabel: String? {
+        if overdue { return "Overdue" }
+        guard let due, timed else { return nil }
+        return due.formatted(date: .omitted, time: .shortened)
+    }
 }
 
 enum WidgetDashboardData {

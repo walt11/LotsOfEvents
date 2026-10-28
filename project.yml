@@ -6,7 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
-    CURRENT_PROJECT_VERSION: 3
+    CURRENT_PROJECT_VERSION: 8
     MARKETING_VERSION: 1.0
     INFOPLIST_KEY_CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
     INFOPLIST_KEY_CFBundleShortVersionString: '$(MARKETING_VERSION)'
@@ -19,7 +19,12 @@ targets:
   LotsOfEvents:
     type: application
     platform: iOS
-    sources: [LotsOfEvents, Shared]
+    sources:
+      - LotsOfEvents
+      - Shared
+      # The widget views, so Settings can preview them; the widget bundle and its extension-only files stay out.
+      - path: AgendaWidget
+        excludes: [WidgetBundle.swift, QuickAddControls.swift, TodayRemindersWidget.swift, Info.plist, AgendaWidget.entitlements]
     dependencies:
       - target: AgendaWidget
     settings:
@@ -35,6 +40,8 @@ targets:
         AgendaAppGroup: $(APP_GROUP)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Only Apple's built-in encryption is used, so App Store Connect skips the export compliance question.
+        ITSAppUsesNonExemptEncryption: false
         NSCalendarsFullAccessUsageDescription: Show your selected calendars in your agenda and widget, and create events.
         NSRemindersFullAccessUsageDescription: Show reminders from the lists you select in your agenda and widget.
         NSMicrophoneUsageDescription: Dictate events and reminders into the Quick Add text box.

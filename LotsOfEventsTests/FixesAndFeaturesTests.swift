@@ -326,9 +326,11 @@ final class AppThemeTests: XCTestCase {
         let (x, y) = (lum(a), lum(b))
         return (max(x, y) + 0.05) / (min(x, y) + 0.05)
     }
+    /// The six preset themes; Custom is the user's own colors, and its editor warns about low contrast instead.
     func testSixThemesAllReadable() {
-        XCTAssertEqual(AppTheme.allCases.count, 6)
-        for theme in AppTheme.allCases {
+        let presets = AppTheme.allCases.filter { $0 != .custom }
+        XCTAssertEqual(presets.count, 6)
+        for theme in presets {
             let c = theme.colors
             for (fg, bg, name) in [(c.ink, c.card, "ink/card"), (c.muted, c.card, "muted/card"), (c.muted, c.paper, "muted/paper"),
                                    (c.accent, c.card, "accent/card"), (c.accent, c.paper, "accent/paper"), (c.onAccent, c.accent, "onAccent")] {
@@ -342,7 +344,9 @@ final class ThemeIconTests: XCTestCase {
     func testEveryThemeHasABundledIcon() throws {
         XCTAssertNil(AppTheme.graphite.iconName)
         let alternates = (Bundle(for: AgendaModel.self).object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any])?["CFBundleAlternateIcons"] as? [String: Any]
-        for theme in AppTheme.allCases where theme != .graphite {
+        // Custom keeps whichever icon is already set.
+        XCTAssertNil(AppTheme.custom.iconName)
+        for theme in AppTheme.allCases where theme != .graphite && theme != .custom {
             let name = try XCTUnwrap(theme.iconName)
             XCTAssertNotNil(alternates?[name], "\(name) missing from the app's alternate icons")
         }
@@ -417,5 +421,121 @@ final class ReviewFeatureTests: XCTestCase {
         func d(_ day: Int, _ hour: Int = 0) -> Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))! }
         let titles = TodayReminderCounts.dueToday([("Later", d(27, 18)), ("Tomorrow", d(28, 9)), ("Overdue", d(25)), ("Undated", nil)], now: d(27, 10), calendar: calendar)
         XCTAssertEqual(titles, ["Overdue", "Later"])
+    }
+}
+
+final class TodayTasksTests: XCTestCase {
+    func testTodayIncludesDueOverdueAndUndatedFromChosenLists() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        func date(_ day: Int, hour: Int = 0) -> Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))! }
+        let now = date(27, hour: 9), chosen: Set<String> = ["home"]
+        func includes(_ due: Date?, list: String = "home", shown: Bool = true) -> Bool {
+            TodayTasks.includes(due: due, listID: list, shown: shown, now: now, undatedLists: chosen, calendar: calendar)
+        }
+        XCTAssertTrue(includes(date(27, hour: 23)), "due later today")
+        XCTAssertTrue(includes(date(20)), "overdue")
+        XCTAssertFalse(includes(date(28)), "due tomorrow")
+        XCTAssertFalse(includes(date(27), shown: false), "dated, from a hidden list")
+        XCTAssertTrue(includes(nil), "undated, from a chosen list")
+        XCTAssertTrue(includes(nil, shown: false), "undated, from a chosen list hidden elsewhere")
+        XCTAssertFalse(includes(nil, list: "work"), "undated, from a list not chosen for Today")
+    }
+    func testUpcomingIncludesRemindersThroughTheLastDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        func date(_ day: Int, hour: Int = 0) -> Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))! }
+        func includes(_ due: Date) -> Bool {
+            TodayTasks.includes(due: due, listID: "home", shown: true, now: date(27, hour: 9), days: 5, undatedLists: [], calendar: calendar)
+        }
+        XCTAssertTrue(includes(date(28)), "tomorrow")
+        XCTAssertTrue(includes(date(31, hour: 23)), "last day of five")
+        XCTAssertFalse(includes(date(32)), "the day after")
+        XCTAssertTrue(includes(date(20)), "overdue")
+    }
+    func testWidgetTaskTrailingLabel() {
+        let base = WidgetTask(id: "a", title: "A", due: nil, timed: false, list: "L", color: .blue, writable: true, priority: 0)
+        XCTAssertNil(base.trailingLabel)
+        XCTAssertEqual(WidgetTask(id: "b", title: "B", due: .now, timed: false, list: "L", color: .blue, writable: true, priority: 0, overdue: true).trailingLabel, "Overdue")
+        XCTAssertNotNil(WidgetTask(id: "c", title: "C", due: .now, timed: true, list: "L", color: .blue, writable: true, priority: 0).trailingLabel)
+    }
+}
+
+final class WidgetFitTests: XCTestCase {
+    func testFitsEverythingWhenRoomOrLeavesRoomForMoreLine() {
+        XCTAssertEqual(WidgetFit.count([10, 10], in: 20), 2, "exact fit needs no +N more line")
+        XCTAssertEqual(WidgetFit.count([10, 10, 10], in: 25), 1, "two rows would leave no room for +N more")
+        XCTAssertEqual(WidgetFit.count([10, 10, 10, 10], in: 34), 2)
+        XCTAssertEqual(WidgetFit.count([], in: 10), 0)
+        XCTAssertEqual(WidgetFit.count([30], in: 10), 0)
+    }
+}
+
+final class WidgetScrollTests: XCTestCase {
+    func testVisibleRowsFromOffset() {
+        XCTAssertEqual(WidgetScroll.visible([10, 10, 10, 10], from: 0, in: 25), 2)
+        XCTAssertEqual(WidgetScroll.visible([10, 10, 10, 10], from: 3, in: 25), 1)
+        XCTAssertEqual(WidgetScroll.visible([10, 10], from: 2, in: 25), 0)
+    }
+    func testMaxStartIsFirstRowOfLastScreenful() {
+        XCTAssertEqual(WidgetScroll.maxStart([10, 10, 10, 10], in: 25), 2)
+        XCTAssertEqual(WidgetScroll.maxStart([10, 10], in: 25), 0, "everything fits, so nothing to scroll")
+        XCTAssertEqual(WidgetScroll.maxStart([], in: 25), 0)
+    }
+    func testStepKeepsOneRowForContext() {
+        XCTAssertEqual(WidgetScroll.step(visible: 6), 5)
+        XCTAssertEqual(WidgetScroll.step(visible: 1), 1)
+        XCTAssertEqual(WidgetScroll.step(visible: 0), 1)
+    }
+}
+
+final class CustomizationTests: XCTestCase {
+    func testCustomAppColorsRoundTrip() {
+        let key = CustomAppColors.key
+        let previous = Preferences.defaults.string(forKey: key)
+        defer { Preferences.defaults.set(previous, forKey: key) }
+        var colors = CustomAppColors(from: .studio)
+        colors.accent = 0x123456
+        colors.dark = true
+        colors.save()
+        XCTAssertEqual(CustomAppColors.saved, colors)
+        XCTAssertEqual(AppTheme.custom.scheme, .dark)
+        XCTAssertEqual(colors.onAccent, 0xFFFFFF)
+    }
+    func testUnreadableCustomColorsFallBackToGraphite() {
+        let key = CustomAppColors.key
+        let previous = Preferences.defaults.string(forKey: key)
+        defer { Preferences.defaults.set(previous, forKey: key) }
+        Preferences.defaults.set("not,colors", forKey: key)
+        XCTAssertEqual(CustomAppColors.saved, CustomAppColors(from: .graphite))
+    }
+    func testContrast() {
+        XCTAssertEqual(CustomAppColors.contrast(0x000000, 0xFFFFFF), 21, accuracy: 0.01)
+        XCTAssertEqual(CustomAppColors.contrast(0x777777, 0x777777), 1, accuracy: 0.01)
+    }
+    func testWidgetLookKeepsDefaultsForMissingKeys() throws {
+        let look = try JSONDecoder().decode(WidgetLook.self, from: Data(#"{"density":"Roomy"}"#.utf8))
+        XCTAssertEqual(look.density, .roomy)
+        XCTAssertEqual(look.textSize, .standard)
+        XCTAssertTrue(look.showTimes)
+    }
+    func testWidgetRowsGrowWithTextAndDensity() {
+        var look = WidgetLook()
+        XCTAssertEqual(look.row(16), 16)
+        look.textSize = .large
+        look.density = .roomy
+        XCTAssertGreaterThan(look.row(16), 16)
+        look.textSize = .small
+        look.density = .compact
+        XCTAssertLessThan(look.row(16), 16)
+    }
+    func testTabOrderIgnoresBadValues() {
+        XCTAssertEqual(AppTabs.order("2,0,1"), [2, 0, 1])
+        XCTAssertEqual(AppTabs.order("2,2,1"), [0, 1, 2])
+        XCTAssertEqual(AppTabs.order(""), [0, 1, 2])
+        XCTAssertEqual(AppTabs.stored([1, 2, 0]), "1,2,0")
+    }
+    func testStoredColorHex() {
+        XCTAssertEqual(StoredColor(red: 1, green: 0, blue: 0.5).hex, 0xFF0080)
     }
 }

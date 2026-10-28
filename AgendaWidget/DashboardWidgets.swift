@@ -4,15 +4,16 @@ import AppIntents
 import EventKit
 
 // Selection and pagination are independent for each layout, shared by instances of that layout.
+// Events + Tasks moved to a new kind when it got its own options: iOS kept applying the old options to the old kind.
 enum DashboardKind: String {
-    case next = "NextUp", split = "EventsTasks", five = "FiveDayStrip", month = "MonthAgenda", focus = "FocusList"
+    case next = "NextUp", split = "EventsTasksDays", five = "FiveDayStrip", month = "MonthAgenda", focus = "FocusList"
     var title: String {
         switch self { case .next: return "Next Up"; case .split: return "Events + Tasks"; case .five: return "Five-Day Strip"; case .month: return "Month + Agenda"; case .focus: return "Focus List" }
     }
     var detail: String {
         switch self {
         case .next: return "Your next timed event and what follows it."
-        case .split: return "Today's events and selected reminders, with completion buttons."
+        case .split: return "Today's events and reminders, or today and the days ahead, plus undated tasks from the lists you choose for Today."
         case .five: return "Tap any of the next five dates to browse its agenda."
         case .month: return "A compact month calendar with the selected day's agenda."
         case .focus: return "Work through your selected reminder lists, including overdue and undated tasks."
@@ -31,6 +32,10 @@ struct DashboardEntry: TimelineEntry {
     var selectedDay: Date = .now
     var page = 0
     var accentRGB = AccentStore.rgb
+    /// This widget's own accent choice.
+    var accent: WidgetAccentOption = .app
+    /// Days Events + Tasks covers, starting today: 1 for just today.
+    var days = 1
 }
 
 struct DashboardProvider: AppIntentTimelineProvider {
@@ -46,29 +51,32 @@ struct DashboardProvider: AppIntentTimelineProvider {
         ], calendarAccess: true, reminderAccess: true, hasLists: true, selectedDay: Calendar.current.startOfDay(for: now))
     }
     func snapshot(for configuration: AgendaConfigurationIntent, in context: Context) async -> DashboardEntry {
-        context.isPreview ? placeholder(in: context) : await load(configuration)
+        context.isPreview ? placeholder(in: context) : await load(theme: configuration.theme, sources: configuration.sources, accent: configuration.accent)
     }
     func timeline(for configuration: AgendaConfigurationIntent, in context: Context) async -> Timeline<DashboardEntry> {
+        await timeline(theme: configuration.theme, sources: configuration.sources, accent: configuration.accent)
+    }
+    func timeline(theme: WidgetThemeOption, sources: [SourceEntity]?, days: Int = 1, accent: WidgetAccentOption = .app) async -> Timeline<DashboardEntry> {
         do {
-            let entry = await load(configuration)
+            let entry = await load(theme: theme, sources: sources, days: days, accent: accent)
             let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: entry.date))!
             // Future timeline entries switch Next Up at starts/ends without depending on a fresh fetch.
             let cutoff = min(entry.date.addingTimeInterval(3600), midnight)
             let transitions = Set(entry.items.filter { !$0.reminder && !$0.allDay }.flatMap { [$0.eventStartDate ?? $0.date, $0.endDate ?? $0.date] })
                 .filter { $0 > entry.date && $0 < cutoff }.sorted()
             let future = transitions.map { date -> DashboardEntry in
-                let updated = DashboardEntry(date: date, items: entry.items, tasks: entry.tasks, calendarAccess: entry.calendarAccess, reminderAccess: entry.reminderAccess, hasLists: entry.hasLists, theme: entry.theme, selectedDay: entry.selectedDay, page: entry.page)
+                let updated = DashboardEntry(date: date, items: entry.items, tasks: entry.tasks, calendarAccess: entry.calendarAccess, reminderAccess: entry.reminderAccess, hasLists: entry.hasLists, theme: entry.theme, selectedDay: entry.selectedDay, page: entry.page, accent: entry.accent, days: entry.days)
                 return updated
             }
             return Timeline(entries: [entry] + (kind == .next ? future : []), policy: .after(min(entry.date.addingTimeInterval(900), midnight)))
         }
     }
-    private func load(_ configuration: AgendaConfigurationIntent) async -> DashboardEntry {
+    func load(theme: WidgetThemeOption, sources: [SourceEntity]?, days taskDays: Int = 1, accent: WidgetAccentOption = .app) async -> DashboardEntry {
         let now = Date.now
         let calendar = Calendar.current
         let store = EKEventStore()
-        var entry = DashboardEntry(date: now, theme: configuration.theme.theme ?? .selected)
-        let sources = configuration.sources ?? []
+        var entry = DashboardEntry(date: now, theme: theme.theme ?? .selected, accent: accent, days: taskDays)
+        let sources = sources ?? []
         // An empty choice means "use the app's Sources selection".
         let calendarIDs = sources.isEmpty ? nil : Set(sources.filter { !$0.reminders }.map(\.id))
         let listIDs = sources.isEmpty ? nil : Set(sources.filter(\.reminders).map(\.id))
@@ -84,18 +92,41 @@ struct DashboardProvider: AppIntentTimelineProvider {
         let agendaLists = kind == .split || kind == .focus ? Set<String>() : listIDs
         entry.items = await AgendaQuery.load(store: store, now: from, days: days, calendarIDs: calendarIDs, listIDs: agendaLists)
         if entry.reminderAccess && (kind == .split || kind == .focus) {
-            let lists = store.calendars(for: .reminder).filter { listIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: true) }
-            entry.hasLists = !lists.isEmpty
-            if !lists.isEmpty {
-                let reminders = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: lists))
-                entry.tasks = WidgetDashboardData.sortedTasks(reminders.map { reminder in
-                    let due = reminder.dueDateComponents.flatMap { ($0.calendar ?? calendar).date(from: $0) }
-                    return WidgetTask(id: reminder.calendarItemIdentifier, title: reminder.title ?? "Reminder", due: due, timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendar.title, color: Color(cgColor: reminder.calendar.cgColor), writable: reminder.calendar.allowsContentModifications, priority: reminder.priority)
-                })
-            }
+            (entry.hasLists, entry.tasks) = await Self.tasks(store: store, listIDs: listIDs, now: now, days: kind == .split ? taskDays : nil)
         }
         return entry
     }
+    /// Incomplete reminders from the shown lists. With `days`, only those due by then plus undated ones from the lists
+    /// chosen for Today, even lists not shown elsewhere; without it, every one.
+    static func tasks(store: EKEventStore, listIDs: Set<String>?, now: Date, days: Int?) async -> (hasLists: Bool, tasks: [WidgetTask]) {
+        let calendar = Calendar.current
+        let shown = { (id: String) in listIDs?.contains(id) ?? Preferences.selected(id, reminders: true) }
+        let undated = days == nil ? [] : TodayTasks.undatedLists
+        let lists = store.calendars(for: .reminder).filter { shown($0.calendarIdentifier) || undated.contains($0.calendarIdentifier) }
+        guard !lists.isEmpty else { return (false, []) }
+        let reminders = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: lists))
+        let today = calendar.startOfDay(for: now)
+        return (true, WidgetDashboardData.sortedTasks(reminders.compactMap { reminder in
+            let due = reminder.dueDateComponents.flatMap { ($0.calendar ?? calendar).date(from: $0) }
+            let id = reminder.calendar.calendarIdentifier
+            if let days, !TodayTasks.includes(due: due, listID: id, shown: shown(id), now: now, days: days, undatedLists: undated) { return nil }
+            return WidgetTask(id: reminder.calendarItemIdentifier, title: reminder.title ?? "Reminder", due: due, timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendar.title, color: Color(cgColor: reminder.calendar.cgColor), writable: reminder.calendar.allowsContentModifications, priority: reminder.priority, overdue: due.map { $0 < today } ?? false)
+        }))
+    }
+}
+
+/// Events + Tasks uses its own options, which add the choice of just today or today and the days ahead.
+struct EventsTasksProvider: AppIntentTimelineProvider {
+    private let base = DashboardProvider(kind: .split)
+    static let upcomingDays = 5
+    func placeholder(in context: Context) -> DashboardEntry { base.placeholder(in: context) }
+    func snapshot(for configuration: EventsTasksConfigurationIntent, in context: Context) async -> DashboardEntry {
+        context.isPreview ? placeholder(in: context) : await base.load(theme: configuration.theme, sources: configuration.sources, days: days(configuration), accent: configuration.accent)
+    }
+    func timeline(for configuration: EventsTasksConfigurationIntent, in context: Context) async -> Timeline<DashboardEntry> {
+        await base.timeline(theme: configuration.theme, sources: configuration.sources, days: days(configuration), accent: configuration.accent)
+    }
+    private func days(_ configuration: EventsTasksConfigurationIntent) -> Int { configuration.upcoming ? Self.upcomingDays : 1 }
 }
 
 struct DashboardDayIntent: AppIntent {
@@ -169,7 +200,8 @@ struct DashboardConfiguration {
             .contentMarginsDisabled()
             .configurationDisplayName(kind.title)
             .description(kind.detail)
-            .supportedFamilies(kind == .next ? [.systemSmall, .accessoryInline, .accessoryCircular, .accessoryRectangular] : [.systemSmall])
+            .supportedFamilies(kind == .next ? [.systemSmall, .accessoryInline, .accessoryCircular, .accessoryRectangular]
+                               : [.systemSmall])
     }
 }
 
@@ -217,7 +249,13 @@ struct NextUpWidget: Widget {
     var body: some WidgetConfiguration { DashboardConfiguration(kind: .next).body }
 }
 struct EventsTasksWidget: Widget {
-    var body: some WidgetConfiguration { DashboardConfiguration(kind: .split).body }
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: DashboardKind.split.rawValue, intent: EventsTasksConfigurationIntent.self, provider: EventsTasksProvider()) { DashboardView(entry: $0, kind: .split) }
+            .contentMarginsDisabled()
+            .configurationDisplayName(DashboardKind.split.title)
+            .description(DashboardKind.split.detail)
+            .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
 }
 struct FiveDayStripWidget: Widget {
     var body: some WidgetConfiguration { DashboardConfiguration(kind: .five).body }
@@ -232,15 +270,19 @@ struct FocusListWidget: Widget {
 struct DashboardView: View {
     let entry: DashboardEntry
     let kind: DashboardKind
+    /// Set by the in-app preview, where there's no widget family in the environment.
+    var previewFamily: WidgetFamily? = nil
+    private let look = WidgetLook.saved
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var environmentFamily
+    private var family: WidgetFamily { previewFamily ?? environmentFamily }
     private var secondary: Color { entry.theme.secondary(scheme) }
     // Headers and highlights follow the app's accent color; the theme sets the background.
-    private var accent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB).color }
-    private var onAccent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB).onColor }
+    private var accent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB, chosen: entry.accent).color }
+    private var onAccent: Color { entry.theme.widgetAccent(appRGB: entry.accentRGB, chosen: entry.accent).onColor }
     /// Accent-colored text. On a custom background without its own accent, the app accent may not stand out, so use the text color.
     private var accentText: Color {
-        entry.theme == .custom && !entry.theme.widgetAccent(appRGB: entry.accentRGB).custom ? entry.theme.text(scheme) : accent
+        entry.theme == .custom && !entry.theme.widgetAccent(appRGB: entry.accentRGB, chosen: entry.accent).custom ? entry.theme.text(scheme) : accent
     }
     private var today: Date { Calendar.current.startOfDay(for: entry.date) }
     @ViewBuilder var body: some View {
@@ -257,65 +299,67 @@ struct DashboardView: View {
             Group {
                 switch kind {
                 case .next: nextUp
-                case .split: split(height: geometry.size.height)
+                case .split: TodayDashboardWidgetView(entry: entry, size: geometry.size, previewFamily: previewFamily)
                 case .five: fiveDays(height: geometry.size.height)
                 case .month: month(height: geometry.size.height)
                 case .focus: focus(height: geometry.size.height)
                 }
             }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
-        .padding(12)
+        // The Events + Tasks list uses a slightly tighter margin to fit more rows.
+        .padding(kind == .split ? 10 : 12)
         .foregroundStyle(entry.theme.text(scheme))
         .containerBackground(for: .widget) { entry.theme.backgroundView(scheme) }
         .widgetURL(URL(string: kind == .focus ? "lotsofevents://reminders" : "lotsofevents://agenda"))
     }
     private func header(_ title: String, addReminder: Bool = false) -> some View {
         HStack(spacing: 2) {
-            Text(title.uppercased()).font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(secondary).lineLimit(1)
+            Text(title.uppercased()).font(look.font(9, .semibold, theme: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(secondary).lineLimit(1)
             Spacer(minLength: 0)
-            Link(destination: URL(string: addReminder ? "lotsofevents://quick-add?type=reminder" : "lotsofevents://quick-add")!) {
-                Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 22, height: 18)
-            }.accessibilityLabel(addReminder ? "New reminder" : "New event")
-        }.frame(height: 18)
+            if look.showAddButton {
+                Link(destination: URL(string: addReminder ? "lotsofevents://quick-add?type=reminder" : "lotsofevents://quick-add")!) {
+                    Image(systemName: "plus").font(look.font(12, .medium)).frame(width: 22, height: 18)
+                }.accessibilityLabel(addReminder ? "New reminder" : "New event")
+            }
+        }.frame(height: look.row(18))
     }
     private func eventRow(_ item: AgendaItem) -> some View {
+        // One line per event, with the start time on the right, so more fit.
         HStack(spacing: 5) {
-            RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 3)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(item.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
-                if !item.allDay { Text(item.widgetTimeLabel).font(.system(size: 9)).foregroundStyle(secondary).lineLimit(1).frame(height: 12) }
-            }
-            Spacer(minLength: 0)
-        }.frame(height: item.allDay ? 14 : 26).padding(.bottom, 1)
+            if look.showColorBars { RoundedRectangle(cornerRadius: 1.5).fill(item.color).frame(width: 3, height: 12) }
+            Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+            Spacer(minLength: 2)
+            if !item.allDay && look.showTimes { Text(item.widgetStartLabel).font(look.font(9)).monospacedDigit().foregroundStyle(secondary).lineLimit(1) }
+        }.frame(height: look.row(16))
     }
     private func taskRow(_ task: WidgetTask, detail: Bool = false) -> some View {
         HStack(spacing: 6) {
             Button(intent: CompleteWidgetReminderIntent(task: task)) {
-                Image(systemName: "circle").font(.system(size: 17)).foregroundStyle(task.color).frame(width: 24, height: detail ? 30 : 24)
+                Image(systemName: "circle").font(look.font(17)).foregroundStyle(task.color).frame(width: 24, height: look.row(detail ? 30 : 24))
             }.buttonStyle(.plain).disabled(!task.writable).accessibilityLabel("Complete \(task.title)")
             VStack(alignment: .leading, spacing: 1) {
-                Text(task.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                Text(task.title).font(look.font(11, .medium)).lineLimit(1)
                 if detail {
                     Text(task.due.map { $0.formatted(date: .abbreviated, time: task.timed ? .shortened : .omitted) } ?? task.list)
-                        .font(.system(size: 9)).foregroundStyle(secondary).lineLimit(1)
+                        .font(look.font(9)).foregroundStyle(secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
-        }.frame(height: detail ? 31 : 24)
+        }.frame(height: look.row(detail ? 31 : 24))
     }
     private func pager(_ pages: Int, page: Int) -> some View {
         HStack(spacing: 5) {
             Spacer(minLength: 0)
             if pages > 1 {
                 Button(intent: DashboardPageIntent(kind: kind, page: (page + pages - 1) % pages)) { Image(systemName: "chevron.left").frame(width: 24, height: 14) }.accessibilityLabel("Previous page")
-                Text("\(page + 1)/\(pages)").font(.system(size: 9))
+                Text("\(page + 1)/\(pages)").font(look.font(9))
                 Button(intent: DashboardPageIntent(kind: kind, page: (page + 1) % pages)) { Image(systemName: "chevron.right").frame(width: 24, height: 14) }.accessibilityLabel("Next page")
             }
             Spacer(minLength: 0)
-        }.font(.system(size: 10, weight: .bold)).foregroundStyle(secondary).buttonStyle(.plain).frame(height: 14)
+        }.font(look.font(10, .bold)).foregroundStyle(secondary).buttonStyle(.plain).frame(height: 14)
     }
     private func empty(_ text: String) -> some View {
-        Text(text).font(.system(size: 11)).foregroundStyle(secondary).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(look.font(11)).foregroundStyle(secondary).fixedSize(horizontal: false, vertical: true)
     }
     private var nextUp: some View {
         let events = WidgetDashboardData.nextEvents(entry.items, now: entry.date)
@@ -325,55 +369,29 @@ struct DashboardView: View {
             else if let next = events.first {
                 let start = next.eventStartDate ?? next.date
                 if start <= entry.date {
-                    Text("HAPPENING NOW").font(.system(size: 9, weight: .bold)).foregroundStyle(accentText)
+                    Text("HAPPENING NOW").font(look.font(9, .bold)).foregroundStyle(accentText)
                 } else if Calendar.current.isDate(start, inSameDayAs: entry.date) {
-                    HStack(spacing: 3) { Text("IN"); Text(start, style: .relative) }.font(.system(size: 10, weight: .semibold)).foregroundStyle(accentText).lineLimit(1)
-                } else { Text(start.formatted(.dateTime.weekday(.abbreviated).month().day())).font(.system(size: 10)).foregroundStyle(accentText) }
-                Text(next.title).font(.system(size: 15, weight: .semibold, design: entry.theme == .gallery ? .serif : .default)).lineLimit(2).minimumScaleFactor(0.85)
-                Text(next.widgetTimeLabel).font(.system(size: 10)).foregroundStyle(secondary).lineLimit(1)
+                    HStack(spacing: 3) { Text("IN"); Text(start, style: .relative) }.font(look.font(10, .semibold)).foregroundStyle(accentText).lineLimit(1)
+                } else { Text(start.formatted(.dateTime.weekday(.abbreviated).month().day())).font(look.font(10)).foregroundStyle(accentText) }
+                Text(next.title).font(look.font(15, .semibold, theme: entry.theme == .gallery ? .serif : .default)).lineLimit(2).minimumScaleFactor(0.85)
+                if look.showTimes { Text(next.widgetTimeLabel).font(look.font(10)).foregroundStyle(secondary).lineLimit(1) }
                 Spacer(minLength: 0)
                 if events.count > 1 {
                     Divider()
-                    Text("AFTER THAT").font(.system(size: 8, weight: .semibold)).foregroundStyle(secondary)
+                    if look.showSectionLabels { Text("AFTER THAT").font(look.font(8, .semibold)).foregroundStyle(secondary) }
                     HStack(spacing: 4) {
-                        Text(events[1].title).font(.system(size: 11)).lineLimit(1)
+                        Text(events[1].title).font(look.font(11)).lineLimit(1)
                         Spacer(minLength: 0)
-                        Text(WidgetDashboardData.laterLabel(events[1], now: entry.date)).font(.system(size: 8)).foregroundStyle(secondary).lineLimit(1)
+                        if look.showTimes { Text(WidgetDashboardData.laterLabel(events[1], now: entry.date)).font(look.font(8)).foregroundStyle(secondary).lineLimit(1) }
                     }
                 }
             } else { empty("No timed events in the next 14 days."); Spacer(minLength: 0) }
         }
     }
-    private func split(height: CGFloat) -> some View {
-        let events = WidgetAgendaLayout.items(on: entry.date, from: entry.items).filter { !$0.reminder }
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-        let tasks = entry.tasks.filter { $0.due == nil || $0.due! < tomorrow }
-        let eventCount = height >= 150 ? 2 : 1
-        let taskCount = max(1, Int((height - 18 - CGFloat(eventCount * 27) - 25 - 14) / 24))
-        let pages = max(1, max((events.count + eventCount - 1) / eventCount, (tasks.count + taskCount - 1) / taskCount))
-        let page = min(entry.page, pages - 1)
-        return VStack(alignment: .leading, spacing: 0) {
-            header("Today · \(entry.date.formatted(.dateTime.month(.abbreviated).day()))")
-            if !entry.calendarAccess { empty("Connect calendars in the app.") }
-            else if events.isEmpty { empty("No events today") }
-            else {
-                ForEach(Array(events.dropFirst(min(page, (events.count - 1) / eventCount) * eventCount).prefix(eventCount))) { eventRow($0) }
-            }
-            Spacer(minLength: 2)
-            Divider().padding(.vertical, 3)
-            Text("REMINDERS").font(.system(size: 9, weight: .semibold, design: entry.theme == .gallery ? .monospaced : .default)).foregroundStyle(secondary).frame(height: 14)
-            if !entry.reminderAccess { empty("Connect Reminders in the app.") }
-            else if !entry.hasLists { empty("Choose reminder lists in Sources.") }
-            else if tasks.isEmpty { empty("All caught up") }
-            else { ForEach(Array(tasks.dropFirst(min(page, (tasks.count - 1) / taskCount) * taskCount).prefix(taskCount))) { taskRow($0) } }
-            Spacer(minLength: 0)
-            pager(pages, page: page)
-        }
-    }
     private func fiveDays(height: CGFloat) -> some View {
         let days = (0..<5).map { Calendar.current.date(byAdding: .day, value: $0, to: today)! }
         let items = WidgetAgendaLayout.items(on: entry.selectedDay, from: entry.items)
-        let pages = WidgetAgendaLayout.pages(items: items, height: max(0, height - 74), headings: false)
+        let pages = WidgetAgendaLayout.pages(items: items, height: max(0, height - 56 - look.row(18)), headings: false, rowHeight: look.row(16), allDayHeight: look.row(16))
         let page = min(entry.page, pages.count - 1)
         return VStack(alignment: .leading, spacing: 0) {
             header(entry.date.formatted(.dateTime.month(.wide)))
@@ -382,8 +400,8 @@ struct DashboardView: View {
                     let selected = Calendar.current.isDate(day, inSameDayAs: entry.selectedDay)
                     Button(intent: DashboardDayIntent(kind: kind, date: day)) {
                         VStack(spacing: 1) {
-                            Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(.system(size: 8, weight: .medium))
-                            Text(day.formatted(.dateTime.day())).font(.system(size: 15, weight: .medium))
+                            Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(look.font(8, .medium))
+                            Text(day.formatted(.dateTime.day())).font(look.font(15, .medium))
                         }
                         .offset(y: DayTabMetrics.offset(weekdaySize: 8, weekdayWeight: .medium, dateSize: 15, dateWeight: .medium))
                         .frame(maxWidth: .infinity).frame(height: 35)
@@ -410,7 +428,7 @@ struct DashboardView: View {
         return VStack(alignment: .leading, spacing: 0) {
             header(entry.date.formatted(.dateTime.month(.wide).year()))
             HStack(spacing: 0) {
-                ForEach(0..<7) { i in Text(symbols[(i + calendar.firstWeekday - 1) % 7]).font(.system(size: 8)).foregroundStyle(secondary).frame(maxWidth: .infinity) }
+                ForEach(0..<7) { i in Text(symbols[(i + calendar.firstWeekday - 1) % 7]).font(look.font(8)).foregroundStyle(secondary).frame(maxWidth: .infinity) }
             }.frame(height: 11)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: 7), spacing: 0) {
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
@@ -418,7 +436,7 @@ struct DashboardView: View {
                         let selected = calendar.isDate(day, inSameDayAs: entry.selectedDay)
                         let marked = !WidgetAgendaLayout.items(on: day, from: entry.items).isEmpty
                         Button(intent: DashboardDayIntent(kind: kind, date: day)) {
-                            Text(day.formatted(.dateTime.day())).font(.system(size: 9, weight: selected ? .bold : .regular))
+                            Text(day.formatted(.dateTime.day())).font(look.font(9, selected ? .bold : .regular))
                                 .frame(maxWidth: .infinity).frame(height: cellHeight)
                                 .foregroundStyle(selected ? onAccent : entry.theme.text(scheme))
                                 .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 4))
@@ -434,12 +452,12 @@ struct DashboardView: View {
         }
     }
     private func focus(height: CGFloat) -> some View {
-        let count = max(1, Int((height - 18 - 20 - 14) / 31))
+        let count = max(1, Int((height - look.row(18) - 20 - 14) / look.row(31)))
         let pages = max(1, (entry.tasks.count + count - 1) / count)
         let page = min(entry.page, pages - 1)
         return VStack(alignment: .leading, spacing: 0) {
             header("Focus List", addReminder: true)
-            Text("\(entry.tasks.count) remaining").font(.system(size: 12, weight: .semibold)).frame(height: 20)
+            Text("\(entry.tasks.count) remaining").font(look.font(12, .semibold)).frame(height: 20)
             if !entry.reminderAccess { empty("Open the app to connect Reminders.") }
             else if !entry.hasLists { empty("Select reminder lists in Sources.") }
             else if entry.tasks.isEmpty { empty("All caught up") }

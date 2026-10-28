@@ -21,20 +21,27 @@ struct MainView: View {
     @AppAccent private var accent
     @StateObject private var model = AgendaModel()
     @Environment(\.scenePhase) private var phase
-    @State private var tab = 0
+    /// Opens to the section chosen in Settings → Tabs.
+    @State private var tab = min(2, max(0, Preferences.defaults.integer(forKey: AppTabs.startKey)))
+    @AppStorage(AppTabs.orderKey, store: Preferences.defaults) private var tabOrderID = "0,1,2"
+    private var tabOrder: [Int] { AppTabs.order(tabOrderID) }
+    @AppStorage(AppTextSize.key, store: Preferences.defaults) private var textSizeID = AppTextSize.automatic.rawValue
     @State private var keyboardShown = false
     @AppStorage(AppTheme.key, store: Preferences.defaults) private var themeID = AppTheme.graphite.rawValue
+    /// Saving custom colors rebuilds the app even when the Custom theme is already chosen.
+    @AppStorage(CustomAppColors.key, store: Preferences.defaults) private var customColorsID = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
         Group {
             if sizeClass == .regular { sidebarLayout } else { phoneLayout }
         }
         // Theme colors are read when views are built, so a new theme rebuilds them.
-        .id(themeID)
+        .id(themeID + customColorsID)
         .background(GalleryPalette.paper)
         .foregroundStyle(GalleryPalette.ink)
         .scrollContentBackground(.hidden)
         .preferredColorScheme((AppTheme(rawValue: themeID) ?? .graphite).scheme)
+        .modifier(TextSizeModifier(size: (AppTextSize(rawValue: textSizeID) ?? .automatic).dynamicType))
         .tint(accent)
         .task { await model.refresh() }
         .onChange(of: phase) { _, phase in
@@ -102,10 +109,10 @@ struct MainView: View {
             // The bar would ride up on the keyboard and cover what's being typed, so it steps aside while typing.
             if !keyboardShown {
             HStack(spacing: 0) {
-                bottomTab(index: 0)
-                bottomTab(index: 1)
+                bottomTab(index: tabOrder[0])
+                bottomTab(index: tabOrder[1])
                 addButton.frame(maxWidth: .infinity)
-                bottomTab(index: 2)
+                bottomTab(index: tabOrder[2])
                 bottomTab(index: 3)
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -121,7 +128,7 @@ struct MainView: View {
     private var sidebarLayout: some View {
         NavigationSplitView {
             List(selection: Binding<Int?>(get: { tab }, set: { if let index = $0 { select(index) } })) {
-                ForEach(Self.sections.indices, id: \.self) { index in
+                ForEach(tabOrder + [3], id: \.self) { index in
                     Label(Self.sections[index].title, systemImage: Self.sections[index].symbol).tag(index)
                 }
             }
@@ -364,4 +371,12 @@ struct AccessCard: View {
 /// Tapping the Calendar (0) or Agenda (1) tab while it is selected jumps back to today.
 enum TabReselect {
     static func returnsToToday(selecting index: Int, from current: Int) -> Bool { index == current && index <= 1 }
+}
+
+/// Applies the app's own text size, or leaves the iPhone's setting alone when it's Automatic.
+private struct TextSizeModifier: ViewModifier {
+    let size: DynamicTypeSize?
+    func body(content: Content) -> some View {
+        if let size { content.dynamicTypeSize(size) } else { content }
+    }
 }
