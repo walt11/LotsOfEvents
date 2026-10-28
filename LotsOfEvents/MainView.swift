@@ -4,13 +4,14 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case newEvent(Date), event(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar)
+    case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar)
     var id: String {
         switch self {
         case .newList: return "new-list"
         case .editList(let list): return "edit-list-\(list.calendarIdentifier)"
         case .quickAdd: return "quick-add"
-        case .newEvent(let date): return "new-\(date.timeIntervalSince1970)"
+        case .newEvent(let date, _): return "new-\(date.timeIntervalSince1970)"
+        case .duplicate(let event): return "duplicate-\(event.occurrenceKey)"
         case .event(let event): return "event-\(event.eventIdentifier ?? "")-\(event.startDate.timeIntervalSince1970)"
         case .reminder(let reminder, let list): return "reminder-\(reminder?.calendarItemIdentifier ?? list ?? "new")"
         }
@@ -44,6 +45,14 @@ struct MainView: View {
         .modifier(TextSizeModifier(size: (AppTextSize(rawValue: textSizeID) ?? .automatic).dynamicType))
         .tint(accent)
         .task { await model.refresh() }
+        // After each refresh: the next-event Live Activity, time-to-leave alerts, and the forecast.
+        .task(id: model.generation) {
+            guard model.calendarAccess else { return }
+            let soon = model.events(in: DateInterval(start: .now.addingTimeInterval(-6 * 3600), duration: 30 * 3600))
+            await NextEventActivity.update(events: soon)
+            await TravelAlerts.update(events: soon)
+            await WeatherStore.shared.refresh()
+        }
         .onChange(of: phase) { _, phase in
             if phase == .active && Date.now.timeIntervalSince(model.lastRefresh) > 2 { model.scheduleRefresh() }
         }
@@ -63,12 +72,14 @@ struct MainView: View {
                 model.sheet = .quickAdd(reminder: items.contains { $0.name == "type" && $0.value == "reminder" }, day: day)
             }
             else if url.host == "reminders" { tab = 2 }
+            else if url.host == "calendar" { tab = 0 }
             else { tab = 1 }
         }
         .sheet(item: $model.sheet, onDismiss: { model.scheduleRefresh() }) { sheet in
             switch sheet {
-            case .newEvent(let date): EventEditor(store: model.store, startDate: date)
-            case .event(let event): EventDetails(event: event)
+            case .newEvent(let date, let end): EventEditor(store: model.store, startDate: date, endDate: end)
+            case .duplicate(let event): EventEditor(store: model.store, startDate: event.startDate, template: event)
+            case .event(let event): EventDetailsSheet(event: event) { model.sheet = .duplicate(event) }
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
             case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
             case .newList: NewListView(model: model)
@@ -233,11 +244,9 @@ extension AgendaModel {
         catch { reminder.isCompleted = previous; self.error = error.localizedDescription }
     }
     /// Moves one occurrence of an event, keeping its length, with Undo.
-    func move(_ event: EKEvent, days: Int, minutes: Int) {
-        guard days != 0 || minutes != 0, event.isWritable else { return }
-        let calendar = Calendar.current
+    func move(_ event: EKEvent, to shifted: Date) {
         let originalStart = event.startDate!, originalEnd = event.endDate!
-        guard let shifted = calendar.date(byAdding: .day, value: days, to: originalStart)?.addingTimeInterval(TimeInterval(minutes * 60)) else { return }
+        guard shifted != originalStart, event.isWritable else { return }
         event.startDate = shifted
         event.endDate = shifted.addingTimeInterval(originalEnd.timeIntervalSince(originalStart))
         do {
@@ -253,6 +262,25 @@ extension AgendaModel {
             scheduleRefresh()
         } catch {
             event.startDate = originalStart
+            event.endDate = originalEnd
+            self.error = error.localizedDescription
+        }
+    }
+    /// Changes when one occurrence of an event ends, with Undo.
+    func resize(_ event: EKEvent, end: Date) {
+        let originalEnd = event.endDate!
+        guard end != originalEnd, end > event.startDate, event.isWritable else { return }
+        event.endDate = end
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            undo = UndoAction(message: "“\(event.title ?? "Event")” now ends at \(end.formatted(date: .omitted, time: .shortened))") { [weak self] in
+                guard let self else { return }
+                event.endDate = originalEnd
+                do { try self.store.save(event, span: .thisEvent, commit: true); self.scheduleRefresh() }
+                catch { self.error = error.localizedDescription }
+            }
+            scheduleRefresh()
+        } catch {
             event.endDate = originalEnd
             self.error = error.localizedDescription
         }
@@ -328,6 +356,38 @@ struct UndoToast: View {
             try? await Task.sleep(for: .seconds(8))
             if !Task.isCancelled { close() }
         }
+    }
+}
+
+/// Apple's event view, which already shows invitees, the Accept, Maybe, and Decline buttons for invitations,
+/// and Join for video calls, with a bar below for directions (with the drive time) and Duplicate.
+struct EventDetailsSheet: View {
+    @AppAccent private var accent
+    let event: EKEvent
+    let onDuplicate: () -> Void
+    var body: some View {
+        EventDetails(event: event)
+            .ignoresSafeArea(edges: .bottom)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 12) {
+                    if let place = event.location, !place.isEmpty, MeetingLink.url(url: nil, location: place, notes: nil) == nil {
+                        Button { directions() } label: {
+                            Label("Directions\(TravelAlerts.estimates[event.occurrenceKey].map { " · \(Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))" } ?? "")",
+                                  systemImage: "car.fill").frame(maxWidth: .infinity)
+                        }
+                    }
+                    Button(action: onDuplicate) { Label("Duplicate", systemImage: "plus.square.on.square").frame(maxWidth: .infinity) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.bordered).controlSize(.large).tint(accent)
+                .padding(.horizontal).padding(.top, 8).padding(.bottom, 4)
+                .background(.bar)
+            }
+    }
+    private func directions() {
+        let query = event.structuredLocation?.geoLocation.map { "daddr=\($0.coordinate.latitude),\($0.coordinate.longitude)" }
+            ?? "daddr=\((event.location ?? "").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        if let url = URL(string: "maps://?\(query)") { UIApplication.shared.open(url) }
     }
 }
 

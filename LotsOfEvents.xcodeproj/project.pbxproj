@@ -11,6 +11,7 @@
 		0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
 		12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */; };
 		133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
+		13C1E097CA52A91D441FAF47 /* CalendarExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */; };
 		15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */; };
 		207305F308E774F2BBF08D78 /* WidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C82927FA5473572B5085650 /* WidgetBundle.swift */; };
 		245DD2421833CEC41F6D6DE1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
@@ -18,15 +19,19 @@
 		2CACC4FAC18782F63920D998 /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		3504124C79FFA8C62F200503 /* QuickAddControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */; };
 		3C36A071D0B6E39E06D01E2D /* TodayDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1F163AD383754C42373941 /* TodayDashboard.swift */; };
+		3EB8C462EE555DB33C7F780E /* NextEventLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */; };
 		435428210F389CFA42A6DFAB /* QuickAddDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9821B971D23D906C622837DD /* QuickAddDictation.swift */; };
 		4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		477B86515969537E0EB1D0AD /* UnifiedSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DE288F6D9EBC66175DAB67 /* UnifiedSearch.swift */; };
 		4A7DF2B4572883E4EB18D5CC /* AgendaTabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95608F205F2304B576239DF /* AgendaTabTests.swift */; };
 		4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */; };
+		51D8139174C5DAD4B74879BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DFDBEBA539F06412737D752 /* Assets.xcassets */; };
+		55EE29BEBFBFD193C50D66BE /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
 		5F4B339A127C6B1A7F4AD3A1 /* TodayRemindersWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */; };
 		626E6619AFFB33D3FFAD389B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 822EF3079EA48BD159AAC26B /* Assets.xcassets */; };
 		64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */; };
 		6ABE3EF592318AAEEA7312B6 /* AppCustomizationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */; };
+		70C00CDDAD631FCE01653772 /* LotsOfEventsWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 10736224638F58408661F524 /* LotsOfEventsWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB5E02F0AC8E5911D573D7C /* NewListView.swift */; };
 		83B063FC5F5EC89A70626508 /* ReminderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09769C17F8413551E8BD0D33 /* ReminderViews.swift */; };
@@ -46,6 +51,8 @@
 		BBE15E6161448D8620D0BD2D /* AppAccent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */; };
 		BEF42BEDD940B3CBDFF1D64C /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
 		C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
+		C34B03B351ADC04A1E07BCD4 /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
+		C70090AC8F0FD785C52BB016 /* LotsOfEventsWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0402A24B70100F3B45C53496 /* LotsOfEventsWatchApp.swift */; };
 		C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */; };
 		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
 		CB776DF48C36FAE6DEC2E5F3 /* TodayDashboardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C051342E55B835AB128881 /* TodayDashboardWidget.swift */; };
@@ -79,6 +86,13 @@
 			remoteGlobalIDString = C58AFEBE09C96E08D388355D;
 			remoteInfo = LotsOfEvents;
 		};
+		F9F68197A7A8CE3826DF865A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 11894B270E91A0B1A4189F83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E873CF0C3A2B20947E20EA44;
+			remoteInfo = LotsOfEventsWatch;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -93,24 +107,41 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		790FC6BDC93C90F61C900FDB /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				70C00CDDAD631FCE01653772 /* LotsOfEventsWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0402A24B70100F3B45C53496 /* LotsOfEventsWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotsOfEventsWatchApp.swift; sourceTree = "<group>"; };
 		09769C17F8413551E8BD0D33 /* ReminderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderViews.swift; sourceTree = "<group>"; };
 		09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LotsOfEvents.entitlements; sourceTree = "<group>"; };
 		0AB5E02F0AC8E5911D573D7C /* NewListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewListView.swift; sourceTree = "<group>"; };
 		0C51F47226373F1925E9ABBA /* Snooze.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snooze.swift; sourceTree = "<group>"; };
+		10736224638F58408661F524 /* LotsOfEventsWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LotsOfEventsWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultAlertsView.swift; sourceTree = "<group>"; };
 		1C82927FA5473572B5085650 /* WidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBundle.swift; sourceTree = "<group>"; };
 		1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixesAndFeaturesTests.swift; sourceTree = "<group>"; };
 		20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LotsOfEvents.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgets.swift; sourceTree = "<group>"; };
+		2DFDBEBA539F06412737D752 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
 		3CBAF9DE5613BF613814BE64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCustomizationViews.swift; sourceTree = "<group>"; };
 		49C051342E55B835AB128881 /* TodayDashboardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboardWidget.swift; sourceTree = "<group>"; };
+		4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarExtras.swift; sourceTree = "<group>"; };
+		528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextEventLiveActivity.swift; sourceTree = "<group>"; };
 		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
 		54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousAgenda.swift; sourceTree = "<group>"; };
+		5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFeatures.swift; sourceTree = "<group>"; };
 		635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LotsOfEventsApp.swift; sourceTree = "<group>"; };
 		6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
@@ -140,6 +171,7 @@
 		ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCore.swift; sourceTree = "<group>"; };
 		B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccent.swift; sourceTree = "<group>"; };
 		BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgetTests.swift; sourceTree = "<group>"; };
+		D9FD306BA641176D02F77EE2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DD5F03C89BEF58BE14D27246 /* TodayLists.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayLists.swift; sourceTree = "<group>"; };
 		ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStyle.swift; sourceTree = "<group>"; };
 		F237CDB66730A8EF85953929 /* AlertDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertDefaults.swift; sourceTree = "<group>"; };
@@ -156,6 +188,7 @@
 				41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */,
 				6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */,
 				822EF3079EA48BD159AAC26B /* Assets.xcassets */,
+				4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */,
 				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
 				54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */,
 				193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */,
@@ -179,12 +212,23 @@
 			path = LotsOfEvents;
 			sourceTree = "<group>";
 		};
+		761333E8C6AD5B867923D4FC /* LotsOfEventsWatch */ = {
+			isa = PBXGroup;
+			children = (
+				2DFDBEBA539F06412737D752 /* Assets.xcassets */,
+				D9FD306BA641176D02F77EE2 /* Info.plist */,
+				0402A24B70100F3B45C53496 /* LotsOfEventsWatchApp.swift */,
+			);
+			path = LotsOfEventsWatch;
+			sourceTree = "<group>";
+		};
 		876C8C079AAF47B5142425E4 = {
 			isa = PBXGroup;
 			children = (
 				E581CA6862DD1CDD3BF0F2F3 /* AgendaWidget */,
 				22F9ADE39CEE0AF5CFC4AB35 /* LotsOfEvents */,
 				C0161C5058495A411061D04D /* LotsOfEventsTests */,
+				761333E8C6AD5B867923D4FC /* LotsOfEventsWatch */,
 				C49D9AF82380ABD7E2EF3761 /* Shared */,
 				987D56426C916752CAF36451 /* Products */,
 			);
@@ -196,6 +240,7 @@
 				883A5E15068E6BD432BF3851 /* AgendaWidget.appex */,
 				20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */,
 				808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */,
+				10736224638F58408661F524 /* LotsOfEventsWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -221,6 +266,7 @@
 				34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */,
 				94242E0DB9C908EB386A826B /* AgendaData.swift */,
 				F237CDB66730A8EF85953929 /* AlertDefaults.swift */,
+				5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */,
 				8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */,
 				7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */,
 				ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */,
@@ -236,6 +282,7 @@
 				66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */,
 				2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */,
 				8C49FDA929D6FACECC3FDD02 /* Info.plist */,
+				528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */,
 				6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */,
 				9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */,
 				49C051342E55B835AB128881 /* TodayDashboardWidget.swift */,
@@ -273,17 +320,37 @@
 				BC43C060E1DE359DD5EE6702 /* Sources */,
 				120C98F93B16689AA348FCE0 /* Resources */,
 				1468D1AF56A8536FFBE3DD6C /* Embed Foundation Extensions */,
+				790FC6BDC93C90F61C900FDB /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				B483F7E4C49D1A6DCCEB8048 /* PBXTargetDependency */,
+				38AC76DC09BB0BE64A4C7272 /* PBXTargetDependency */,
 			);
 			name = LotsOfEvents;
 			packageProductDependencies = (
 			);
 			productName = LotsOfEvents;
 			productReference = 20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E873CF0C3A2B20947E20EA44 /* LotsOfEventsWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F627935ABFECB7F319F22FC8 /* Build configuration list for PBXNativeTarget "LotsOfEventsWatch" */;
+			buildPhases = (
+				D147E5456B6860A27DC002FF /* Sources */,
+				C10BD53214A32196DAFCB6E2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LotsOfEventsWatch;
+			packageProductDependencies = (
+			);
+			productName = LotsOfEventsWatch;
+			productReference = 10736224638F58408661F524 /* LotsOfEventsWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 		EA38F86A34D88A80331B3610 /* LotsOfEventsTests */ = {
@@ -321,6 +388,10 @@
 						DevelopmentTeam = 76BJCJ4Q7X;
 						ProvisioningStyle = Automatic;
 					};
+					E873CF0C3A2B20947E20EA44 = {
+						DevelopmentTeam = 76BJCJ4Q7X;
+						ProvisioningStyle = Automatic;
+					};
 					EA38F86A34D88A80331B3610 = {
 						DevelopmentTeam = 76BJCJ4Q7X;
 						ProvisioningStyle = Automatic;
@@ -343,6 +414,7 @@
 			targets = (
 				C58AFEBE09C96E08D388355D /* LotsOfEvents */,
 				324EFF245D3D0D8FA8DBB358 /* AgendaWidget */,
+				E873CF0C3A2B20947E20EA44 /* LotsOfEventsWatch */,
 				EA38F86A34D88A80331B3610 /* LotsOfEventsTests */,
 			);
 		};
@@ -366,6 +438,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C10BD53214A32196DAFCB6E2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				51D8139174C5DAD4B74879BB /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -377,8 +457,10 @@
 				C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */,
 				0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */,
 				BA408E39C1490A95CC22B832 /* AlertDefaults.swift in Sources */,
+				C34B03B351ADC04A1E07BCD4 /* CalendarFeatures.swift in Sources */,
 				133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */,
 				DA0BE228740CEE146A1794D1 /* GalleryStyle.swift in Sources */,
+				3EB8C462EE555DB33C7F780E /* NextEventLiveActivity.swift in Sources */,
 				3504124C79FFA8C62F200503 /* QuickAddControls.swift in Sources */,
 				BEF42BEDD940B3CBDFF1D64C /* QuickAddCore.swift in Sources */,
 				4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */,
@@ -400,6 +482,8 @@
 				BBE15E6161448D8620D0BD2D /* AppAccent.swift in Sources */,
 				6ABE3EF592318AAEEA7312B6 /* AppCustomizationViews.swift in Sources */,
 				912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */,
+				13C1E097CA52A91D441FAF47 /* CalendarExtras.swift in Sources */,
+				55EE29BEBFBFD193C50D66BE /* CalendarFeatures.swift in Sources */,
 				A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */,
 				C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */,
 				BABEF3839E2CDA7270503239 /* DashboardWidgets.swift in Sources */,
@@ -426,6 +510,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D147E5456B6860A27DC002FF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C70090AC8F0FD785C52BB016 /* LotsOfEventsWatchApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DC02B31F84D2B49ECE333A7B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -448,6 +540,11 @@
 			isa = PBXTargetDependency;
 			target = C58AFEBE09C96E08D388355D /* LotsOfEvents */;
 			targetProxy = 31C10D4900E6EEF6FF26DFF9 /* PBXContainerItemProxy */;
+		};
+		38AC76DC09BB0BE64A4C7272 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E873CF0C3A2B20947E20EA44 /* LotsOfEventsWatch */;
+			targetProxy = F9F68197A7A8CE3826DF865A /* PBXContainerItemProxy */;
 		};
 		B483F7E4C49D1A6DCCEB8048 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -549,6 +646,19 @@
 			};
 			name = Debug;
 		};
+		84F35EEB9894628812EB4296 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = LotsOfEventsWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
 		A0B3B5DD4DCC5D6CB6D396BD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -601,7 +711,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -622,11 +732,23 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D230CA8CC5B756C373B4107D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = LotsOfEventsWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
 			};
 			name = Release;
 		};
@@ -666,7 +788,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -694,7 +816,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -737,6 +858,15 @@
 			buildConfigurations = (
 				A0B3B5DD4DCC5D6CB6D396BD /* Debug */,
 				0B017A25909D5670172708CA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F627935ABFECB7F319F22FC8 /* Build configuration list for PBXNativeTarget "LotsOfEventsWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				84F35EEB9894628812EB4296 /* Debug */,
+				D230CA8CC5B756C373B4107D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

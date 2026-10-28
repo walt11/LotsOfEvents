@@ -33,12 +33,18 @@
 	<false/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Show your selected calendars in your agenda and widget, and create events.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Show how old friends are turning on their birthdays.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Show the weather forecast in your calendar and work out when to leave for events.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dictate events and reminders into the Quick Add text box.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Show reminders from the lists you select in your agenda and widget.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Turn your spoken words into editable Quick Add text.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

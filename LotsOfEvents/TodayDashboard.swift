@@ -5,6 +5,7 @@ import EventKit
 /// that needs attention (overdue, due today, and undated ones from the lists chosen for Today).
 struct TodayDashboard: View {
     @ObservedObject var model: AgendaModel
+    @ObservedObject private var weather = WeatherStore.shared
     /// Today's rows from the agenda: events and reminders due today.
     let items: [AgendaItem]
     let overdue: [EKReminder]
@@ -23,9 +24,13 @@ struct TodayDashboard: View {
     }
 
     private func header(_ now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(now.formatted(.dateTime.weekday(.wide))).font(.largeTitle.bold()).foregroundStyle(GalleryPalette.ink)
-            Text(now.formatted(.dateTime.month(.wide).day().year())).font(.subheadline).foregroundStyle(GalleryPalette.muted)
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(now.formatted(.dateTime.weekday(.wide))).font(.largeTitle.bold()).foregroundStyle(GalleryPalette.ink)
+                Text(now.formatted(.dateTime.month(.wide).day().year())).font(.subheadline).foregroundStyle(GalleryPalette.muted)
+            }
+            Spacer(minLength: 0)
+            if let forecast = weather.forecast(for: now) { WeatherSummary(forecast: forecast) }
         }
         .accessibilityElement(children: .combine)
         .padding(.horizontal, 4)
@@ -58,8 +63,10 @@ struct TodayDashboard: View {
                     VStack(alignment: .leading, spacing: 6) { ForEach(allDay) { chip($0) } }
                 }
             }
+            let conflicts = Conflicts.ids(timed.map { ($0.id, $0.eventStartDate ?? $0.date, $0.endDate ?? $0.date) })
             ForEach(timed) { item in
                 let past = (item.endDate ?? item.date) <= now
+                HStack(spacing: 6) {
                 Button { model.open(item) } label: {
                     HStack(spacing: 10) {
                         Text(item.continuation ? "…" : (item.eventStartDate ?? item.date).formatted(date: .omitted, time: .shortened))
@@ -69,11 +76,15 @@ struct TodayDashboard: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(item.title).font(.subheadline.weight(.medium)).foregroundStyle(GalleryPalette.ink).lineLimit(1)
                             if let detail = item.agendaDetail { Text(detail).font(.caption2).foregroundStyle(GalleryPalette.muted).lineLimit(1) }
+                            EventBadges(needsReply: item.needsReply, conflict: conflicts.contains(item.id) && !past)
                         }
                         Spacer(minLength: 0)
                     }.contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // The call link shows for meetings that haven't ended.
+                if let link = item.joinURL, !past { JoinButton(url: link) }
+                }
                 .opacity(past ? 0.45 : 1)
             }
         }

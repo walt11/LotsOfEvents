@@ -15,5 +15,6 @@ struct LotsOfEventsWidgets: WidgetBundle {
         TodayRemindersWidget()
         QuickAddEventControl()
         QuickAddReminderControl()
+        NextEventLiveActivity()
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import EventKit
 import WidgetKit
+import Contacts
 
 struct SourcesView: View {
     @AppAccent private var accent
@@ -15,6 +16,13 @@ struct SourcesView: View {
     // Default alerts; the same keys and defaults as AlertDefaults, in the shared App Group.
     @AppStorage("alertEvent", store: Preferences.defaults) private var eventAlert = EventAlertOption.minutes15.rawValue
     @AppStorage("alertReminder", store: Preferences.defaults) private var reminderAlert = ReminderAlertOption.atTime.rawValue
+    @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
+    @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
+    @AppStorage(WeatherStore.key, store: Preferences.defaults) private var showWeather = false
+    @AppStorage(BirthdayAges.key, store: Preferences.defaults) private var birthdayAges = false
+    @AppStorage(TravelAlerts.key, store: Preferences.defaults) private var timeToLeave = false
+    @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
+    @ObservedObject private var weather = WeatherStore.shared
     var body: some View {
         NavigationStack {
             List {
@@ -45,6 +53,34 @@ struct SourcesView: View {
                         Preferences.defaults.set(0, forKey: "page")
                         model.scheduleRefresh()
                         WidgetReloader.schedule()
+                    }
+                }.listRowBackground(GalleryPalette.card)
+                Section {
+                    NavigationLink { CalendarSetsView(model: model) } label: {
+                        settingsRow("Calendar sets", symbol: "square.stack", color: .blue,
+                                    detail: CalendarSet.saved.isEmpty ? "Groups like Work and Personal · Focus filters" : "\(CalendarSet.saved.count) saved · switch from the Calendar tab")
+                    }
+                    Toggle(isOn: $weekNumbers) { settingsRow("Week numbers", symbol: "number", color: .gray, detail: "In Month view and beside dates") }
+                    NavigationLink { TimeZonePicker(selection: $secondZoneID) } label: {
+                        settingsRow("Second time zone", symbol: "globe", color: .cyan,
+                                    detail: secondZoneID.isEmpty ? "Off" : TimeZonePicker.name(secondZoneID))
+                    }
+                    Toggle(isOn: $showWeather) { settingsRow("Weather", symbol: "cloud.sun", color: .orange, detail: "Forecast in Day, 3 Day, and Week views") }
+                        .onChange(of: showWeather) { _, on in if on { Task { await weather.refresh(force: true) } } }
+                    Toggle(isOn: $birthdayAges) { settingsRow("Birthday ages", symbol: "gift", color: .pink, detail: "Uses birth years from Contacts") }
+                        .onChange(of: birthdayAges) { _, on in
+                            if on { Task { _ = try? await CNContactStore().requestAccess(for: .contacts); model.objectWillChange.send() } }
+                        }
+                } header: { Text("Calendar") } footer: {
+                    if showWeather, let problem = weather.problem {
+                        Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    } else if showWeather, let attribution = weather.attribution {
+                        HStack(spacing: 6) {
+                            AsyncImage(url: attribution.mark) { $0.resizable().scaledToFit() } placeholder: { Text(" Weather") }.frame(height: 12)
+                            Link("Weather data sources", destination: attribution.legal)
+                        }
+                    } else {
+                        Text("Birthdays come from the Birthdays calendar; turn it on under Calendars.")
                     }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Appearance") {
@@ -87,6 +123,15 @@ struct SourcesView: View {
                         settingsRow("Default alerts", symbol: "bell.badge", color: .red,
                                     detail: "Events: \(EventAlertOption(rawValue: eventAlert)?.title ?? "None") · Reminders: \(ReminderAlertOption(rawValue: reminderAlert)?.title ?? "None")")
                     }
+                    Toggle(isOn: $timeToLeave) { settingsRow("Time to leave", symbol: "car", color: .green, detail: "Alerts based on the drive to an event's location") }
+                        .onChange(of: timeToLeave) { _, on in
+                            Task {
+                                if on { _ = await TravelAlerts.requestPermission() }
+                                model.scheduleRefresh()
+                            }
+                        }
+                    Toggle(isOn: $liveActivity) { settingsRow("Next event countdown", symbol: "timer", color: .purple, detail: "Live Activity on the Lock Screen and Dynamic Island") }
+                        .onChange(of: liveActivity) { _, _ in model.scheduleRefresh() }
                 }.listRowBackground(GalleryPalette.card)
                 Section("Widgets") {
                     NavigationLink {
@@ -233,5 +278,42 @@ struct SourcesView: View {
         }
         .background(GalleryPalette.paper)
         .navigationTitle("App Theme").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Picks a second time zone for the timeline, with search.
+struct TimeZonePicker: View {
+    @Binding var selection: String
+    @State private var search = ""
+    @Environment(\.dismiss) private var dismiss
+    static func name(_ id: String) -> String {
+        let city = id.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? id
+        return [city, TimeZone(identifier: id)?.abbreviation()].compactMap { $0 }.joined(separator: " · ")
+    }
+    private var zones: [String] {
+        let all = TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") && !$0.hasPrefix("Etc") }
+        return search.isEmpty ? all : all.filter { Self.name($0).localizedCaseInsensitiveContains(search) || $0.localizedCaseInsensitiveContains(search) }
+    }
+    var body: some View {
+        List {
+            Button { selection = ""; dismiss() } label: {
+                HStack { Text("Off").foregroundStyle(.primary); Spacer(); if selection.isEmpty { Image(systemName: "checkmark") } }
+            }
+            ForEach(zones, id: \.self) { id in
+                Button { selection = id; dismiss() } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(Self.name(id)).foregroundStyle(.primary)
+                            Text(Date.now.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: id) ?? .current).hour().minute())).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if selection == id { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        }
+        .searchable(text: $search, prompt: "City or region")
+        .navigationTitle("Second Time Zone").navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden).background(GalleryPalette.paper)
     }
 }

@@ -16,6 +16,11 @@ struct AgendaItem: Identifiable {
     /// The original item's ID when this row repeats a multi-day event on a later day.
     var sourceID: String? = nil
     var location: String? = nil
+    /// A Zoom, Meet, Teams, or other video-call link found in the event.
+    var joinURL: URL? = nil
+    /// An invitation the user hasn't answered yet.
+    var needsReply = false
+    var birthday = false
     /// The Agenda's second line: the list for reminders, otherwise where or how long. The color bar already identifies the calendar.
     var agendaDetail: String? {
         if reminder { return source }
@@ -114,6 +119,8 @@ enum Preferences {
         if enabled { hidden.remove(id) } else { hidden.insert(id) }
         store.set(Array(hidden), forKey: key)
         store.set(0, forKey: "page")
+        // The shown calendars no longer match a saved set.
+        store.removeObject(forKey: "activeCalendarSet")
     }
     /// Converts the original explicit calendar selection into exclusions.
     static func migrateCalendars(available: [String], in store: UserDefaults = defaults) {
@@ -179,7 +186,8 @@ enum AgendaQuery {
             let calendars = store.calendars(for: .event).filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
             if !calendars.isEmpty {
                 items += store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars)).map {
-                    AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate, location: $0.location)
+                    AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate, location: $0.location,
+                               joinURL: MeetingLink.url(for: $0), needsReply: $0.needsReply, birthday: $0.isBirthday)
                 }
             }
         }

@@ -177,12 +177,13 @@ struct AgendaView: View {
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                         }.id("agenda-today")
                     case .day(let day):
+                        let conflicts = Conflicts.ids(day.items.filter { !$0.reminder && !$0.allDay }.map { ($0.id, $0.eventStartDate ?? $0.date, $0.endDate ?? $0.date) })
                         Section {
                             if day.items.isEmpty {
                                 Text("Nothing scheduled").font(.caption).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             }
-                            ForEach(day.items) { item in itemRow(item) }
+                            ForEach(day.items) { item in itemRow(item, conflict: conflicts.contains(item.id)) }
                         } header: { Text(dayTitle(day.date)).font(.system(.caption, design: .monospaced)).foregroundStyle(GalleryPalette.muted) }
                             .id(day.date.description)
                     case .empty(let start, let end):
@@ -218,7 +219,7 @@ struct AgendaView: View {
         if calendar.isDateInToday(date) { return "Today · \(date.formatted(.dateTime.weekday(.wide).month().day()))" }
         return calendar.isDateInTomorrow(date) ? "Tomorrow" : date.formatted(.dateTime.weekday(.wide).month().day())
     }
-    private func itemRow(_ item: AgendaItem) -> some View {
+    private func itemRow(_ item: AgendaItem, conflict: Bool = false) -> some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 3).fill(item.color).frame(width: 4)
             if item.reminder {
@@ -229,7 +230,11 @@ struct AgendaView: View {
             Button { model.open(item) } label: {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title).font(.subheadline.weight(.medium))
+                        HStack(spacing: 5) {
+                            if item.birthday { Image(systemName: "gift.fill").foregroundStyle(item.color) }
+                            Text(item.title).font(.subheadline.weight(.medium))
+                        }
+                        EventBadges(needsReply: item.needsReply, conflict: conflict)
                         if let detail = item.agendaDetail {
                             Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -238,6 +243,7 @@ struct AgendaView: View {
                     Text(item.timeLabel).font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
+            if let link = item.joinURL, (item.endDate ?? item.date) > .now { JoinButton(url: link) }
         }
         .galleryRow()
         .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
@@ -251,6 +257,10 @@ struct EventEditor: UIViewControllerRepresentable {
     @AppAccent private var accent
     let store: EKEventStore
     var startDate: Date = .now
+    /// Set when the time was swept out on the timeline.
+    var endDate: Date? = nil
+    /// An event to copy, for Duplicate. The copy isn't saved until Add is tapped.
+    var template: EKEvent? = nil
     @Environment(\.dismiss) private var dismiss
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
     func makeUIViewController(context: Context) -> EKEventEditViewController {
@@ -258,11 +268,25 @@ struct EventEditor: UIViewControllerRepresentable {
         editor.eventStore = store
         editor.view.tintColor = UIColor(accent)
         let event = EKEvent(eventStore: store)
-        event.startDate = startDate
-        event.endDate = startDate.addingTimeInterval(3600)
-        event.calendar = store.defaultCalendarForNewEvents
-        // Prefill the default alert; Apple's editor shows it and it can be changed there.
-        AlertDefaults.apply(to: event)
+        if let template {
+            event.title = template.title
+            event.location = template.location
+            event.structuredLocation = template.structuredLocation?.copy() as? EKStructuredLocation
+            event.notes = template.notes
+            event.url = template.url
+            event.isAllDay = template.isAllDay
+            event.startDate = template.startDate
+            event.endDate = template.endDate
+            event.availability = template.availability
+            event.calendar = template.calendar.allowsContentModifications ? template.calendar : store.defaultCalendarForNewEvents
+            event.alarms = template.alarms?.compactMap { $0.copy() as? EKAlarm }
+        } else {
+            event.startDate = startDate
+            event.endDate = endDate ?? startDate.addingTimeInterval(3600)
+            event.calendar = store.defaultCalendarForNewEvents
+            // Prefill the default alert; Apple's editor shows it and it can be changed there.
+            AlertDefaults.apply(to: event)
+        }
         editor.event = event
         editor.editViewDelegate = context.coordinator
         return editor

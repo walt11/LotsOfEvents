@@ -408,12 +408,23 @@ final class ReviewFeatureTests: XCTestCase {
         XCTAssertEqual(QuickAddParser.parse("Pay rent every month").title, "Pay rent")
         XCTAssertNil(QuickAddParser.parse("Buy milk").repeats)
     }
-    func testDragShiftSnapsToQuarterHoursAndDays() {
-        let shift = CalendarDates.dragShift(translation: CGSize(width: 95, height: 40), hourHeight: 52, columnWidth: 48)
-        XCTAssertEqual(shift.minutes, 45)
-        XCTAssertEqual(shift.days, 2)
-        XCTAssertEqual(CalendarDates.dragShift(translation: CGSize(width: 200, height: -13), hourHeight: 52, columnWidth: nil).days, 0)
-        XCTAssertEqual(CalendarDates.dragShift(translation: CGSize(width: 0, height: -13), hourHeight: 52, columnWidth: nil).minutes, -15)
+    func testDragSnapsToQuarterHoursOnTheClockAndDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: 9, minute: 10))!
+        func target(_ width: CGFloat, _ height: CGFloat, column: CGFloat? = 48) -> DateComponents {
+            calendar.dateComponents([.day, .hour, .minute], from: CalendarDates.dragTarget(start: start, translation: CGSize(width: width, height: height), hourHeight: 52, columnWidth: column, calendar: calendar))
+        }
+        // 9:10 dragged about 50 minutes lands exactly on 10:00, not 10:10.
+        XCTAssertEqual(target(0, 44), DateComponents(day: 27, hour: 10, minute: 0))
+        // Picking it up without moving leaves it alone; a real move snaps onto the grid.
+        XCTAssertEqual(target(0, 2), DateComponents(day: 27, hour: 9, minute: 10))
+        XCTAssertEqual(target(0, 8), DateComponents(day: 27, hour: 9, minute: 15))
+        XCTAssertEqual(target(95, 0), DateComponents(day: 29, hour: 9, minute: 15))
+        // Day view ignores sideways movement, and the start never leaves its day.
+        XCTAssertEqual(target(200, 0, column: nil).day, 27)
+        XCTAssertEqual(target(0, -1000), DateComponents(day: 27, hour: 0, minute: 0))
+        XCTAssertEqual(target(0, 2000), DateComponents(day: 27, hour: 23, minute: 45))
     }
     func testTodayReminderCountIncludesOverdueOnly() {
         var calendar = Calendar(identifier: .gregorian)
@@ -537,5 +548,57 @@ final class CustomizationTests: XCTestCase {
     }
     func testStoredColorHex() {
         XCTAssertEqual(StoredColor(red: 1, green: 0, blue: 0.5).hex, 0xFF0080)
+    }
+}
+
+final class CalendarFeatureTests: XCTestCase {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        return calendar
+    }
+    func testMeetingLinksFoundInURLLocationOrNotes() {
+        let zoom = URL(string: "https://us02web.zoom.us/j/123456")!
+        XCTAssertEqual(MeetingLink.url(url: zoom, location: nil, notes: nil), zoom)
+        XCTAssertEqual(MeetingLink.url(url: nil, location: "https://meet.google.com/abc-defg-hij", notes: nil)?.host, "meet.google.com")
+        XCTAssertEqual(MeetingLink.url(url: URL(string: "https://example.com"), location: "Room 4", notes: "Join: https://teams.microsoft.com/l/meetup-join/xyz thanks")?.host, "teams.microsoft.com")
+        XCTAssertNil(MeetingLink.url(url: URL(string: "https://example.com"), location: "Cafe", notes: "See https://notzoom.us.example.org"))
+        XCTAssertEqual(MeetingLink.service(zoom), "Zoom")
+    }
+    func testConflictsOnlyMarkOverlappingEvents() {
+        let base = Date(timeIntervalSince1970: 0)
+        let ids = Conflicts.ids([("a", base, base + 3600), ("b", base + 1800, base + 5400), ("c", base + 5400, base + 7200), ("d", base + 9000, base + 9000)])
+        XCTAssertEqual(ids, ["a", "b"])
+    }
+    func testSweepAndResizeSnapToQuarterHours() {
+        let day = calendar.date(from: DateComponents(year: 2026, month: 10, day: 27))!
+        // 9:05 to 10:20 at 52 points an hour sweeps 9:00 to 10:15, dragging either way.
+        let down = CalendarDates.sweep(day: day, from: 52 * (9 + 5 / 60), to: 52 * (10 + 20 / 60), hourHeight: 52, calendar: calendar)
+        let up = CalendarDates.sweep(day: day, from: 52 * (10 + 20 / 60), to: 52 * (9 + 5 / 60), hourHeight: 52, calendar: calendar)
+        XCTAssertEqual(down, up)
+        XCTAssertEqual(calendar.dateComponents([.hour, .minute], from: down.start), DateComponents(hour: 9, minute: 0))
+        XCTAssertEqual(calendar.dateComponents([.hour, .minute], from: down.end), DateComponents(hour: 10, minute: 15))
+        // A touch just before the hour starts on the hour.
+        XCTAssertEqual(calendar.dateComponents([.hour, .minute], from: CalendarDates.sweep(day: day, from: 52 * (8 + 57 / 60), to: 52 * 10, hourHeight: 52, calendar: calendar).start), DateComponents(hour: 9, minute: 0))
+        // A hold without a drag still makes a 15-minute event.
+        XCTAssertEqual(CalendarDates.sweep(day: day, from: 52 * 9, to: 52 * 9, hourHeight: 52, calendar: calendar).duration, 900)
+
+        let start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)!
+        let end = calendar.date(bySettingHour: 10, minute: 10, second: 0, of: day)!
+        // Dragging the bottom edge 45 minutes lands on 11:00, and it can't end before 9:15.
+        XCTAssertEqual(calendar.dateComponents([.hour, .minute], from: CalendarDates.resizeTarget(start: start, end: end, translation: 39, hourHeight: 52, calendar: calendar)), DateComponents(hour: 11, minute: 0))
+        XCTAssertEqual(CalendarDates.resizeTarget(start: start, end: end, translation: -500, hourHeight: 52, calendar: calendar), start.addingTimeInterval(900))
+    }
+    func testCalendarSetsApplyAndClear() {
+        let store = UserDefaults(suiteName: "CalendarSetTests")!
+        store.removePersistentDomain(forName: "CalendarSetTests")
+        let work = CalendarSet(name: "Work", hiddenCalendars: ["home"], hiddenLists: ["groceries"])
+        CalendarSet.apply(work, in: store)
+        XCTAssertFalse(Preferences.selected("home", reminders: false, in: store))
+        XCTAssertTrue(Preferences.selected("office", reminders: false, in: store))
+        XCTAssertFalse(Preferences.selected("groceries", reminders: true, in: store))
+        CalendarSet.apply(nil, in: store)
+        XCTAssertTrue(Preferences.selected("home", reminders: false, in: store))
+        CalendarSet.activeID = nil
     }
 }
