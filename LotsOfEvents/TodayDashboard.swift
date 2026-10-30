@@ -82,6 +82,7 @@ struct TodayDashboard: View {
                 if let link = item.joinURL, !past { JoinButton(url: link) }
                 }
                 .opacity(past ? 0.45 : 1)
+                .deletableAgendaItem(model: model, item: item)
             }
         }
     }
@@ -94,6 +95,7 @@ struct TodayDashboard: View {
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(item.color.opacity(0.15), in: Capsule())
         }.buttonStyle(.plain)
+        .deletableAgendaItem(model: model, item: item)
     }
 
     private var tasks: some View {
@@ -129,7 +131,7 @@ struct TodayDashboard: View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
         }
-        .contextMenu {
+        .deletableAgendaItem(model: model, item: item) {
             if let reminder = model.reminder(withID: item.id) { SnoozeButtons(model: model, reminder: reminder) }
         }
     }

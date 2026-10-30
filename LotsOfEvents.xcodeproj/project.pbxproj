@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0335135B55A96DAACDCEF933 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		05FDB80A9B0FE10CCAD5F3CB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
+		0A666BBA9205F7A0F6741094 /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
 		0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
 		12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */; };
 		133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
@@ -19,6 +21,7 @@
 		2CACC4FAC18782F63920D998 /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
 		3504124C79FFA8C62F200503 /* QuickAddControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */; };
 		3C36A071D0B6E39E06D01E2D /* TodayDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1F163AD383754C42373941 /* TodayDashboard.swift */; };
+		3DD5F6602EDC8D978DE2087F /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */; };
 		3EB8C462EE555DB33C7F780E /* NextEventLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */; };
 		435428210F389CFA42A6DFAB /* QuickAddDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9821B971D23D906C622837DD /* QuickAddDictation.swift */; };
 		4495AFC321BD80CA69AFAEFA /* ThreeDayAgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCFA14F4311BB01DB00338A /* ThreeDayAgendaWidget.swift */; };
@@ -26,12 +29,15 @@
 		4A7DF2B4572883E4EB18D5CC /* AgendaTabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95608F205F2304B576239DF /* AgendaTabTests.swift */; };
 		4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */; };
 		51D8139174C5DAD4B74879BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DFDBEBA539F06412737D752 /* Assets.xcassets */; };
+		547D081180E4517939FBDD68 /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
 		55EE29BEBFBFD193C50D66BE /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
+		5B171F807A8EBAE9F2D2314F /* ICSImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */; };
 		5F4B339A127C6B1A7F4AD3A1 /* TodayRemindersWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */; };
 		626E6619AFFB33D3FFAD389B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 822EF3079EA48BD159AAC26B /* Assets.xcassets */; };
 		64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */; };
 		6ABE3EF592318AAEEA7312B6 /* AppCustomizationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */; };
-		70C00CDDAD631FCE01653772 /* LotsOfEventsWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 10736224638F58408661F524 /* LotsOfEventsWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		70C00CDDAD631FCE01653772 /* LotsOfEventsWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 10736224638F58408661F524 /* LotsOfEventsWatch.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		77E6581BC039E0987A838D52 /* GalleryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */; };
 		7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB5E02F0AC8E5911D573D7C /* NewListView.swift */; };
 		83B063FC5F5EC89A70626508 /* ReminderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09769C17F8413551E8BD0D33 /* ReminderViews.swift */; };
@@ -39,12 +45,16 @@
 		8B0C0260612BCF4F72B2EFCD /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F743E868923401A1D200EE2 /* DesignSystem.swift */; };
 		8B8951E144EFE45FEC9FEC5F /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
 		8C3497DABD279B13059FB994 /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
+		8D8E855950358BD0C20B0C9B /* AlertDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237CDB66730A8EF85953929 /* AlertDefaults.swift */; };
+		8FE1090A5C1157BF9C6D42D2 /* ICSImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2493423CBECE4C6F918BADB9 /* ICSImportTests.swift */; };
 		912D67FF1057B728E06D9E92 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615BDDC11AE490EF8CFD74B /* AppShortcuts.swift */; };
+		9BA0D03680946020FA63B836 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 52D23613D5A4548E6ED1DC61 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9673B93B2FA0CF1B2871781C /* CalendarHome.swift */; };
 		A23430DF01684011450429B0 /* SnoozeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C030AA4A5C60BA97D67967 /* SnoozeTests.swift */; };
 		A3E0E2277B4B5F9DC4A7B684 /* TodayLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5F03C89BEF58BE14D27246 /* TodayLists.swift */; };
 		A6473C7F7F96EC3412C7042B /* AlertDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237CDB66730A8EF85953929 /* AlertDefaults.swift */; };
 		B020B5D5B7487C2FE28904D2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899445C71BA33F55F900627C /* SettingsView.swift */; };
+		B1447CCA97E3FAA40F3515B7 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B15B651DA16E58DCDC2DDD2 /* ShareViewController.swift */; };
 		B2D31BC7229D7B0D9D29D054 /* WidgetReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF4B9693A4693C660AD04C6 /* WidgetReloader.swift */; };
 		B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */; };
 		BA408E39C1490A95CC22B832 /* AlertDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237CDB66730A8EF85953929 /* AlertDefaults.swift */; };
@@ -53,6 +63,7 @@
 		BEF42BEDD940B3CBDFF1D64C /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
 		C005E9D41BF922F041E36093 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		C34B03B351ADC04A1E07BCD4 /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
+		C3636E9775F739EE97805883 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
 		C70090AC8F0FD785C52BB016 /* LotsOfEventsWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0402A24B70100F3B45C53496 /* LotsOfEventsWatchApp.swift */; };
 		C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */; };
 		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
@@ -65,14 +76,24 @@
 		DDB3214DC52172670388D9E9 /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */; };
 		DE8FBE49EA3E7A607F4C9059 /* TodayDashboardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C051342E55B835AB128881 /* TodayDashboardWidget.swift */; };
 		E568F1FFFDA575B4F8F1C283 /* WidgetEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 890B42F875E8FE0B144EFD0C /* WidgetEditorView.swift */; };
+		E6AA5FE4408EBDE2CCB58565 /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
 		E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */; };
+		E8E2D6005EE1F175288CF112 /* MacLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933924AFD8B6D71F3D43E4EF /* MacLayout.swift */; };
 		E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */; };
 		EF1C716AE3DE20158E2B13DE /* Snooze.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C51F47226373F1925E9ABBA /* Snooze.swift */; };
 		F013A9C1B2BDA401090F1303 /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
+		F9565AAF7515BD1203E242B6 /* ICSImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */; };
 		F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0898CF5E782E3EF4B509C99C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 11894B270E91A0B1A4189F83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AEDD2C03296B0C37ACD040C1;
+			remoteInfo = ShareExtension;
+		};
 		20F9A8284788B890F18F0CC9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 11894B270E91A0B1A4189F83 /* Project object */;
@@ -104,6 +125,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				7D1037EFA6FE95C80BB68787 /* AgendaWidget.appex in Embed Foundation Extensions */,
+				9BA0D03680946020FA63B836 /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -132,6 +154,7 @@
 		1C82927FA5473572B5085650 /* WidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBundle.swift; sourceTree = "<group>"; };
 		1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixesAndFeaturesTests.swift; sourceTree = "<group>"; };
 		20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LotsOfEvents.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2493423CBECE4C6F918BADB9 /* ICSImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICSImportTests.swift; sourceTree = "<group>"; };
 		2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgets.swift; sourceTree = "<group>"; };
 		2DFDBEBA539F06412737D752 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
@@ -140,6 +163,7 @@
 		49C051342E55B835AB128881 /* TodayDashboardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboardWidget.swift; sourceTree = "<group>"; };
 		4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarExtras.swift; sourceTree = "<group>"; };
 		528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextEventLiveActivity.swift; sourceTree = "<group>"; };
+		52D23613D5A4548E6ED1DC61 /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
 		54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousAgenda.swift; sourceTree = "<group>"; };
 		5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFeatures.swift; sourceTree = "<group>"; };
@@ -149,6 +173,7 @@
 		6A1F163AD383754C42373941 /* TodayDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboard.swift; sourceTree = "<group>"; };
 		6E0355C3FB63242321937C6F /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		6EFB017E4A9EA736658E5795 /* QuickAddControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddControls.swift; sourceTree = "<group>"; };
+		6F8349E5142883CC3DE64C97 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7BF4B9693A4693C660AD04C6 /* WidgetReloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetReloader.swift; sourceTree = "<group>"; };
 		7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LotsOfEventsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -156,9 +181,11 @@
 		883A5E15068E6BD432BF3851 /* AgendaWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AgendaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		890B42F875E8FE0B144EFD0C /* WidgetEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetEditorView.swift; sourceTree = "<group>"; };
 		899445C71BA33F55F900627C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		8B15B651DA16E58DCDC2DDD2 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryStyle.swift; sourceTree = "<group>"; };
 		8C49FDA929D6FACECC3FDD02 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8F743E868923401A1D200EE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		933924AFD8B6D71F3D43E4EF /* MacLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLayout.swift; sourceTree = "<group>"; };
 		94242E0DB9C908EB386A826B /* AgendaData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaData.swift; sourceTree = "<group>"; };
 		9673B93B2FA0CF1B2871781C /* CalendarHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarHome.swift; sourceTree = "<group>"; };
 		9821B971D23D906C622837DD /* QuickAddDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddDictation.swift; sourceTree = "<group>"; };
@@ -168,6 +195,7 @@
 		9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAdd.swift; sourceTree = "<group>"; };
 		A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayRemindersWidget.swift; sourceTree = "<group>"; };
 		A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaQueryTests.swift; sourceTree = "<group>"; };
+		A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICSImport.swift; sourceTree = "<group>"; };
 		A95608F205F2304B576239DF /* AgendaTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaTabTests.swift; sourceTree = "<group>"; };
 		A9DE288F6D9EBC66175DAB67 /* UnifiedSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSearch.swift; sourceTree = "<group>"; };
 		ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCore.swift; sourceTree = "<group>"; };
@@ -195,9 +223,11 @@
 				54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */,
 				193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */,
 				8F743E868923401A1D200EE2 /* DesignSystem.swift */,
+				A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */,
 				3CBAF9DE5613BF613814BE64 /* Info.plist */,
 				09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */,
 				635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */,
+				933924AFD8B6D71F3D43E4EF /* MacLayout.swift */,
 				6E0355C3FB63242321937C6F /* MainView.swift */,
 				0AB5E02F0AC8E5911D573D7C /* NewListView.swift */,
 				9CDD06FD38EBFBA9521C006A /* QuickAdd.swift */,
@@ -233,6 +263,7 @@
 				C0161C5058495A411061D04D /* LotsOfEventsTests */,
 				761333E8C6AD5B867923D4FC /* LotsOfEventsWatch */,
 				C49D9AF82380ABD7E2EF3761 /* Shared */,
+				FC31199A4D9A594AB0B3AD78 /* ShareExtension */,
 				987D56426C916752CAF36451 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -244,6 +275,7 @@
 				20DF5B508FF275A14AE562A0 /* LotsOfEvents.app */,
 				808BE9F0AD0E7BCCAF2E388E /* LotsOfEventsTests.xctest */,
 				10736224638F58408661F524 /* LotsOfEventsWatch.app */,
+				52D23613D5A4548E6ED1DC61 /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -257,6 +289,7 @@
 				9C8FE968658F59115E5BA591 /* ContinuousAgendaTests.swift */,
 				BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */,
 				1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */,
+				2493423CBECE4C6F918BADB9 /* ICSImportTests.swift */,
 				F6C030AA4A5C60BA97D67967 /* SnoozeTests.swift */,
 				54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */,
 			);
@@ -295,6 +328,15 @@
 			path = AgendaWidget;
 			sourceTree = "<group>";
 		};
+		FC31199A4D9A594AB0B3AD78 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				6F8349E5142883CC3DE64C97 /* Info.plist */,
+				8B15B651DA16E58DCDC2DDD2 /* ShareViewController.swift */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -316,6 +358,24 @@
 			productReference = 883A5E15068E6BD432BF3851 /* AgendaWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		AEDD2C03296B0C37ACD040C1 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D92F1F752A773F9EDA54457A /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				7971B7ED00313BA599AED7DC /* Sources */,
+				DED1B20B3C63BB5910860655 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShareExtension;
+			packageProductDependencies = (
+			);
+			productName = ShareExtension;
+			productReference = 52D23613D5A4548E6ED1DC61 /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		C58AFEBE09C96E08D388355D /* LotsOfEvents */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8832DE74E260347187B5851F /* Build configuration list for PBXNativeTarget "LotsOfEvents" */;
@@ -329,6 +389,7 @@
 			);
 			dependencies = (
 				B483F7E4C49D1A6DCCEB8048 /* PBXTargetDependency */,
+				CC846FE6845CC2D45829FDEB /* PBXTargetDependency */,
 				38AC76DC09BB0BE64A4C7272 /* PBXTargetDependency */,
 			);
 			name = LotsOfEvents;
@@ -387,6 +448,10 @@
 						DevelopmentTeam = 76BJCJ4Q7X;
 						ProvisioningStyle = Automatic;
 					};
+					AEDD2C03296B0C37ACD040C1 = {
+						DevelopmentTeam = 76BJCJ4Q7X;
+						ProvisioningStyle = Automatic;
+					};
 					C58AFEBE09C96E08D388355D = {
 						DevelopmentTeam = 76BJCJ4Q7X;
 						ProvisioningStyle = Automatic;
@@ -417,6 +482,7 @@
 			targets = (
 				C58AFEBE09C96E08D388355D /* LotsOfEvents */,
 				324EFF245D3D0D8FA8DBB358 /* AgendaWidget */,
+				AEDD2C03296B0C37ACD040C1 /* ShareExtension */,
 				E873CF0C3A2B20947E20EA44 /* LotsOfEventsWatch */,
 				EA38F86A34D88A80331B3610 /* LotsOfEventsTests */,
 			);
@@ -449,6 +515,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DED1B20B3C63BB5910860655 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C3636E9775F739EE97805883 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -474,6 +548,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7971B7ED00313BA599AED7DC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3DD5F6602EDC8D978DE2087F /* AgendaConfiguration.swift in Sources */,
+				0335135B55A96DAACDCEF933 /* AgendaData.swift in Sources */,
+				8D8E855950358BD0C20B0C9B /* AlertDefaults.swift in Sources */,
+				0A666BBA9205F7A0F6741094 /* CalendarFeatures.swift in Sources */,
+				77E6581BC039E0987A838D52 /* GalleryStyle.swift in Sources */,
+				5B171F807A8EBAE9F2D2314F /* ICSImport.swift in Sources */,
+				E6AA5FE4408EBDE2CCB58565 /* QuickAddCore.swift in Sources */,
+				B1447CCA97E3FAA40F3515B7 /* ShareViewController.swift in Sources */,
+				547D081180E4517939FBDD68 /* WidgetStyle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC43C060E1DE359DD5EE6702 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -493,7 +583,9 @@
 				E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */,
 				8B0C0260612BCF4F72B2EFCD /* DesignSystem.swift in Sources */,
 				E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */,
+				F9565AAF7515BD1203E242B6 /* ICSImport.swift in Sources */,
 				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
+				E8E2D6005EE1F175288CF112 /* MacLayout.swift in Sources */,
 				C996037E77D3B8D325EFF313 /* MainView.swift in Sources */,
 				832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */,
 				64DB785A4DAF1790D2A6C4D3 /* QuickAdd.swift in Sources */,
@@ -532,6 +624,7 @@
 				859B60231D80C1B8CE73CA54 /* ContinuousAgendaTests.swift in Sources */,
 				4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */,
 				D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */,
+				8FE1090A5C1157BF9C6D42D2 /* ICSImportTests.swift in Sources */,
 				A23430DF01684011450429B0 /* SnoozeTests.swift in Sources */,
 				B50837EB98D45C424BA10427 /* WidgetAgendaTests.swift in Sources */,
 			);
@@ -547,6 +640,7 @@
 		};
 		38AC76DC09BB0BE64A4C7272 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = E873CF0C3A2B20947E20EA44 /* LotsOfEventsWatch */;
 			targetProxy = F9F68197A7A8CE3826DF865A /* PBXContainerItemProxy */;
 		};
@@ -554,6 +648,11 @@
 			isa = PBXTargetDependency;
 			target = 324EFF245D3D0D8FA8DBB358 /* AgendaWidget */;
 			targetProxy = 20F9A8284788B890F18F0CC9 /* PBXContainerItemProxy */;
+		};
+		CC846FE6845CC2D45829FDEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AEDD2C03296B0C37ACD040C1 /* ShareExtension */;
+			targetProxy = 0898CF5E782E3EF4B509C99C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -563,6 +662,8 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AgendaWidget/AgendaWidget.entitlements;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
 				INFOPLIST_FILE = AgendaWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Upcoming Agenda";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -572,6 +673,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.AgendaWidget;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -592,11 +695,35 @@
 			};
 			name = Release;
 		};
+		0F898FAF3EC10C661225B0A6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
+				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.ShareExtension;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		4D57DB4709559A9214A6BD0E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AgendaWidget/AgendaWidget.entitlements;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
 				INFOPLIST_FILE = AgendaWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Upcoming Agenda";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -606,6 +733,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.AgendaWidget;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -617,6 +746,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_OUTGOING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_AUDIO_INPUT[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CONTACTS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_LOCATION[sdk=macosx*]" = YES;
+				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -626,6 +762,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -637,6 +775,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LotsOfEvents/LotsOfEvents.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_OUTGOING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_AUDIO_INPUT[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CONTACTS[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_LOCATION[sdk=macosx*]" = YES;
+				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -646,6 +791,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -756,6 +903,28 @@
 			};
 			name = Release;
 		};
+		E90544B1E3942516EC0922B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_RESOURCE_ACCESS_CALENDARS[sdk=macosx*]" = YES;
+				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.walt.LotsOfEvents.ShareExtension;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		EBEB762E806622D6309C12C9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -853,6 +1022,15 @@
 			buildConfigurations = (
 				EBEB762E806622D6309C12C9 /* Debug */,
 				A40AB6C7416375C8503758C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D92F1F752A773F9EDA54457A /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E90544B1E3942516EC0922B8 /* Debug */,
+				0F898FAF3EC10C661225B0A6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

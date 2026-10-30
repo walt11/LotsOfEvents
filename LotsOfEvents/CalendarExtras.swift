@@ -5,7 +5,9 @@ import CoreLocation
 import MapKit
 import Contacts
 import UserNotifications
+#if !targetEnvironment(macCatalyst)
 import ActivityKit
+#endif
 import AppIntents
 import WidgetKit
 
@@ -177,25 +179,41 @@ struct WeatherBadge: View {
     private(set) static var estimates: [String: TimeInterval] = [:]
     private static var places: [String: CLLocation] = [:]
     static var enabled: Bool { Preferences.defaults.bool(forKey: key) }
+    private static var revision = 0
+    /// Keep eligible alerts while refreshing estimates; only remove alerts whose events disappeared or were disabled.
+    static func obsoleteIDs(pending: [String], eligible: Set<String>, enabled: Bool) -> [String] {
+        pending.filter { $0.hasPrefix("leave-") && (!enabled || !eligible.contains($0)) }
+    }
     static func update(events: [EKEvent]) async {
+        revision += 1
+        let current = revision
         let center = UNUserNotificationCenter.current()
         let old = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("leave-") }
-        center.removePendingNotificationRequests(withIdentifiers: old)
-        guard enabled else { estimates = [:]; return }
+        guard current == revision, !Task.isCancelled else { return }
         let soon = events.filter {
             !$0.isAllDay && $0.startDate > .now && $0.startDate < .now.addingTimeInterval(12 * 3600)
                 && ($0.structuredLocation?.geoLocation != nil || !($0.location ?? "").isEmpty)
                 && MeetingLink.url(url: nil, location: $0.location, notes: nil) == nil
         }
-        guard !soon.isEmpty, let here = await LocationProvider.current() else { return }
+        let eligible = Set(soon.map { "leave-\($0.occurrenceKey)" })
+        center.removePendingNotificationRequests(withIdentifiers: obsoleteIDs(pending: old, eligible: eligible, enabled: enabled))
+        guard enabled else { estimates = [:]; return }
+        guard !soon.isEmpty, let here = await LocationProvider.current(), current == revision, !Task.isCancelled else { return }
         for event in soon.prefix(8) {
-            guard let destination = await place(for: event), destination.distance(from: here) > 300 else { continue }
+            guard current == revision, !Task.isCancelled else { return }
+            guard let destination = await place(for: event) else { continue }
+            guard current == revision, !Task.isCancelled else { return }
+            if destination.distance(from: here) <= 300 {
+                center.removePendingNotificationRequests(withIdentifiers: ["leave-\(event.occurrenceKey)"])
+                continue
+            }
             let request = MKDirections.Request()
             request.source = MKMapItem(placemark: MKPlacemark(coordinate: here.coordinate))
             request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination.coordinate))
             request.transportType = .automobile
             request.departureDate = event.startDate.addingTimeInterval(-1800)
             guard let travel = try? await MKDirections(request: request).calculateETA().expectedTravelTime else { continue }
+            guard current == revision, !Task.isCancelled else { return }
             estimates[event.occurrenceKey] = travel
             let leave = event.startDate.addingTimeInterval(-travel - 300)
             guard leave > .now else { continue }
@@ -228,6 +246,7 @@ struct WeatherBadge: View {
     static let key = "nextEventActivity"
     static var enabled: Bool { Preferences.defaults.object(forKey: key) as? Bool ?? true }
     static func update(events: [EKEvent]) async {
+        #if !targetEnvironment(macCatalyst)
         let now = Date.now
         let next = events.filter { !$0.isAllDay && $0.endDate > now && $0.startDate < now.addingTimeInterval(3600) }
             .min { $0.startDate < $1.startDate }
@@ -245,6 +264,7 @@ struct WeatherBadge: View {
             updated = true
         }
         if !updated { _ = try? Activity.request(attributes: NextEventAttributes(eventID: event.occurrenceKey), content: content) }
+        #endif
     }
     private static func rgb(_ color: CGColor?) -> Int {
         guard let color, let srgb = CGColorSpace(name: CGColorSpace.sRGB),

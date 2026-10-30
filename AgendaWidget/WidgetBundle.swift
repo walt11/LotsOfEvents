@@ -15,6 +15,8 @@ struct LotsOfEventsWidgets: WidgetBundle {
         TodayRemindersWidget()
         QuickAddEventControl()
         QuickAddReminderControl()
+        #if !targetEnvironment(macCatalyst)
         NextEventLiveActivity()
+        #endif
     }
 }

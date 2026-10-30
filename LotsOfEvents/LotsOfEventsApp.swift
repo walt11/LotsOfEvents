@@ -31,7 +31,12 @@ struct LotsOfEventsApp: App {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
-    var body: some Scene { WindowGroup { MainView() } }
+    var body: some Scene {
+        WindowGroup { MainView() }
+        #if targetEnvironment(macCatalyst)
+        .commands { MacCalendarCommands() }
+        #endif
+    }
 }
 
 @MainActor
@@ -214,6 +219,9 @@ struct AgendaView: View {
         }
         .galleryRow()
         .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+        .deletableAgendaItem(model: model, item: item) {
+            if item.reminder, let reminder = model.reminder(withID: item.id) { SnoozeButtons(model: model, reminder: reminder) }
+        }
         .swipeActions(edge: .trailing) {
             if item.reminder, let reminder = model.reminder(withID: item.id) { SnoozeButtons(model: model, reminder: reminder) }
         }

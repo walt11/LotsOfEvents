@@ -183,3 +183,20 @@ private struct AppRowHeightModifier: ViewModifier {
         content.environment(\.defaultMinListRowHeight, base + (AppDensity(rawValue: densityID) ?? .standard).rowHeightChange)
     }
 }
+
+/// A list or card section title: sentence case, footnote weight, with an optional count or note on the right.
+struct SectionHeader: View {
+    let title: String
+    var trailing: String? = nil
+    var tint: Color = GalleryPalette.muted
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).foregroundStyle(tint)
+            Spacer(minLength: 8)
+            if let trailing { Text(trailing).foregroundStyle(GalleryPalette.muted) }
+        }
+        .font(.footnote.weight(.semibold))
+        .textCase(nil)
+        .accessibilityAddTraits(.isHeader)
+    }
+}

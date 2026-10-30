@@ -339,7 +339,8 @@ struct InlineReminderDraft: Equatable {
         let today = calendar.startOfDay(for: now)
         let base: Date
         switch day {
-        case nil, .today: base = today
+        case nil: base = parsed.date.map { calendar.startOfDay(for: $0) } ?? today
+        case .today: base = today
         case .tomorrow: base = calendar.date(byAdding: .day, value: 1, to: today)!
         case .weekend:
             base = calendar.isDateInWeekend(now) ? today
@@ -348,10 +349,11 @@ struct InlineReminderDraft: Equatable {
             base = calendar.startOfDay(for: calendar.nextDate(after: now, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime)!)
         case .custom(let date): base = calendar.startOfDay(for: date)
         }
-        guard let time, let hour = time.hour else { return (parsed.title, base, false) }
+        let resolvedTime = time ?? (parsed.allDay ? nil : parsed.date.map { calendar.dateComponents([.hour, .minute], from: $0) })
+        guard let time = resolvedTime, let hour = time.hour else { return (parsed.title, base, false) }
         var due = calendar.date(bySettingHour: hour, minute: time.minute ?? 0, second: 0, of: base)!
         // A time picked with no day means its next occurrence.
-        if day == nil && due <= now { due = calendar.date(byAdding: .day, value: 1, to: due)! }
+        if day == nil && parsed.date == nil && due <= now { due = calendar.date(byAdding: .day, value: 1, to: due)! }
         return (parsed.title, due, true)
     }
 }
@@ -446,8 +448,8 @@ struct ReminderOptionsButton: View {
 @MainActor
 enum InlineReminderSaver {
     static func save(text: String, draft: InlineReminderDraft, defaultToToday: Bool, listID: String?, model: AgendaModel) throws -> Bool {
-        let (repeats, rest) = QuickAddParser.extractRepeat(text)
-        var resolved = draft.resolve(rest)
+        let repeats = QuickAddParser.parse(text).repeats
+        var resolved = draft.resolve(text)
         guard !resolved.title.isEmpty else { return false }
         // A repeating reminder needs a due date to repeat from.
         if resolved.due == nil && (defaultToToday || repeats != nil) { resolved.due = Calendar.current.startOfDay(for: .now) }

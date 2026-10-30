@@ -4,23 +4,6 @@ import EventKit
 // The pieces every tab is built from, so Calendar, Agenda, Reminders, and search look and behave alike:
 // one section header, one row of mode chips, one event row, one toolbar layout, and one search.
 
-/// A list or card section title: sentence case, footnote weight, with an optional count or note on the right.
-struct SectionHeader: View {
-    let title: String
-    var trailing: String? = nil
-    var tint: Color = GalleryPalette.muted
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).foregroundStyle(tint)
-            Spacer(minLength: 8)
-            if let trailing { Text(trailing).foregroundStyle(GalleryPalette.muted) }
-        }
-        .font(.footnote.weight(.semibold))
-        .textCase(nil)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
 /// The row of capsules under the title that switches a tab's view, used by Calendar and Reminders.
 /// It scrolls sideways, so it works at every text size, and keeps the chosen chip in view.
 struct ChipBar<Value: Hashable>: View {
@@ -149,5 +132,45 @@ struct SearchSheet: View {
             .navigationTitle("Search").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+/// Touch and hold an agenda item for Delete, below any other actions the row offers.
+/// A repeating event asks whether to delete just this one or all future ones, like Apple's Calendar.
+private struct DeletableAgendaItem<Extra: View>: ViewModifier {
+    @ObservedObject var model: AgendaModel
+    let item: AgendaItem
+    let extra: Extra
+    @State private var repeating: EKEvent?
+    func body(content: Content) -> some View {
+        content
+            .contextMenu {
+                extra
+                // Birthdays come from Contacts and can't be deleted here.
+                if !item.birthday {
+                    Button(item.reminder ? "Delete Reminder" : "Delete Event", systemImage: "trash", role: .destructive, action: delete)
+                }
+            }
+            .confirmationDialog("This is a repeating event.", isPresented: Binding(get: { repeating != nil }, set: { if !$0 { repeating = nil } }),
+                                titleVisibility: .visible, presenting: repeating) { event in
+                Button("Delete This Event Only", role: .destructive) { model.delete(event, span: .thisEvent) }
+                Button("Delete All Future Events", role: .destructive) { model.delete(event, span: .futureEvents) }
+            }
+    }
+    private func delete() {
+        if item.reminder {
+            guard let reminder = model.reminder(withID: item.sourceID ?? item.id) else { model.error = "This reminder no longer exists. Refresh your agenda."; return }
+            guard reminder.calendar?.allowsContentModifications == true else { model.error = "This list is read-only."; return }
+            do { try model.delete(reminder) } catch { model.error = error.localizedDescription }
+        } else {
+            guard let event = model.event(for: item) else { model.error = "This event changed or was removed. Refresh your agenda."; return }
+            if event.hasRecurrenceRules { repeating = event } else { model.delete(event) }
+        }
+    }
+}
+
+extension View {
+    func deletableAgendaItem<Extra: View>(model: AgendaModel, item: AgendaItem, @ViewBuilder extra: () -> Extra = { EmptyView() }) -> some View {
+        modifier(DeletableAgendaItem(model: model, item: item, extra: extra()))
     }
 }

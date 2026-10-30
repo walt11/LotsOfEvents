@@ -4,11 +4,13 @@ import EventKitUI
 import WidgetKit
 
 enum AppSheet: Identifiable {
-    case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar), search, sources(reminders: Bool)
+    case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar), search, sources(reminders: Bool), importICS([ICSEvent]), settings
     var id: String {
         switch self {
         case .newList: return "new-list"
         case .search: return "search"
+        case .importICS: return "import-ics"
+        case .settings: return "settings"
         case .sources(let reminders): return "sources-\(reminders)"
         case .editList(let list): return "edit-list-\(list.calendarIdentifier)"
         case .quickAdd: return "quick-add"
@@ -36,7 +38,11 @@ struct MainView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
         Group {
+            #if targetEnvironment(macCatalyst)
+            MacLayout(model: model)
+            #else
             if sizeClass == .regular { sidebarLayout } else { phoneLayout }
+            #endif
         }
         // Theme colors are read when views are built, so a new theme rebuilds them.
         .id(themeID + customColorsID)
@@ -64,6 +70,7 @@ struct MainView: View {
             WidgetReloader.schedule()
         }
         .onOpenURL { url in
+            if url.isFileURL { model.importCalendarFile(url); return }
             guard url.scheme == "lotsofevents" else { return }
             if url.host == "new" { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
             else if url.host == "quick-add" {
@@ -73,7 +80,12 @@ struct MainView: View {
                 let day = items.first { $0.name == "day" }?.value.flatMap(TimeInterval.init).map(Date.init(timeIntervalSince1970:))
                 model.sheet = .quickAdd(reminder: items.contains { $0.name == "type" && $0.value == "reminder" }, day: day)
             }
-            else if url.host == "reminders" { tab = 2 }
+            else if url.host == "reminders" {
+                tab = 2
+                #if targetEnvironment(macCatalyst)
+                Preferences.defaults.set(MacView.reminders.rawValue, forKey: "macView")
+                #endif
+            }
             else if url.host == "calendar" { tab = 0 }
             else { tab = 1 }
         }
@@ -87,6 +99,8 @@ struct MainView: View {
             case .newList: NewListView(model: model)
             case .editList(let list): NewListView(model: model, editing: list)
             case .search: SearchSheet(model: model)
+            case .importICS(let events): ICSImportView(store: model.store, events: events)
+            case .settings: SourcesView(model: model) { model.sheet = nil }.frame(minWidth: 560, minHeight: 640)
             case .sources(let reminders):
                 NavigationStack {
                     SourcePickerView(model: model, reminders: reminders)
@@ -226,14 +240,34 @@ extension AgendaModel {
             if let reminder = store.calendarItem(withIdentifier: item.sourceID ?? item.id) as? EKReminder { sheet = .reminder(reminder, nil) }
             else { error = "This reminder no longer exists. Refresh your agenda." }
         } else {
-            // Resolve the exact occurrence, rather than another instance of a recurring event.
-            let day = Calendar.current.startOfDay(for: item.date)
-            let range = DateInterval(start: day, end: Calendar.current.date(byAdding: .day, value: 1, to: day)!)
-            if let event = events(in: range).first(where: {
-                "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)" == (item.sourceID ?? item.id)
-            }) { sheet = .event(event) }
+            if let event = event(for: item) { sheet = .event(event) }
             else { error = "This event changed or was removed. Refresh your agenda." }
         }
+    }
+    /// The exact occurrence an agenda row shows, rather than another instance of a recurring event.
+    func event(for item: AgendaItem) -> EKEvent? {
+        let day = Calendar.current.startOfDay(for: item.date)
+        let range = DateInterval(start: day, end: Calendar.current.date(byAdding: .day, value: 1, to: day)!)
+        return events(in: range).first {
+            "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)" == (item.sourceID ?? item.id)
+        }
+    }
+    /// Deletes an event. A one-time event can be brought back with Undo (as a copy with a new identifier).
+    func delete(_ event: EKEvent, span: EKSpan = .thisEvent) {
+        guard event.calendar?.allowsContentModifications == true else { error = "This calendar is read-only."; return }
+        let snapshot = event.hasRecurrenceRules ? nil : EventSnapshot(event)
+        do {
+            try store.remove(event, span: span, commit: true)
+            let title = event.title ?? "Event"
+            if let snapshot {
+                undo = UndoAction(message: "Deleted “\(title)”") { [weak self] in
+                    guard let self else { return }
+                    do { try snapshot.restore(in: self.store); self.scheduleRefresh() }
+                    catch { self.error = error.localizedDescription }
+                }
+            }
+            scheduleRefresh()
+        } catch { self.error = error.localizedDescription }
     }
     func toggle(_ reminder: EKReminder, offerUndo: Bool = true) {
         guard reminder.isWritable else { error = "This list is read-only."; return }
@@ -274,6 +308,18 @@ extension AgendaModel {
             self.error = error.localizedDescription
         }
     }
+    /// Opens the Add to Calendar sheet for an .ics file shared to the app or picked in Settings.
+    func importCalendarFile(_ url: URL) {
+        guard calendarAccess else {
+            error = "Allow LotsOfEvents to use your calendars to add events from a file."
+            errorOffersSettings = true
+            return
+        }
+        do { sheet = .importICS(try ICSParser.events(at: url)) }
+        catch { self.error = "The file couldn't be read. \(error.localizedDescription)" }
+        // Files shared to the app arrive as a copy in an "…Inbox" folder; it isn't needed once read.
+        if url.deletingLastPathComponent().lastPathComponent.hasSuffix("Inbox") { try? FileManager.default.removeItem(at: url) }
+    }
     /// Changes when one occurrence of an event ends, with Undo.
     func resize(_ event: EKEvent, end: Date) {
         let originalEnd = event.endDate!
@@ -303,6 +349,52 @@ extension AgendaModel {
             catch { self.error = error.localizedDescription }
         }
         scheduleRefresh()
+    }
+}
+
+/// A one-time event's details, kept so Undo can recreate it after a delete.
+struct EventSnapshot {
+    let title: String?
+    let location: String?
+    let structuredLocation: EKStructuredLocation?
+    let notes: String?
+    let url: URL?
+    let allDay: Bool
+    let start: Date
+    let end: Date
+    let timeZone: TimeZone?
+    let availability: EKEventAvailability
+    let calendarID: String
+    let alarms: [EKAlarm]?
+    init(_ event: EKEvent) {
+        title = event.title
+        location = event.location
+        structuredLocation = event.structuredLocation?.copy() as? EKStructuredLocation
+        notes = event.notes
+        url = event.url
+        allDay = event.isAllDay
+        start = event.startDate
+        end = event.endDate
+        timeZone = event.timeZone
+        availability = event.availability
+        calendarID = event.calendar?.calendarIdentifier ?? ""
+        alarms = event.alarms?.compactMap { $0.copy() as? EKAlarm }
+    }
+    func restore(in store: EKEventStore) throws {
+        let event = EKEvent(eventStore: store)
+        event.title = title
+        event.location = location
+        event.structuredLocation = structuredLocation
+        event.notes = notes
+        event.url = url
+        event.isAllDay = allDay
+        event.timeZone = timeZone
+        event.startDate = start
+        event.endDate = end
+        event.availability = availability
+        event.calendar = store.calendar(withIdentifier: calendarID) ?? store.defaultCalendarForNewEvents
+        event.alarms = alarms
+        try store.save(event, span: .thisEvent, commit: true)
     }
 }
 

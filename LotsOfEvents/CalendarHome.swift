@@ -59,7 +59,9 @@ enum CalendarDates {
     static func sweep(day: Date, from startY: CGFloat, to endY: CGFloat, hourHeight: CGFloat, calendar: Calendar = .current) -> DateInterval {
         func time(_ y: CGFloat) -> Date {
             let minutes = max(0, min(24 * 60, Double(y / hourHeight) * 60))
-            return calendar.date(byAdding: .minute, value: Int((minutes / 15).rounded()) * 15, to: calendar.startOfDay(for: day))!
+            let rounded = Int((minutes / 15).rounded()) * 15
+            if rounded == 1440 { return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day))! }
+            return calendar.date(bySettingHour: rounded / 60, minute: rounded % 60, second: 0, of: day)!
         }
         let start = time(min(startY, endY))
         return DateInterval(start: start, end: max(time(max(startY, endY)), start.addingTimeInterval(900)))
@@ -97,6 +99,9 @@ enum CalendarDates {
 struct CalendarHome: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
+    /// Shown inside the Mac window, whose own header switches views, moves between dates, and holds search,
+    /// so the chips, date row, and bar are left out.
+    var embedded = false
     // Kept on the model so a theme change, which rebuilds the views, doesn't jump back to today.
     private var date: Date {
         get { model.calendarDate }
@@ -142,8 +147,10 @@ struct CalendarHome: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ChipBar(options: CalendarDisplay.allCases, selection: $model.calendarMode) { $0.rawValue }
-                navigation
+                if !embedded {
+                    ChipBar(options: CalendarDisplay.allCases, selection: $model.calendarMode) { $0.rawValue }
+                    navigation
+                }
                 if !model.calendarAccess {
                     AccessCard(title: "Your calendars, together", description: "Connect Apple Calendar to browse and manage events from your synced accounts.") { Task { await model.request(.event) } }
                 } else {
@@ -162,6 +169,7 @@ struct CalendarHome: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
             .tabToolbar(model: model, today: { date = .now }) { CalendarSetsMenu(model: model) }
+            .toolbar(embedded ? .hidden : .visible, for: .navigationBar)
             .tint(accent)
             .onAppear(perform: reload)
             .onChange(of: date) { _, _ in reload() }

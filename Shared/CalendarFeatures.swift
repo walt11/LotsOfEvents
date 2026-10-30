@@ -1,6 +1,8 @@
 import Foundation
 import EventKit
+#if !targetEnvironment(macCatalyst)
 import ActivityKit
+#endif
 
 /// Finds a video-call link (Zoom, Google Meet, Teams, Webex, FaceTime, and others) in an event's URL, location, or notes.
 enum MeetingLink {
@@ -90,7 +92,9 @@ struct CalendarSet: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// The Live Activity for the next event: a countdown on the Lock Screen and in the Dynamic Island.
+#if !targetEnvironment(macCatalyst)
+/// The Live Activity for the next event: a countdown on the Lock Screen and in the Dynamic Island. iPhone only;
+/// the Mac has no Live Activities.
 struct NextEventAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var title: String
@@ -103,3 +107,4 @@ struct NextEventAttributes: ActivityAttributes {
     /// Which event the activity follows, so a moved or different event replaces it.
     var eventID: String
 }
+#endif

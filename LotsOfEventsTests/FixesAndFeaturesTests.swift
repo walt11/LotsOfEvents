@@ -602,3 +602,59 @@ final class CalendarFeatureTests: XCTestCase {
         CalendarSet.activeID = nil
     }
 }
+
+@MainActor
+final class ReviewRegressionTests: XCTestCase {
+    private var calendar: Calendar {
+        var result = Calendar(identifier: .gregorian)
+        result.timeZone = TimeZone(identifier: "America/Chicago")!
+        return result
+    }
+
+    func testSweepingUsesClockHoursOnBothDSTTransitions() {
+        for (month, day) in [(3, 8), (11, 1)] {
+            let date = calendar.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let range = CalendarDates.sweep(day: date, from: 9 * 52, to: 10 * 52, hourHeight: 52, calendar: calendar)
+            XCTAssertEqual(calendar.component(.hour, from: range.start), 9)
+            XCTAssertEqual(calendar.component(.hour, from: range.end), 10)
+            let midnight = CalendarDates.sweep(day: date, from: 23 * 52, to: 24 * 52, hourHeight: 52, calendar: calendar).end
+            XCTAssertEqual(calendar.component(.hour, from: midnight), 0)
+            XCTAssertEqual(calendar.component(.day, from: midnight), day + 1)
+        }
+    }
+
+    func testPickingTimePreservesTypedDay() {
+        let text = "Call plumber next Friday"
+        let parsed = QuickAddParser.parse(text, calendar: calendar)
+        XCTAssertNotNil(parsed.date)
+        var draft = InlineReminderDraft()
+        draft.time = DateComponents(hour: 9, minute: 0)
+        let result = draft.resolve(text, calendar: calendar)
+        XCTAssertEqual(result.due.map { calendar.startOfDay(for: $0) }, parsed.date.map { calendar.startOfDay(for: $0) })
+        XCTAssertEqual(result.due.map { calendar.component(.hour, from: $0) }, 9)
+        XCTAssertTrue(result.timed)
+    }
+
+    func testPickingDayPreservesTypedTime() {
+        var draft = InlineReminderDraft()
+        let day = calendar.date(from: DateComponents(year: 2026, month: 12, day: 4))!
+        draft.day = .custom(day)
+        let result = draft.resolve("Call plumber at 3pm", calendar: calendar)
+        XCTAssertEqual(result.due.map { calendar.startOfDay(for: $0) }, day)
+        XCTAssertEqual(result.due.map { calendar.component(.hour, from: $0) }, 15)
+        XCTAssertTrue(result.timed)
+    }
+
+    func testFailedTravelRefreshKeepsEligibleAlerts() {
+        XCTAssertEqual(TravelAlerts.obsoleteIDs(pending: ["leave-existing", "leave-deleted", "other"], eligible: ["leave-existing"], enabled: true), ["leave-deleted"])
+        XCTAssertEqual(TravelAlerts.obsoleteIDs(pending: ["leave-existing", "other"], eligible: ["leave-existing"], enabled: false), ["leave-existing"])
+    }
+
+    func testMacExposesRemindersAlongsideCalendarModes() {
+        XCTAssertTrue(MacView.allCases.contains(.reminders))
+        XCTAssertNil(MacView.reminders.calendarMode)
+        for mode in [CalendarDisplay.day, .threeDay, .week, .month, .year] {
+            XCTAssertEqual(MacView.allCases.filter { $0.calendarMode == mode }.count, 1)
+        }
+    }
+}

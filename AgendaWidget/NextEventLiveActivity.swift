@@ -1,3 +1,5 @@
+// Live Activities exist only on iPhone, so the Mac widget extension leaves this out.
+#if !targetEnvironment(macCatalyst)
 import SwiftUI
 import WidgetKit
 import ActivityKit
@@ -65,3 +67,4 @@ struct NextEventLiveActivity: Widget {
         state.start > .now ? Text(timerInterval: Date.now...state.start, countsDown: true) : Text(timerInterval: state.start...state.end, countsDown: true)
     }
 }
+#endif

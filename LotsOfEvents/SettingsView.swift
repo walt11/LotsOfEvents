@@ -2,10 +2,13 @@ import SwiftUI
 import EventKit
 import WidgetKit
 import Contacts
+import UniformTypeIdentifiers
 
 struct SourcesView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
+    /// Closes Settings when it's shown as a sheet, as on the Mac; the iPhone shows it as a tab instead.
+    var done: (() -> Void)? = nil
     @AppStorage(AppTextSize.key, store: Preferences.defaults) private var textSizeID = AppTextSize.automatic.rawValue
     @AppStorage(AppDensity.key, store: Preferences.defaults) private var densityID = AppDensity.standard.rawValue
     @AppStorage(AppTheme.key, store: Preferences.defaults) private var appThemeID = AppTheme.graphite.rawValue
@@ -23,6 +26,7 @@ struct SourcesView: View {
     @AppStorage(TravelAlerts.key, store: Preferences.defaults) private var timeToLeave = false
     @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
     @ObservedObject private var weather = WeatherStore.shared
+    @State private var importing = false
     var body: some View {
         NavigationStack {
             List {
@@ -49,6 +53,13 @@ struct SourcesView: View {
                     NavigationLink { CalendarSetsView(model: model) } label: {
                         settingsRow("Calendar sets", symbol: "line.3.horizontal.decrease.circle", color: .indigo,
                                     detail: CalendarSet.saved.isEmpty ? "Groups like Work and Personal · Focus filters" : "\(CalendarSet.saved.count) saved · switch with the filter button")
+                    }
+                    Button { importing = true } label: {
+                        settingsRow("Import calendar file", symbol: "square.and.arrow.down", color: .teal,
+                                    detail: "Add events from an .ics file · or share one to LotsOfEvents")
+                    }
+                    .fileImporter(isPresented: $importing, allowedContentTypes: [.ics, .calendarEvent]) { result in
+                        if case .success(let url) = result { model.importCalendarFile(url) }
                     }
                 } header: { SectionHeader(title: "Calendars & Lists") }
                 .listRowBackground(GalleryPalette.card)
@@ -118,8 +129,10 @@ struct SourcesView: View {
                                 model.scheduleRefresh()
                             }
                         }
+                    #if !targetEnvironment(macCatalyst)
                     Toggle(isOn: $liveActivity) { settingsRow("Next event countdown", symbol: "timer", color: .purple, detail: "Live Activity on the Lock Screen and Dynamic Island") }
                         .onChange(of: liveActivity) { _, _ in model.scheduleRefresh() }
+                    #endif
                 } header: { SectionHeader(title: "Notifications") }.listRowBackground(GalleryPalette.card)
                 Section {
                     NavigationLink {
@@ -160,6 +173,12 @@ struct SourcesView: View {
             .galleryTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
+            .toolbar {
+                if let done {
+                    // Escape closes it too.
+                    ToolbarItem(placement: .confirmationAction) { Button("Done", action: done).keyboardShortcut(.cancelAction) }
+                }
+            }
             .tint(accent)
         }
     }
