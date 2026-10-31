@@ -1,0 +1,122 @@
+{
+  "appID": "6826862370",
+  "version": "1.0",
+  "build": "24",
+  "updatedAt": "2026-10-31T21:05:50.858014+00:00",
+  "notSubmitted": false,
+  "platforms": {
+    "iOS": {
+      "versionID": "de027e44-9f81-4f6f-9337-1d59f1f40fc7",
+      "buildID": "99eca2e6-f33a-4bb4-8e13-9dffdff5d27c",
+      "buildProcessingState": "VALID",
+      "versionState": "WAITING_FOR_REVIEW",
+      "releaseType": "AFTER_APPROVAL",
+      "reviewDraftID": "c45ecf3d-1b9e-44e7-9490-f9f68c71a9ec",
+      "reviewItemID": "YzQ1ZWNmM2QtMWI5ZS00NGU3LTk0OTAtZjlmNjhjNzFhOWVjfDZ8ODkzODYyODQ1",
+      "reviewItemState": "READY_FOR_REVIEW",
+      "submittedDate": "2026-10-31T21:05:27.972Z",
+      "archive": "/Users/walt/Library/Developer/Xcode/Archives/2026-10-31/LotsOfEvents-1.0-build24.xcarchive",
+      "reviewSubmissionState": "WAITING_FOR_REVIEW",
+      "submissionRequested": true
+    },
+    "Mac": {
+      "versionID": "f76e8002-e29c-46b9-9a90-0d5412fe04f0",
+      "buildID": "f76632a9-5922-4e50-95cc-ff9225d3d120",
+      "buildProcessingState": "VALID",
+      "versionState": "WAITING_FOR_REVIEW",
+      "releaseType": "AFTER_APPROVAL",
+      "reviewDraftID": "245e4143-d264-4139-94c8-294398605c37",
+      "reviewItemID": "MjQ1ZTQxNDMtZDI2NC00MTM5LTk0YzgtMjk0Mzk4NjA1YzM3fDZ8ODk0MzAwNTA2",
+      "reviewItemState": "READY_FOR_REVIEW",
+      "submittedDate": "2026-10-31T21:05:31.615Z",
+      "archive": "/Users/walt/Library/Developer/Xcode/Archives/2026-10-31/LotsOfEvents-Mac-1.0-build24.xcarchive",
+      "reviewSubmissionState": "WAITING_FOR_REVIEW",
+      "submissionRequested": true
+    }
+  },
+  "screenshots": {
+    "APP_IPHONE_67": {
+      "count": 5,
+      "state": "COMPLETE",
+      "setID": "962ed92a-7781-410f-9df0-fd5996412965",
+      "assetIDs": [
+        "9e400019-6e9a-8722-803d-2c5b3bc7e388",
+        "e9c00019-6e9a-8722-803e-4f2a7ef99910",
+        "73c00019-6e9a-8722-8004-e4f1ce397f3a",
+        "8c400019-6e9a-8722-801d-a7adb5878f1e",
+        "4f000019-6e9a-8722-8026-77f33a520f48"
+      ]
+    },
+    "APP_IPAD_PRO_3GEN_129": {
+      "count": 5,
+      "state": "COMPLETE",
+      "setID": "d6e18bed-abf2-4d8e-9350-e495a3dbb7db",
+      "assetIDs": [
+        "9b000019-6e9a-8722-8011-1b631d28ac58",
+        "6c400019-6e9a-8722-802a-72501d3b1583",
+        "b4400019-6e9a-8722-802b-f7a6eeb0ab19",
+        "c7c00019-6e9a-8722-8004-aa1b5ed3db9a",
+        "7e400019-6e9a-8722-8025-aaf42d5986e9"
+      ]
+    },
+    "APP_WATCH_SERIES_10": {
+      "count": 5,
+      "state": "COMPLETE",
+      "setID": "be8da587-1b6c-4d02-990f-1e21d477e092",
+      "assetIDs": [
+        "9c000019-6e9a-8722-802c-6d8b2952be99",
+        "50c00019-6e9a-8722-800c-2ce2725bfb76",
+        "e8000019-6e9a-8722-8030-24e3561d5cc1",
+        "4c800019-6e9a-8722-8030-75015356253e",
+        "92000019-6e9a-8722-8030-9ce7bcee7d2d"
+      ]
+    },
+    "APP_IPHONE_DUO": {
+      "count": 5,
+      "state": "COMPLETE",
+      "setID": "9e02ffed-1bdd-413f-b4cf-e6fcb4be399d",
+      "assetIDs": [
+        "66400019-6e9a-8722-8023-2b55b5afde92",
+        "77800019-6e9a-8722-8022-b8f48ce80a6d",
+        "df400019-6e9a-8722-8031-ab3e3b87a395",
+        "c42193e6-0fdd-44dd-95f4-5e365eb6a2d7",
+        "ab000019-6e9a-8722-8023-c3a9bc3ed186"
+      ]
+    },
+    "APP_DESKTOP": {
+      "count": 5,
+      "state": "COMPLETE",
+      "setID": "60b3c2a8-72bc-4d84-b07d-580e0ac0dd25",
+      "assetIDs": [
+        "d1800019-6e9a-8722-802f-41267350097a",
+        "f5400019-6e9a-8722-8012-bb76048921d2",
+        "48000019-6e9a-8722-803b-46920eef69ee",
+        "29000019-6e9a-8722-8011-cd47d7bbfe5e",
+        "79000019-6e9a-8722-800b-b9b87f7a6c4a"
+      ]
+    }
+  },
+  "listing": {
+    "description": "saved for iOS and Mac",
+    "reviewNotes": "updated for contact dates and calendar tasks",
+    "reviewContact": "saved for iOS and Mac",
+    "copyright": "2026 John Walter",
+    "category": "Productivity",
+    "pricing": "Free",
+    "availability": "175 territories and new territories",
+    "supportURL": "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/index.html",
+    "privacyURL": "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/privacy.html",
+    "publicPages": "verified HTTP 200",
+    "privacyQuestionnaire": "published; Apple review-draft validation passed"
+  },
+  "validation": {
+    "latestFullTestSuite": 122,
+    "failures": 0,
+    "iOSReleaseArchive": "passed",
+    "MacReleaseArchive": "passed",
+    "quickAddNoDueDateUI": "verified: date cleared and time disabled"
+  },
+  "pending": [
+    "Apple App Review; manual release after approval"
+  ]
+}

@@ -8,13 +8,16 @@
 
 /* Begin PBXBuildFile section */
 		0335135B55A96DAACDCEF933 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
+		05E5763817EB173945149C0C /* ContactDatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3F3D7A1527217C4EBC6BBD /* ContactDatesView.swift */; };
 		05FDB80A9B0FE10CCAD5F3CB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
 		0A666BBA9205F7A0F6741094 /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
+		0F47C90E3E894AB737AF9C6E /* ContactDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38CA12AE78C2FF9B3B6A845 /* ContactDates.swift */; };
 		0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
 		12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */; };
 		133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD19F0B5932E288DC53C3FD /* DashboardWidgets.swift */; };
 		13C1E097CA52A91D441FAF47 /* CalendarExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */; };
 		15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */; };
+		15DB779D6FEF3D206040D2FC /* MacEventDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F38B2FE5D7EDB86F488CDCE /* MacEventDetails.swift */; };
 		207305F308E774F2BBF08D78 /* WidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C82927FA5473572B5085650 /* WidgetBundle.swift */; };
 		245DD2421833CEC41F6D6DE1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */; };
 		275F3E28B4FAF0DED76F207C /* QuickAddCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */; };
@@ -31,6 +34,7 @@
 		51D8139174C5DAD4B74879BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DFDBEBA539F06412737D752 /* Assets.xcassets */; };
 		547D081180E4517939FBDD68 /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE5007AD586AB60ACF26E4 /* WidgetStyle.swift */; };
 		55EE29BEBFBFD193C50D66BE /* CalendarFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */; };
+		59B2781FD71CB1475D4D77B0 /* ContactDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38CA12AE78C2FF9B3B6A845 /* ContactDates.swift */; };
 		5B171F807A8EBAE9F2D2314F /* ICSImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */; };
 		5F4B339A127C6B1A7F4AD3A1 /* TodayRemindersWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36A03C21E302D0F5DBE7F34 /* TodayRemindersWidget.swift */; };
 		626E6619AFFB33D3FFAD389B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 822EF3079EA48BD159AAC26B /* Assets.xcassets */; };
@@ -69,6 +73,7 @@
 		C996037E77D3B8D325EFF313 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0355C3FB63242321937C6F /* MainView.swift */; };
 		CB776DF48C36FAE6DEC2E5F3 /* TodayDashboardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C051342E55B835AB128881 /* TodayDashboardWidget.swift */; };
 		D131D584D22E405E9E82EDC5 /* AgendaConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */; };
+		D1BF19FDF34DE6135EAE70E5 /* ContactDatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5075175522D1F05252D209D3 /* ContactDatesTests.swift */; };
 		D7041D7165876ADBE87FBAEB /* RemindersHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4685BCA4E88411E3F69B19 /* RemindersHome.swift */; };
 		D874E0B9BFCD922A9B3D2DD3 /* AgendaData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94242E0DB9C908EB386A826B /* AgendaData.swift */; };
 		D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */; };
@@ -80,6 +85,7 @@
 		E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */; };
 		E8E2D6005EE1F175288CF112 /* MacLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 933924AFD8B6D71F3D43E4EF /* MacLayout.swift */; };
 		E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */; };
+		EDA0994747F8DE10F7C5AA99 /* ContactDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38CA12AE78C2FF9B3B6A845 /* ContactDates.swift */; };
 		EF1C716AE3DE20158E2B13DE /* Snooze.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C51F47226373F1925E9ABBA /* Snooze.swift */; };
 		F013A9C1B2BDA401090F1303 /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC2F894EDDE3205D5A053E /* AgendaWidget.swift */; };
 		F9565AAF7515BD1203E242B6 /* ICSImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83E2F531E3AF0033EE8BF45 /* ICSImport.swift */; };
@@ -159,9 +165,11 @@
 		2DFDBEBA539F06412737D752 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		34319BBB02FADA3BAE2C5ECB /* AgendaConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaConfiguration.swift; sourceTree = "<group>"; };
 		3CBAF9DE5613BF613814BE64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		3F38B2FE5D7EDB86F488CDCE /* MacEventDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEventDetails.swift; sourceTree = "<group>"; };
 		41F3414C40841ADF88F50E23 /* AppCustomizationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCustomizationViews.swift; sourceTree = "<group>"; };
 		49C051342E55B835AB128881 /* TodayDashboardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDashboardWidget.swift; sourceTree = "<group>"; };
 		4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarExtras.swift; sourceTree = "<group>"; };
+		5075175522D1F05252D209D3 /* ContactDatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDatesTests.swift; sourceTree = "<group>"; };
 		528392B1794830F96DEFA4EE /* NextEventLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextEventLiveActivity.swift; sourceTree = "<group>"; };
 		52D23613D5A4548E6ED1DC61 /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		54B75253A9C378428973CA7A /* WidgetAgendaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetAgendaTests.swift; sourceTree = "<group>"; };
@@ -199,6 +207,7 @@
 		A95608F205F2304B576239DF /* AgendaTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaTabTests.swift; sourceTree = "<group>"; };
 		A9DE288F6D9EBC66175DAB67 /* UnifiedSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSearch.swift; sourceTree = "<group>"; };
 		ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCore.swift; sourceTree = "<group>"; };
+		B38CA12AE78C2FF9B3B6A845 /* ContactDates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDates.swift; sourceTree = "<group>"; };
 		B74A5F84D14316A78E1F0FA0 /* AppAccent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccent.swift; sourceTree = "<group>"; };
 		BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWidgetTests.swift; sourceTree = "<group>"; };
 		D9FD306BA641176D02F77EE2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -208,6 +217,7 @@
 		F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndReminderTests.swift; sourceTree = "<group>"; };
 		F6C030AA4A5C60BA97D67967 /* SnoozeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnoozeTests.swift; sourceTree = "<group>"; };
 		F90BC7114F0716F452585279 /* AgendaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgendaWidget.entitlements; sourceTree = "<group>"; };
+		FB3F3D7A1527217C4EBC6BBD /* ContactDatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDatesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -220,6 +230,7 @@
 				822EF3079EA48BD159AAC26B /* Assets.xcassets */,
 				4BD206307D2DAD0BE1F709FC /* CalendarExtras.swift */,
 				9673B93B2FA0CF1B2871781C /* CalendarHome.swift */,
+				FB3F3D7A1527217C4EBC6BBD /* ContactDatesView.swift */,
 				54DF8818351FD6589F6A05BC /* ContinuousAgenda.swift */,
 				193D1B16077FE64CF79324D9 /* DefaultAlertsView.swift */,
 				8F743E868923401A1D200EE2 /* DesignSystem.swift */,
@@ -227,6 +238,7 @@
 				3CBAF9DE5613BF613814BE64 /* Info.plist */,
 				09BEA6ABD463BB31EA253326 /* LotsOfEvents.entitlements */,
 				635DA6A52220747CF5806C7A /* LotsOfEventsApp.swift */,
+				3F38B2FE5D7EDB86F488CDCE /* MacEventDetails.swift */,
 				933924AFD8B6D71F3D43E4EF /* MacLayout.swift */,
 				6E0355C3FB63242321937C6F /* MainView.swift */,
 				0AB5E02F0AC8E5911D573D7C /* NewListView.swift */,
@@ -286,6 +298,7 @@
 				A810EFD752C56EAD558B2C68 /* AgendaQueryTests.swift */,
 				A95608F205F2304B576239DF /* AgendaTabTests.swift */,
 				F44BB2A9227281D0550861D8 /* CalendarAndReminderTests.swift */,
+				5075175522D1F05252D209D3 /* ContactDatesTests.swift */,
 				9C8FE968658F59115E5BA591 /* ContinuousAgendaTests.swift */,
 				BBD6E587AC79F30AF38CFF5C /* DashboardWidgetTests.swift */,
 				1F0E3826D9B41FEC41DB6D3E /* FixesAndFeaturesTests.swift */,
@@ -303,6 +316,7 @@
 				94242E0DB9C908EB386A826B /* AgendaData.swift */,
 				F237CDB66730A8EF85953929 /* AlertDefaults.swift */,
 				5CD381C38EB3D6417D50214E /* CalendarFeatures.swift */,
+				B38CA12AE78C2FF9B3B6A845 /* ContactDates.swift */,
 				8B769587A3C4F8D9F0CE86C2 /* GalleryStyle.swift */,
 				7EA8500E120BBBDB3D715986 /* PrivacyInfo.xcprivacy */,
 				ABC9D2BB453A23175A415B5A /* QuickAddCore.swift */,
@@ -535,6 +549,7 @@
 				0FA646B007F1D822DC58C15C /* AgendaWidget.swift in Sources */,
 				BA408E39C1490A95CC22B832 /* AlertDefaults.swift in Sources */,
 				C34B03B351ADC04A1E07BCD4 /* CalendarFeatures.swift in Sources */,
+				EDA0994747F8DE10F7C5AA99 /* ContactDates.swift in Sources */,
 				133B6EA66914FC68AE0D324E /* DashboardWidgets.swift in Sources */,
 				DA0BE228740CEE146A1794D1 /* GalleryStyle.swift in Sources */,
 				3EB8C462EE555DB33C7F780E /* NextEventLiveActivity.swift in Sources */,
@@ -556,6 +571,7 @@
 				0335135B55A96DAACDCEF933 /* AgendaData.swift in Sources */,
 				8D8E855950358BD0C20B0C9B /* AlertDefaults.swift in Sources */,
 				0A666BBA9205F7A0F6741094 /* CalendarFeatures.swift in Sources */,
+				59B2781FD71CB1475D4D77B0 /* ContactDates.swift in Sources */,
 				77E6581BC039E0987A838D52 /* GalleryStyle.swift in Sources */,
 				5B171F807A8EBAE9F2D2314F /* ICSImport.swift in Sources */,
 				E6AA5FE4408EBDE2CCB58565 /* QuickAddCore.swift in Sources */,
@@ -578,6 +594,8 @@
 				13C1E097CA52A91D441FAF47 /* CalendarExtras.swift in Sources */,
 				55EE29BEBFBFD193C50D66BE /* CalendarFeatures.swift in Sources */,
 				A16295950DBFFE1D6676BE5A /* CalendarHome.swift in Sources */,
+				0F47C90E3E894AB737AF9C6E /* ContactDates.swift in Sources */,
+				05E5763817EB173945149C0C /* ContactDatesView.swift in Sources */,
 				C8B8F0B843BE14B773B96B19 /* ContinuousAgenda.swift in Sources */,
 				BABEF3839E2CDA7270503239 /* DashboardWidgets.swift in Sources */,
 				E7282CF611BA0A0851A7EA99 /* DefaultAlertsView.swift in Sources */,
@@ -585,6 +603,7 @@
 				E900E1D1530F3654271642CA /* GalleryStyle.swift in Sources */,
 				F9565AAF7515BD1203E242B6 /* ICSImport.swift in Sources */,
 				12B1408BCEC3620F5B845D4C /* LotsOfEventsApp.swift in Sources */,
+				15DB779D6FEF3D206040D2FC /* MacEventDetails.swift in Sources */,
 				E8E2D6005EE1F175288CF112 /* MacLayout.swift in Sources */,
 				C996037E77D3B8D325EFF313 /* MainView.swift in Sources */,
 				832EE7EC15A1759A4065B78B /* NewListView.swift in Sources */,
@@ -621,6 +640,7 @@
 				F9AE5292ADB35439AB6AA14F /* AgendaQueryTests.swift in Sources */,
 				4A7DF2B4572883E4EB18D5CC /* AgendaTabTests.swift in Sources */,
 				15148056A2266B7EE0472DE1 /* CalendarAndReminderTests.swift in Sources */,
+				D1BF19FDF34DE6135EAE70E5 /* ContactDatesTests.swift in Sources */,
 				859B60231D80C1B8CE73CA54 /* ContinuousAgendaTests.swift in Sources */,
 				4CD6BCEC4F9E6641AF64183F /* DashboardWidgetTests.swift in Sources */,
 				D8EBEDE7FBB0E17F3EC50C73 /* FixesAndFeaturesTests.swift in Sources */,
@@ -755,6 +775,7 @@
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
+				"INFOPLIST_KEY_LSApplicationCategoryType[sdk=macosx*]" = "public.app-category.productivity";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -784,6 +805,7 @@
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
 				INFOPLIST_FILE = LotsOfEvents/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LotsOfEvents;
+				"INFOPLIST_KEY_LSApplicationCategoryType[sdk=macosx*]" = "public.app-category.productivity";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -862,7 +884,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 24;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -961,7 +983,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 24;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 76BJCJ4Q7X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

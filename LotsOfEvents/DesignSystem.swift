@@ -7,6 +7,7 @@ import EventKit
 /// The row of capsules under the title that switches a tab's view, used by Calendar and Reminders.
 /// It scrolls sideways, so it works at every text size, and keeps the chosen chip in view.
 struct ChipBar<Value: Hashable>: View {
+    @AppAccent private var accent
     let options: [Value]
     @Binding var selection: Value
     let title: (Value) -> String
@@ -19,8 +20,8 @@ struct ChipBar<Value: Hashable>: View {
                     Button { withAnimation(.snappy) { selection = option } } label: {
                         Text(title(option)).font(.subheadline.weight(.medium)).lineLimit(1)
                             .padding(.horizontal, 14).frame(minHeight: 36)
-                            .foregroundStyle(selected ? GalleryPalette.paper : GalleryPalette.ink)
-                            .background(selected ? GalleryPalette.ink : GalleryPalette.card, in: Capsule())
+                            .foregroundStyle(selected ? _accent.contrastingText : GalleryPalette.ink)
+                            .background(selected ? accent : .clear, in: Capsule())
                             .overlay { Capsule().strokeBorder(GalleryPalette.line, lineWidth: selected ? 0 : 0.5) }
                     }
                     .buttonStyle(.plain)
@@ -54,10 +55,10 @@ struct EventRow<Leading: View>: View {
     @ViewBuilder var leading: () -> Leading
     var body: some View {
         HStack(spacing: 8) {
+            leading()
             Button(action: open) {
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4)
-                    leading()
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 5) {
                             if birthday { Image(systemName: "gift.fill").foregroundStyle(color).accessibilityLabel("Birthday") }
@@ -75,7 +76,7 @@ struct EventRow<Leading: View>: View {
             // Separate from the row's button so each can be tapped.
             if let joinURL { JoinButton(url: joinURL) }
         }
-        .opacity(dimmed ? 0.45 : 1)
+        .opacity(dimmed ? 0.65 : 1)
     }
 }
 
@@ -147,7 +148,7 @@ private struct DeletableAgendaItem<Extra: View>: ViewModifier {
             .contextMenu {
                 extra
                 // Birthdays come from Contacts and can't be deleted here.
-                if !item.birthday {
+                if !item.birthday && item.contactDateID == nil {
                     Button(item.reminder ? "Delete Reminder" : "Delete Event", systemImage: "trash", role: .destructive, action: delete)
                 }
             }

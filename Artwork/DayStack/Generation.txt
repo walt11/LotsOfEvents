@@ -1,0 +1,22 @@
+Day Stack — approved vibrant calendar-and-reminders icon
+
+Created with the built-in image-generation tool, then normalized without alpha to 1024×1024 by scripts/GenerateThemeIcons.swift.
+
+Source artwork:
+  Artwork/DayStack/Light.png
+  Artwork/DayStack/Dark.png
+  Artwork/DayStack/Tinted.png
+Production assets:
+  LotsOfEvents/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+  LotsOfEvents/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark.png
+  LotsOfEvents/Assets.xcassets/AppIcon.appiconset/AppIcon-Tinted.png
+The existing Light, Dark, Midnight, Forest and Studio alternate icon identifiers are retained with the same approved design. The Watch catalog uses the dark artwork.
+
+Light production prompt:
+Prepare a production app icon asset from the approved LEFT LIGHT icon in the reference. Output exactly one square 1024x1024 image. Preserve the same slightly tilted stacked calendars, vibrant lime green back card, electric cyan middle card, coral-orange front card and matching bold checkmark, cream inset, slim cream bindings, crisp thin layers and restrained dimensional shading. Match the approved shapes and composition faithfully. Remove the presentation board, the right icon, the external drop shadow and outer squircle bevel. Extend the light warm cream icon background fully to all four straight square image edges. The file must be opaque, square, full bleed, without baked-in rounded outer corners; iOS supplies the corner mask. Keep the calendar symbol centered at approximately 80 percent of canvas width and height with balanced margins. No text or added objects.
+
+Dark production prompt:
+Create the matching dark appearance production app icon by changing ONLY the full-bleed warm cream background of this image to deep cool slate gray, around #29343F with an extremely subtle gradient. Keep every calendar card, their lime green, electric cyan and coral-orange colors, the cream inset, checkmark, bindings, shape, placement, scale, sharpness, and small shadows exactly the same. Opaque square full-bleed app icon, 1024x1024, straight square edges with no outer rounded corner mask, no surrounding presentation backdrop, no text. Preserve the artwork precisely; only change the background to slate dark gray.
+
+Tinted production prompt:
+Prepare the monochrome tinted-appearance companion asset for this iOS app icon. Convert this exact artwork to pure neutral grayscale, keeping the stacked calendars, binding tabs, checkmark, every shape, scale, and location identical. Dark near-black background, middle-gray and light-gray stacked cards with clear tonal separation, off-white front inset and dark-gray checkmark. Preserve clean precise edges and restrained shadows. No hue anywhere, no glow, no new objects. Opaque full-bleed square image, 1024x1024, straight outer edges, no rounded mask or exterior presentation background. This is the system-tintable version of the same icon.

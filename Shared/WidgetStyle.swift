@@ -86,7 +86,8 @@ struct CustomWidgetStyle: Codable, Hashable {
     }
 }
 
-/// Text, spacing, and visibility choices that apply to every widget, whatever its theme.
+/// Text, spacing, and visibility choices for widgets, whatever their theme. Set for all widgets in the Widget editor;
+/// each widget's own options (touch and hold → Edit Widget) can change the font, text size, and spacing for just that widget.
 struct WidgetLook: Codable, Equatable, Hashable {
     enum FontStyle: String, Codable, CaseIterable {
         case theme = "Theme default", standard = "Default", rounded = "Rounded", serif = "Serif", mono = "Monospaced"
@@ -101,8 +102,8 @@ struct WidgetLook: Codable, Equatable, Hashable {
         }
     }
     enum TextSize: String, Codable, CaseIterable {
-        case small = "Small", standard = "Standard", large = "Large"
-        var scale: CGFloat { switch self { case .small: 0.9; case .standard: 1; case .large: 1.12 } }
+        case small = "Small", standard = "Standard", large = "Large", extraLarge = "Extra large"
+        var scale: CGFloat { switch self { case .small: 0.9; case .standard: 1; case .large: 1.12; case .extraLarge: 1.26 } }
     }
     enum Density: String, Codable, CaseIterable {
         case compact = "Compact", standard = "Standard", roomy = "Roomy"
@@ -143,4 +144,9 @@ struct WidgetLook: Codable, Equatable, Hashable {
     }
     /// A row height scaled for both the density and the text size, so larger text still fits.
     func row(_ height: CGFloat) -> CGFloat { (height * density.factor * textSize.scale).rounded() }
+}
+
+/// Equal side insets keep text away from rounded widget corners in every Home Screen layout.
+enum WidgetContentLayout {
+    static let insets = EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
 }

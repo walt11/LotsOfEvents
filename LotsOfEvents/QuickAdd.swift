@@ -9,28 +9,25 @@ struct QuickAddView: View {
     @StateObject private var dictation = QuickAddDictation()
     @State private var dictationPrefix = ""
     @Environment(\.scenePhase) private var phase
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State var reminder = false
     /// A day chosen before opening (a widget's +); used unless the text or a day shortcut names another.
     var presetDay: Date? = nil
     @State private var error: String?
-    @State private var dayPhrase: String?
-    @State private var timePhrase: String?
+    @State private var chosenDay: Date?
+    @State private var noDueDate = false
+    @State private var chosenTime: DateComponents?
+    @State private var timeOverride: Bool?
+    @State private var choosingDate = false
+    @State private var choosingTime = false
+    @State private var pickerDate = Date.now
     /// The chosen calendar or list; empty means the account default.
     @State private var targetID = ""
     @FocusState private var focused: Bool
     private var parsed: QuickAddParse {
-        var result = QuickAddParser.parse([text, dayPhrase, timePhrase].compactMap { $0 }.joined(separator: " "))
-        guard let presetDay, dayPhrase == nil else { return result }
-        let calendar = Calendar.current
-        if let date = result.date, !result.allDay, !QuickAddParser.namesDay(text) {
-            // A time on its own ("3pm", or a time shortcut) lands on the preset day.
-            let time = calendar.dateComponents([.hour, .minute], from: date)
-            result.date = calendar.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: presetDay)
-        } else if result.date == nil {
-            result.date = calendar.startOfDay(for: presetDay)
-            result.allDay = true
-        }
-        return result
+        QuickAddResolution.resolve(text, presetDay: presetDay, chosenDay: chosenDay,
+                                   chosenTime: chosenTime, timed: timeOverride, noDueDate: reminder && noDueDate)
     }
     private var targets: [EKCalendar] { (reminder ? model.lists : model.calendars).filter(\.allowsContentModifications) }
     private var defaultTargetName: String { (reminder ? model.store.defaultCalendarForNewReminders()?.title : model.store.defaultCalendarForNewEvents?.title) ?? "None" }
@@ -53,40 +50,20 @@ struct QuickAddView: View {
                         Label(dictation.active ? (dictation.listening ? "Listening… Tap to stop" : "Cancel dictation") : "Dictate", systemImage: dictation.active ? "stop.circle.fill" : "mic.fill")
                             .foregroundStyle(dictation.active ? Color.red : accent)
                     }
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(QuickAddShortcuts.days(), id: \.label) { chip in
-                                shortcut(chip.label, selected: dayPhrase == chip.phrase) { dayPhrase = dayPhrase == chip.phrase ? nil : chip.phrase }
-                            }
-                            Divider().frame(height: 20)
-                            ForEach(QuickAddShortcuts.times, id: \.label) { chip in
-                                shortcut(chip.label, selected: timePhrase == chip.phrase) { timePhrase = timePhrase == chip.phrase ? nil : chip.phrase }
-                            }
-                        }
-                    }.scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                    Picker("Add as", selection: $reminder) {
-                        Text("Event").tag(false)
-                        Text("Reminder").tag(true)
-                    }.pickerStyle(.segmented)
-                    Picker(reminder ? "List" : "Calendar", selection: $targetID) {
-                        Text("Default (\(defaultTargetName))").tag("")
-                        ForEach(targets, id: \.calendarIdentifier) { target in
-                            // Menus tint SF Symbols, so draw the dot in its own color to keep each list recognizable.
-                            Label { Text(target.title) } icon: {
-                                Image(uiImage: UIImage(systemName: "circle.fill")!.withTintColor(UIColor(cgColor: target.cgColor), renderingMode: .alwaysOriginal))
-                            }.tag(target.calendarIdentifier)
-                        }
-                    }
-                } footer: { Text("Type or dictate a title with a day or time, like “Gym every Monday 6pm”, or tap a shortcut.") }
+                    interpretation
+                } footer: { Text("Type or dictate naturally. Adjust the details below before adding.") }
                 if !parsed.title.isEmpty {
-                    Section("Preview") {
-                        LabeledContent("Title", value: parsed.title)
-                        LabeledContent(reminder ? "Due" : "Starts", value: whenText)
-                        if let repeats = parsed.repeats { LabeledContent("Repeats", value: repeats.title) }
+                    Section {
+                        Text(parsed.title).font(.headline)
+                        if let repeats = parsed.repeats { Label(repeats.title, systemImage: "repeat").font(.caption).foregroundStyle(.secondary) }
+                        if reminder && noDueDate && QuickAddParser.parse(text).repeats != nil {
+                            Text("Repeating tasks need a due date. This task will not repeat.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if reminder ? !model.reminderAccess : !model.calendarAccess {
-                    Text(reminder ? "Connect Reminders to add reminders." : "Connect calendars to add events.").foregroundStyle(.secondary)
+                    Text(reminder ? "Connect Reminders to add reminders." : "Connect Calendar to add events.").foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Quick Add")
@@ -113,23 +90,98 @@ struct QuickAddView: View {
             try? await Task.sleep(for: .milliseconds(450))
             focused = true
         }
-        .presentationDetents([.medium, .large])
+        // A medium detent is unavailable in compact-height windows (landscape or a folded pose).
+        .presentationDetents(verticalSizeClass == .compact ? [.large] : [.medium])
         .presentationDragIndicator(.hidden)
         .presentationContentInteraction(.scrolls)
         .tint(accent)
     }
-    private func shortcut(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label).font(.footnote.weight(.medium)).padding(.horizontal, 11).frame(minHeight: 30)
-                .foregroundStyle(selected ? _accent.contrastingText : .primary)
-                .background(selected ? accent : Color(uiColor: .tertiarySystemFill), in: Capsule())
+    private var interpretation: some View {
+        LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
+                  ? [GridItem(.flexible())]
+                  : [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                Menu {
+                    Picker("Add as", selection: $reminder) { Text("Event").tag(false); Text("Reminder").tag(true) }
+                } label: { option("Type", value: reminder ? "Reminder" : "Event", symbol: reminder ? "checklist" : "calendar") }
+                Menu {
+                    if reminder {
+                        Button("No due date") { noDueDate = true; chosenDay = nil; chosenTime = nil; timeOverride = nil }
+                    }
+                    Button("Today") { noDueDate = false; chosenDay = Calendar.current.startOfDay(for: .now) }
+                    Button("Tomorrow") { noDueDate = false; chosenDay = Calendar.current.date(byAdding: .day, value: 1, to: .now) }
+                    Button("Choose Date…") { pickerDate = parsed.date ?? eventStart; choosingDate = true }
+                    Button("Use typed date") { noDueDate = false; chosenDay = nil }
+                } label: {
+                    option("Date", value: reminder && parsed.date == nil ? "No due date" : (parsed.date ?? eventStart).formatted(.dateTime.month(.abbreviated).day()), symbol: "calendar")
+                }
+                Menu {
+                    Button(reminder ? "No time" : "All day") { timeOverride = false; chosenTime = nil }
+                    ForEach([9, 12, 18], id: \.self) { hour in
+                        Button(Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now)!.formatted(date: .omitted, time: .shortened)) {
+                            chosenTime = DateComponents(hour: hour, minute: 0); timeOverride = true
+                        }
+                    }
+                    Button("Choose Time…") { pickerDate = parsed.date ?? eventStart; choosingTime = true }
+                    Button("Use typed time") { chosenTime = nil; timeOverride = nil }
+                } label: {
+                    option("Time", value: parsed.allDay || (reminder && parsed.date == nil) ? (reminder ? "No time" : "All day") : (parsed.date ?? eventStart).formatted(date: .omitted, time: .shortened), symbol: "clock")
+                }
+                .disabled(reminder && noDueDate)
+                Menu {
+                    Picker(reminder ? "List" : "Calendar", selection: $targetID) {
+                        Text("Default (\(defaultTargetName))").tag("")
+                        ForEach(targets, id: \.calendarIdentifier) { target in Text(target.title).tag(target.calendarIdentifier) }
+                    }
+                } label: { option(reminder ? "List" : "Calendar", value: targets.first { $0.calendarIdentifier == targetID }?.title ?? defaultTargetName, symbol: reminder ? "list.bullet" : "circle.fill") }
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .sheet(isPresented: $choosingDate) { dateEditor(time: false) }
+        .sheet(isPresented: $choosingTime) { dateEditor(time: true) }
+    }
+    private func option(_ title: String, value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).foregroundStyle(accent)
+                Text(title).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").foregroundStyle(.secondary)
+            }.font(.caption)
+            Text(value).font(.subheadline.weight(.medium))
+                .foregroundStyle(GalleryPalette.ink)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(value)")
+    }
+    private func dateEditor(time: Bool) -> some View {
+        NavigationStack {
+            DatePicker(time ? "Time" : "Date", selection: $pickerDate, displayedComponents: time ? .hourAndMinute : .date)
+                #if targetEnvironment(macCatalyst)
+                .datePickerStyle(.compact)
+                #else
+                .datePickerStyle(.wheel)
+                #endif
+                .labelsHidden().padding()
+                .navigationTitle(time ? "Choose Time" : "Choose Date").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { choosingDate = false; choosingTime = false } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            if time { chosenTime = Calendar.current.dateComponents([.hour, .minute], from: pickerDate); timeOverride = true }
+                            else { noDueDate = false; chosenDay = pickerDate }
+                            choosingDate = false; choosingTime = false
+                        }
+                    }
+                }
+        }.presentationDetents([.medium])
     }
     private var eventStart: Date { QuickAddSaver.eventStart(parsed) }
     private var whenText: String {
-        if reminder && parsed.date == nil { return "No date" }
+        if reminder && parsed.date == nil { return "No due date" }
         let date = reminder ? parsed.date! : eventStart
         return parsed.allDay ? date.formatted(date: .complete, time: .omitted) : date.formatted(date: .abbreviated, time: .shortened)
     }
@@ -141,5 +193,38 @@ struct QuickAddView: View {
             model.scheduleRefresh()
             dismiss()
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+
+/// Merge explicit option choices without losing the date or time detected in the text.
+enum QuickAddResolution {
+    static func resolve(_ text: String, presetDay: Date? = nil, chosenDay: Date? = nil,
+                        chosenTime: DateComponents? = nil, timed: Bool? = nil, noDueDate: Bool = false,
+                        now: Date = .now, calendar: Calendar = .current) -> QuickAddParse {
+        var result = QuickAddParser.parse(text, calendar: calendar)
+        let parsedHasDate = result.date != nil
+        let day = chosenDay ?? (!QuickAddParser.namesDay(text) ? presetDay : nil)
+        if let day {
+            let components = calendar.dateComponents([.hour, .minute], from: result.date ?? day)
+            result.date = result.date != nil && !result.allDay
+                ? calendar.date(bySettingHour: components.hour ?? 0, minute: components.minute ?? 0, second: 0, of: day)
+                : calendar.startOfDay(for: day)
+            if !parsedHasDate { result.allDay = true }
+        }
+        if let chosenTime {
+            result.date = calendar.date(bySettingHour: chosenTime.hour ?? 9, minute: chosenTime.minute ?? 0, second: 0, of: result.date ?? now)
+            result.allDay = false
+        }
+        if timed == false {
+            if let date = result.date { result.date = calendar.startOfDay(for: date) }
+            result.allDay = true
+        }
+        if noDueDate {
+            result.date = nil
+            result.allDay = true
+            result.repeats = nil
+        }
+        return result
     }
 }

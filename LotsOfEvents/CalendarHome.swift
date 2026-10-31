@@ -8,6 +8,11 @@ enum CalendarDisplay: String, CaseIterable {
 }
 
 enum CalendarDates {
+    static func swipeDirection(horizontal: CGFloat, vertical: CGFloat) -> Int? {
+        guard abs(horizontal) >= 50, abs(horizontal) > abs(vertical) * 1.5 else { return nil }
+        return horizontal < 0 ? 1 : -1
+    }
+
     static func monthDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
         let start = calendar.dateInterval(of: .month, for: date)!.start
         let offset = (calendar.component(.weekday, from: start) - calendar.firstWeekday + 7) % 7
@@ -148,10 +153,9 @@ struct CalendarHome: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !embedded {
-                    ChipBar(options: CalendarDisplay.allCases, selection: $model.calendarMode) { $0.rawValue }
                     navigation
                 }
-                if !model.calendarAccess {
+                if !model.calendarAccess && !model.reminderAccess && !ContactDates.enabled {
                     AccessCard(title: "Your calendars, together", description: "Connect Apple Calendar to browse and manage events from your synced accounts.") { Task { await model.request(.event) } }
                 } else {
                     if mode == .year { yearGrid }
@@ -168,7 +172,17 @@ struct CalendarHome: View {
             .galleryTitle("Calendar")
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden).background(GalleryPalette.paper)
-            .tabToolbar(model: model, today: { date = .now }) { CalendarSetsMenu(model: model) }
+            .tabToolbar(model: model, today: { date = .now }) {
+                HStack(spacing: 12) {
+                    Menu {
+                        Picker("Calendar view", selection: $model.calendarMode) {
+                            ForEach(CalendarDisplay.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                    } label: { Label(mode.rawValue, systemImage: "chevron.down").font(.subheadline.weight(.semibold)) }
+                    .accessibilityLabel("Calendar view, \(mode.rawValue)")
+                    CalendarSetsMenu(model: model)
+                }
+            }
             .toolbar(embedded ? .hidden : .visible, for: .navigationBar)
             .tint(accent)
             .onAppear(perform: reload)
@@ -177,10 +191,12 @@ struct CalendarHome: View {
             .onChange(of: model.calendarReturnToToday) { _, _ in date = .now }
             .onChange(of: model.generation) { _, _ in reload() }
             .sheet(isPresented: $datePicker) {
-                NavigationStack {
-                    DatePicker("Jump to date", selection: $model.calendarDate, displayedComponents: .date).datePickerStyle(.graphical).padding()
-                        .navigationTitle("Go to date").toolbar { Button("Done") { datePicker = false } }
-                }.presentationDetents([.medium, .large])
+                // Month and Year jump by month or year; the day-based views pick a day.
+                if mode == .month || mode == .year {
+                    MonthYearPicker(date: $model.calendarDate, yearsOnly: mode == .year)
+                } else {
+                    DayPicker(date: $model.calendarDate)
+                }
             }
         }
     }
@@ -229,10 +245,22 @@ struct CalendarHome: View {
                 }
             }
         }.padding(8).gallerySurface(radius: 18).padding(.horizontal, 16).padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    // Only deliberate horizontal swipes page the month; taps and vertical drags stay available.
+                    guard abs(horizontal) >= 50, abs(horizontal) > abs(vertical) * 1.5 else { return }
+                    withAnimation(.snappy) { shift(horizontal < 0 ? 1 : -1) }
+                }
+        )
     }
     private func monthCell(_ day: Date) -> some View {
         let selected = calendar.isDate(day, inSameDayAs: date)
         let dayEvents = eventsOn(day)
+        let tasks = tasksOn(day)
         return Button { date = day } label: {
             VStack(spacing: 3) {
                 Text(day.formatted(.dateTime.day())).font(.system(.subheadline, design: .rounded, weight: selected ? .bold : .regular))
@@ -241,7 +269,10 @@ struct CalendarHome: View {
                     ForEach(Array(dayEvents.prefix(3).enumerated()), id: \.offset) { _, event in
                         Capsule().fill(selected ? _accent.contrastingText : event.calendarColor).frame(width: 6, height: 3)
                     }
-                    if dayEvents.count > 3 {
+                    if let task = tasks.first {
+                        Circle().stroke(selected ? _accent.contrastingText : task.calendarColor, lineWidth: 1.5).frame(width: 5, height: 5)
+                    }
+                    if dayEvents.count + tasks.count > 3 {
                         Text("+").font(.caption2).foregroundStyle(selected ? _accent.contrastingText : .secondary)
                     }
                 }.frame(height: 8)
@@ -250,18 +281,18 @@ struct CalendarHome: View {
             .background(selected ? accent : Color.clear, in: RoundedRectangle(cornerRadius: 9))
             .opacity(calendar.isDate(day, equalTo: date, toGranularity: .month) ? 1 : 0.4)
         }.buttonStyle(.plain)
-            .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(dayEvents.count) events")
+            .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(dayEvents.count) events, \(tasks.count) tasks")
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
     /// Twelve small months; days with events are tinted, and tapping a month opens it.
     private var yearGrid: some View {
-        let busy = Set(events.flatMap { event -> [Date] in
+        let busy = Set(datedTasks.compactMap { ReminderDates.due($0).map { calendar.startOfDay(for: $0) } }).union(Set(events.flatMap { event -> [Date] in
             var day = calendar.startOfDay(for: event.startDate)
             var result: [Date] = []
             // Multi-day events tint each day they cover, up to a month.
             while day < event.endDate && result.count < 31 { result.append(day); day = calendar.date(byAdding: .day, value: 1, to: day)! }
             return result.isEmpty ? [calendar.startOfDay(for: event.startDate)] : result
-        })
+        }))
         let year = calendar.dateInterval(of: .year, for: date)!.start
         let symbols = calendar.veryShortStandaloneWeekdaySymbols
         return ScrollView {
@@ -278,13 +309,13 @@ struct CalendarHome: View {
                                 .foregroundStyle(calendar.isDate(month, equalTo: .now, toGranularity: .month) ? accent : .primary)
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 2) {
                                 ForEach(0..<7, id: \.self) { index in
-                                    Text(symbols[(index + calendar.firstWeekday - 1) % 7]).font(.system(size: 7, weight: .medium)).foregroundStyle(.tertiary)
+                                    Text(symbols[(index + calendar.firstWeekday - 1) % 7]).font(.system(size: 8, weight: .medium)).foregroundStyle(.tertiary)
                                 }
                                 ForEach(CalendarDates.monthDays(containing: month), id: \.self) { day in
                                     let inMonth = calendar.isDate(day, equalTo: month, toGranularity: .month)
                                     let today = calendar.isDateInToday(day)
                                     Text(inMonth ? day.formatted(.dateTime.day()) : "")
-                                        .font(.system(size: 9, weight: today ? .bold : .regular).monospacedDigit())
+                                        .font(.system(size: 10, weight: today ? .bold : .regular).monospacedDigit())
                                         .foregroundStyle(today ? _accent.contrastingText : .primary)
                                         .frame(width: 14, height: 14)
                                         .background {
@@ -307,14 +338,26 @@ struct CalendarHome: View {
     }
     /// The chosen day's events under the month grid, or what's coming up when it's empty.
     private var agendaList: some View {
-        List {
-            ForEach([calendar.startOfDay(for: date)], id: \.self) { day in
-                let dayEvents = eventsOn(day)
-                if dayEvents.isEmpty {
-                    // An empty day takes one quiet line, and the space shows what's coming up next instead.
+        let day = calendar.startOfDay(for: date)
+        let dayEvents = eventsOn(day)
+        let tasks = tasksOn(day)
+        return VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Button("Previous day", systemImage: "chevron.left") { shiftDay(-1) }
+                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(GalleryPalette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    .accessibilityAddTraits(.isHeader)
+                Button("Next day", systemImage: "chevron.right") { shiftDay(1) }
+                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                Spacer(minLength: 0)
+                if let forecast = weather.forecast(for: day) { WeatherBadge(forecast: forecast) }
+            }.buttonStyle(.plain).foregroundStyle(accent).padding(.horizontal, 16)
+            List {
+                if dayEvents.isEmpty && tasks.isEmpty {
                     let upcoming = comingUp(after: day)
                     Section {
-                        Label("Nothing on \(day.formatted(.dateTime.weekday(.wide).month().day()))", systemImage: "moon.zzz")
+                        Label("Nothing scheduled", systemImage: "moon.zzz")
                             .font(.subheadline).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
                     }
                     if !upcoming.isEmpty {
@@ -324,21 +367,40 @@ struct CalendarHome: View {
                     }
                 } else {
                     let conflicts = Conflicts.ids(dayEvents.filter { !$0.isAllDay }.map { (dragKey($0), $0.startDate, $0.endDate) })
-                    Section {
-                        ForEach(dayEvents, id: \.self) { event in eventRow(event, conflict: conflicts.contains(dragKey(event))) }
-                    } header: {
-                        HStack {
-                            SectionHeader(title: day.formatted(.dateTime.weekday(.wide).month().day()))
-                            if let forecast = weather.forecast(for: day) { WeatherBadge(forecast: forecast) }
-                        }
+                    ForEach(dayEvents, id: \.self) { event in eventRow(event, conflict: conflicts.contains(dragKey(event))) }
+                }
+                if !tasks.isEmpty {
+                    SectionHeader(title: "Tasks")
+                        .accessibilityAddTraits(.isHeader)
+                        .galleryRow()
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 0, trailing: 16))
+                        .environment(\.defaultMinListRowHeight, 26)
+                    ForEach(tasks, id: \.calendarItemIdentifier) { task in
+                        taskRow(task).galleryRow()
+                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
                     }
                 }
             }
-        }.listStyle(.insetGrouped)
+            .id(day)
+            .listStyle(.insetGrouped)
             .listSectionSpacing(10)
-            .contentMargins(.top, 4, for: .scrollContent)
+            .contentMargins(.top, 0, for: .scrollContent)
             .appRowHeight(44)
             .refreshable { await model.refresh() }
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
+            if let direction = CalendarDates.swipeDirection(horizontal: value.translation.width, vertical: value.translation.height) {
+                shiftDay(direction)
+            }
+        })
+        .accessibilityAction(named: "Previous day") { shiftDay(-1) }
+        .accessibilityAction(named: "Next day") { shiftDay(1) }
+    }
+    private func shiftDay(_ direction: Int) {
+        withAnimation(.snappy) {
+            date = calendar.date(byAdding: .day, value: direction, to: date) ?? date
+        }
     }
     /// The next few events after `day`, from what's already loaded for the visible month.
     private func comingUp(after day: Date) -> [EKEvent] {
@@ -389,6 +451,21 @@ struct CalendarHome: View {
         let columnWidth = max(0, (gridWidth - gutter) / CGFloat(columns.count))
         return VStack(spacing: 0) {
             if compact { weekHeader(columns) }
+            if days.contains(where: { !tasksOn($0).isEmpty }) {
+                HStack(alignment: .top, spacing: 0) {
+                    if compact { Text("Tasks").font(.caption2).foregroundStyle(.secondary).frame(width: gutter) }
+                    ForEach(days, id: \.self) { day in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(tasksOn(day), id: \.calendarItemIdentifier) { task in
+                                    taskRow(task, compact: compact)
+                                }
+                            }.padding(6)
+                        }.frame(maxWidth: .infinity)
+                    }
+                }.frame(height: 104)
+                Divider()
+            }
             if columns.contains(where: { !$0.allDay.isEmpty }) {
                 if compact { weekAllDay(columns) }
                 else {
@@ -500,7 +577,7 @@ struct CalendarHome: View {
             if let secondZone {
                 let time = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date) ?? date
                 Text(time.formatted(Date.FormatStyle(timeZone: secondZone).hour().minute()))
-                    .font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1).minimumScaleFactor(0.7)
+                    .font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             Text(hourLabel(hour)).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
@@ -592,7 +669,7 @@ struct CalendarHome: View {
                     HStack(spacing: 4) {
                         Text(secondZone.abbreviation() ?? "").frame(maxWidth: .infinity, alignment: .trailing)
                         Text(TimeZone.current.abbreviation() ?? "")
-                    }.font(.system(size: 8, weight: .semibold)).foregroundStyle(.tertiary).padding(.trailing, 6)
+                    }.font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary).padding(.trailing, 6)
                 } else { Color.clear }
             }.frame(width: gutter, height: 1, alignment: .bottom).frame(maxHeight: .infinity, alignment: .bottom)
             ForEach(columns, id: \.day) { column in
@@ -614,17 +691,17 @@ struct CalendarHome: View {
     }
     private func weekAllDay(_ columns: [DayColumn]) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            Text("all-day").font(.system(size: 9)).foregroundStyle(.secondary).frame(width: gutter - 6, alignment: .trailing).padding(.trailing, 6)
+            Text("all-day").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: gutter - 6, alignment: .trailing).padding(.trailing, 6)
             ForEach(columns, id: \.day) { column in
                 VStack(spacing: 2) {
                     ForEach(column.allDay.prefix(2), id: \.self) { event in
-                        Button { model.sheet = .event(event) } label: {
-                            Text(event.title ?? "Untitled event").font(.system(size: 9, weight: .medium)).lineLimit(1)
+                        Button { model.inspect(event) } label: {
+                            Text(event.title ?? "Untitled event").font(.system(size: 10, weight: .medium)).lineLimit(1)
                                 .padding(.horizontal, 3).frame(maxWidth: .infinity, alignment: .leading).frame(height: 16)
                                 .background(event.calendarColor.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
                         }.buttonStyle(.plain)
                     }
-                    if column.allDay.count > 2 { Text("+\(column.allDay.count - 2)").font(.system(size: 9)).foregroundStyle(.secondary) }
+                    if column.allDay.count > 2 { Text("+\(column.allDay.count - 2)").font(.system(size: 10)).foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity).padding(.horizontal, 1)
             }
         }.padding(.trailing, 8).padding(.vertical, 4)
@@ -637,7 +714,7 @@ struct CalendarHome: View {
             HStack(spacing: 3) {
                 if event.needsReply { Circle().fill(color).frame(width: 6, height: 6).accessibilityLabel("Needs reply") }
                 if MeetingLink.url(for: event) != nil && !compact { Image(systemName: "video.fill").font(.system(size: 9)).foregroundStyle(color) }
-                Text(event.title ?? "Untitled event").font(compact ? .system(size: 10, weight: .semibold) : .caption.weight(.semibold)).lineLimit(compact ? 3 : 2)
+                Text(event.title ?? "Untitled event").font(compact ? .system(size: 11, weight: .semibold) : .caption.weight(.semibold)).lineLimit(compact ? 3 : 2)
             }
             if !compact {
                 Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
@@ -654,10 +731,10 @@ struct CalendarHome: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
-        .onTapGesture { model.sheet = .event(event) }
+        .onTapGesture { model.inspect(event) }
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { model.sheet = .event(event) }
+        .accessibilityAction { model.inspect(event) }
         .accessibilityLabel("\(event.title ?? "Untitled event"), \(event.startDate.formatted(date: .omitted, time: .shortened)) to \(event.endDate.formatted(date: .omitted, time: .shortened))")
     }
     private func eventRow(_ event: EKEvent, showDate: Bool = false, conflict: Bool = false) -> some View {
@@ -668,13 +745,41 @@ struct CalendarHome: View {
                         detail: detail.isEmpty ? nil : detail,
                         time: event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened))\n\(event.endDate.formatted(date: .omitted, time: .shortened))",
                         birthday: event.isBirthday, needsReply: event.needsReply, conflict: conflict,
-                        joinURL: !event.isAllDay && event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.sheet = .event(event) }
+                        joinURL: !event.isAllDay && event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }
             .contextMenu {
                 Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
                 if let link = MeetingLink.url(for: event) { Link(destination: link) { Label("Join \(MeetingLink.service(link))", systemImage: "video") } }
             }
             .galleryRow()
             .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+    }
+    private var datedTasks: [EKReminder] {
+        model.reminders.filter {
+            !$0.isCompleted && ReminderDates.due($0) != nil &&
+            $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true
+        }.sorted { ReminderDates.due($0)! < ReminderDates.due($1)! }
+    }
+    private func tasksOn(_ day: Date) -> [EKReminder] {
+        datedTasks.filter { calendar.isDate(ReminderDates.due($0)!, inSameDayAs: day) }
+    }
+    private func taskRow(_ task: EKReminder, compact: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: compact ? 4 : 10) {
+            Button { model.toggle(task) } label: {
+                Image(systemName: "circle").font(compact ? .caption : .title3)
+                    .foregroundStyle(task.calendarColor).frame(minWidth: compact ? 24 : 36, minHeight: 32)
+            }.buttonStyle(.plain).disabled(!task.isWritable)
+                .accessibilityLabel("Complete \(task.title ?? "task")")
+            Button { model.inspect(task) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(task.title ?? "Reminder").font(compact ? .caption : .subheadline).foregroundStyle(GalleryPalette.ink)
+                        .lineLimit(compact ? 2 : 3)
+                    if let due = ReminderDates.due(task), task.dueDateComponents?.hour != nil {
+                        Text(due.formatted(date: .omitted, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    if !compact { Text(task.calendarTitle).font(.caption).foregroundStyle(.secondary) }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+            }.buttonStyle(.plain)
+        }
     }
     private func eventsOn(_ day: Date) -> [EKEvent] {
         events.filter { CalendarDates.overlaps(start: $0.startDate, end: $0.endDate, day: day) }
@@ -688,6 +793,121 @@ struct CalendarHome: View {
     private func reload() {
         model.calendarCreationDate = newEventDate
         events = model.events(in: DateInterval(start: days.first!, end: calendar.date(byAdding: .day, value: 1, to: days.last!)!))
+    }
+}
+
+/// Picks a day for Day, 3 Day, and Week. Sized so a six-week month fits, and a tap on a day goes there.
+struct DayPicker: View {
+    @AppAccent private var accent
+    @Binding var date: Date
+    @State private var choice: Date
+    @Environment(\.dismiss) private var dismiss
+    init(date: Binding<Date>) {
+        _date = date
+        _choice = State(initialValue: date.wrappedValue)
+    }
+    var body: some View {
+        NavigationStack {
+            DatePicker("Go to date", selection: $choice, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding(.horizontal)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .background(GalleryPalette.paper)
+                .navigationTitle("Go to Date").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Today") { date = .now; dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+                .tint(accent)
+                // Browsing months doesn't change the selection; only tapping a day does.
+                .onChange(of: choice) { _, day in
+                    date = day
+                    dismiss()
+                }
+        }
+        .presentationDetents([.height(500), .large])
+    }
+}
+
+/// Jumps straight to a month or a year: arrows step the year, then a tap on a month (or year) goes there.
+struct MonthYearPicker: View {
+    @AppAccent private var accent
+    @Binding var date: Date
+    /// Year view picks only a year.
+    var yearsOnly = false
+    @State private var year: Int
+    @Environment(\.dismiss) private var dismiss
+    private var calendar: Calendar { .current }
+
+    init(date: Binding<Date>, yearsOnly: Bool = false) {
+        _date = date
+        self.yearsOnly = yearsOnly
+        _year = State(initialValue: Calendar.current.component(.year, from: date.wrappedValue))
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                HStack {
+                    Button(yearsOnly ? "Earlier years" : "Previous year", systemImage: "chevron.left") { year -= yearsOnly ? 12 : 1 }
+                    Spacer()
+                    Text(yearsOnly ? "\(String(firstYear)) – \(String(firstYear + 11))" : String(year))
+                        .font(.title2.bold()).monospacedDigit().contentTransition(.numericText())
+                    Spacer()
+                    Button(yearsOnly ? "Later years" : "Next year", systemImage: "chevron.right") { year += yearsOnly ? 12 : 1 }
+                }
+                .labelStyle(.iconOnly).font(.title3.weight(.semibold))
+                .animation(.snappy, value: year)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    if yearsOnly {
+                        ForEach(firstYear..<(firstYear + 12), id: \.self) { value in
+                            cell(String(value), selected: value == calendar.component(.year, from: date),
+                                 current: value == calendar.component(.year, from: .now)) { choose(year: value, month: nil) }
+                        }
+                    } else {
+                        ForEach(1...12, id: \.self) { month in
+                            cell(calendar.shortStandaloneMonthSymbols[month - 1],
+                                 selected: year == calendar.component(.year, from: date) && month == calendar.component(.month, from: date),
+                                 current: year == calendar.component(.year, from: .now) && month == calendar.component(.month, from: .now)) {
+                                choose(year: year, month: month)
+                            }
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20).padding(.top, 8)
+            .background(GalleryPalette.paper)
+            .navigationTitle(yearsOnly ? "Go to Year" : "Go to Month").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Today") { date = .now; dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .tint(accent)
+        }
+        .presentationDetents([.height(yearsOnly ? 400 : 380)])
+    }
+
+    /// The twelve years shown, with the chosen year near the middle; the arrows page by twelve.
+    private var firstYear: Int { year - 5 }
+
+    private func cell(_ title: String, selected: Bool, current: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.headline).monospacedDigit()
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .foregroundStyle(selected ? _accent.contrastingText : current ? accent : GalleryPalette.ink)
+                .background(selected ? accent : GalleryPalette.card, in: RoundedRectangle(cornerRadius: 12))
+                .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(current && !selected ? accent : GalleryPalette.line, lineWidth: current && !selected ? 1.5 : 0.5) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Today when it falls in the chosen month (or year), otherwise the 1st, so the list under the month starts at the top.
+    private func choose(year: Int, month: Int?) {
+        let target = calendar.date(from: DateComponents(year: year, month: month ?? calendar.component(.month, from: date), day: 1)) ?? date
+        date = calendar.isDate(.now, equalTo: target, toGranularity: yearsOnly ? .year : .month) ? .now : target
+        dismiss()
     }
 }
 

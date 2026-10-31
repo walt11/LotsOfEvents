@@ -21,6 +21,8 @@ struct AgendaItem: Identifiable {
     /// An invitation the user hasn't answered yet.
     var needsReply = false
     var birthday = false
+    var blocksAvailability = true
+    var contactDateID: String? = nil
     /// The Agenda's second line: the list for reminders, otherwise where or how long. The color bar already identifies the calendar.
     var agendaDetail: String? {
         if reminder { return source }
@@ -66,7 +68,7 @@ extension EKCalendarItem {
     // A deleted item loses its calendar, and EventKit's implicitly unwrapped `calendar` would crash.
     var calendarColor: Color { Color(cgColor: calendar?.cgColor ?? CGColor(gray: 0.6, alpha: 1)) }
     var calendarTitle: String { calendar?.title ?? "" }
-    var isWritable: Bool { calendar?.allowsContentModifications ?? false }
+    var isWritable: Bool { (self as? EKEvent)?.contactDateID == nil && (calendar?.allowsContentModifications ?? false) }
 }
 
 /// The app accent, kept in the App Group so widgets use the same color. -1 means the default graphite steel blue.
@@ -182,12 +184,15 @@ enum AgendaQuery {
     nonisolated(nonsending) static func load(store: EKEventStore, now: Date = .now, days: Int? = nil, calendarIDs: Set<String>? = nil, listIDs: Set<String>? = nil) async -> [AgendaItem] {
         let range = window(now: now, days: days ?? Preferences.days)
         var items: [AgendaItem] = []
+        var birthdayContacts = Set<String>()
         if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
             let calendars = store.calendars(for: .event).filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
             if !calendars.isEmpty {
-                items += store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars)).map {
+                let events = store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars))
+                birthdayContacts = Set(events.compactMap(\.birthdayContactIdentifier))
+                items += events.map {
                     AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate, location: $0.location,
-                               joinURL: MeetingLink.url(for: $0), needsReply: $0.needsReply, birthday: $0.isBirthday)
+                               joinURL: MeetingLink.url(for: $0), needsReply: $0.needsReply, birthday: $0.isBirthday, blocksAvailability: $0.blocksTime)
                 }
             }
         }
@@ -203,6 +208,7 @@ enum AgendaQuery {
                 }
             }
         }
+        items += ContactDates.items(in: range, excludingBirthdays: birthdayContacts)
         return sorted(items)
     }
 }
@@ -425,5 +431,79 @@ enum WidgetDashboardData {
         let start = month ? calendar.dateInterval(of: .month, for: now)!.start : calendar.startOfDay(for: now)
         let end = month ? calendar.dateInterval(of: .month, for: now)!.end : calendar.date(byAdding: .day, value: 5, to: start)!
         return saved >= start && saved < end ? calendar.startOfDay(for: saved) : calendar.startOfDay(for: now)
+    }
+}
+
+/// Pure calculations shared by the widgets and their tests.
+enum WidgetCompanionData {
+    static func pages(heights: [CGFloat], height: CGFloat) -> [Range<Int>] {
+        guard !heights.isEmpty else { return [0..<0] }
+        var result: [Range<Int>] = []
+        var start = 0, used: CGFloat = 0
+        for index in heights.indices {
+            if index > start && used + heights[index] > height {
+                result.append(start..<index); start = index; used = 0
+            }
+            used += heights[index]
+        }
+        result.append(start..<heights.count)
+        return result
+    }
+
+    /// Merge occupied intervals before finding gaps. All-day busy events block the working day;
+    /// reminders and events explicitly marked Free do not.
+    static func openSlots(items: [AgendaItem], now: Date, startHour: Int = 9, endHour: Int = 17,
+                          minimumMinutes: Int = 30, calendar: Calendar = .current) -> [DateInterval] {
+        guard (0...23).contains(startHour), (1...24).contains(endHour), startHour < endHour else { return [] }
+        let day = calendar.startOfDay(for: now)
+        guard let start = calendar.date(bySettingHour: startHour, minute: 0, second: 0, of: day),
+              let end = endHour == 24 ? calendar.date(byAdding: .day, value: 1, to: day) : calendar.date(bySettingHour: endHour, minute: 0, second: 0, of: day) else { return [] }
+        var cursor = max(start, now)
+        guard cursor < end else { return [] }
+        let busy = items.filter { !$0.reminder && $0.blocksAvailability }.compactMap { item -> DateInterval? in
+            let a = max(start, item.eventStartDate ?? item.date)
+            let b = min(end, item.endDate ?? item.date)
+            return b > a ? DateInterval(start: a, end: b) : nil
+        }.sorted { $0.start < $1.start }
+        var gaps: [DateInterval] = []
+        let minimum = TimeInterval(max(1, minimumMinutes) * 60)
+        for interval in busy {
+            if interval.start.timeIntervalSince(cursor) >= minimum { gaps.append(DateInterval(start: cursor, end: interval.start)) }
+            cursor = max(cursor, interval.end)
+        }
+        if end.timeIntervalSince(cursor) >= minimum { gaps.append(DateInterval(start: cursor, end: end)) }
+        return gaps
+    }
+    static func tomorrowTasks(_ tasks: [WidgetTask], now: Date, calendar: Calendar = .current) -> [WidgetTask] {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
+        return WidgetDashboardData.sortedTasks(tasks.filter { $0.due.map { calendar.isDate($0, inSameDayAs: tomorrow) } ?? false })
+    }
+    static func overdueTasks(_ tasks: [WidgetTask], now: Date, calendar: Calendar = .current) -> [WidgetTask] {
+        tasks.filter { task in
+            guard let due = task.due else { return false }
+            return task.timed ? due < now : due < calendar.startOfDay(for: now)
+        }.sorted {
+            let lhs = $0.priority == 0 ? 10 : $0.priority
+            let rhs = $1.priority == 0 ? 10 : $1.priority
+            if lhs != rhs { return lhs < rhs }
+            if $0.due != $1.due { return ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
+            return $0.id < $1.id
+        }
+    }
+    static func eventURL(for slot: DateInterval) -> URL {
+        var url = URLComponents()
+        url.scheme = "lotsofevents"; url.host = "plan-time"
+        url.queryItems = [URLQueryItem(name: "start", value: String(slot.start.timeIntervalSince1970)),
+                          URLQueryItem(name: "end", value: String(slot.end.timeIntervalSince1970))]
+        return url.url!
+    }
+    static func eventInterval(from url: URL) -> DateInterval? {
+        guard url.scheme == "lotsofevents", url.host == "plan-time",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              let a = items.first(where: { $0.name == "start" })?.value.flatMap(Double.init),
+              let b = items.first(where: { $0.name == "end" })?.value.flatMap(Double.init),
+              a.isFinite, b.isFinite, b > a, b - a <= 86400,
+              a > 0, b < 32_503_680_000 else { return nil }
+        return DateInterval(start: Date(timeIntervalSince1970: a), end: Date(timeIntervalSince1970: b))
     }
 }

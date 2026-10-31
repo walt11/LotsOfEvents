@@ -658,3 +658,109 @@ final class ReviewRegressionTests: XCTestCase {
         }
     }
 }
+
+final class UIRefreshTests: XCTestCase {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Chicago")!
+        return c
+    }
+    func testQuickAddNoDueDateOverridesTypedPresetAndExplicitDates() {
+        let day = Date.now
+        let result = QuickAddResolution.resolve("Call plumber tomorrow at 9am", presetDay: day,
+            chosenDay: day, chosenTime: DateComponents(hour: 14), timed: true, noDueDate: true, calendar: calendar)
+        XCTAssertNil(result.date)
+        XCTAssertTrue(result.allDay)
+        XCTAssertEqual(result.title, QuickAddParser.parse("Call plumber tomorrow at 9am", calendar: calendar).title)
+        XCTAssertNotNil(QuickAddResolution.resolve("Call plumber tomorrow at 9am", noDueDate: false, calendar: calendar).date)
+    }
+    func testQuickAddNoDueDateRemovesRepeatThatWouldRestoreDueDate() {
+        let text = "Water plants every day"
+        XCTAssertNotNil(QuickAddParser.parse(text).repeats)
+        let result = QuickAddResolution.resolve(text, noDueDate: true)
+        XCTAssertNil(result.date)
+        XCTAssertNil(result.repeats)
+    }
+    func testQuickAddChipTimeKeepsTypedDay() {
+        let text = "Call plumber next Friday"
+        let typed = QuickAddParser.parse(text, calendar: calendar)
+        let result = QuickAddResolution.resolve(text, chosenTime: DateComponents(hour: 9, minute: 15), timed: true, calendar: calendar)
+        XCTAssertNotNil(result.date)
+        XCTAssertEqual(result.date.map { calendar.startOfDay(for: $0) }, typed.date.map { calendar.startOfDay(for: $0) })
+        XCTAssertEqual(result.date.map { calendar.component(.hour, from: $0) }, 9)
+        XCTAssertEqual(result.date.map { calendar.component(.minute, from: $0) }, 15)
+        XCTAssertFalse(result.allDay)
+    }
+    func testQuickAddChipDateKeepsTypedTime() {
+        let date = calendar.date(from: DateComponents(year: 2026, month: 12, day: 5))!
+        let result = QuickAddResolution.resolve("Dinner at 7pm", chosenDay: date, calendar: calendar)
+        XCTAssertEqual(result.date.map { calendar.startOfDay(for: $0) }, date)
+        XCTAssertEqual(result.date.map { calendar.component(.hour, from: $0) }, 19)
+        XCTAssertFalse(result.allDay)
+    }
+    func testQuickAddAllDayOverrideRemovesTypedTime() {
+        let result = QuickAddResolution.resolve("Conference tomorrow at 9am", timed: false, calendar: calendar)
+        XCTAssertNotNil(result.date)
+        XCTAssertEqual(result.date.map { calendar.component(.hour, from: $0) }, 0)
+        XCTAssertTrue(result.allDay)
+    }
+    func testPresetDayDoesNotOverrideExplicitTypedDay() {
+        let preset = calendar.date(from: DateComponents(year: 2026, month: 12, day: 5))!
+        let text = "Call next Friday at 3pm"
+        XCTAssertEqual(QuickAddResolution.resolve(text, presetDay: preset, calendar: calendar).date,
+                       QuickAddParser.parse(text, calendar: calendar).date)
+        let timed = QuickAddResolution.resolve("Call at 3pm", presetDay: preset, calendar: calendar)
+        XCTAssertEqual(timed.date.map { calendar.startOfDay(for: $0) }, preset)
+    }
+    func testSettingsSearchFindsHiddenControlsAndSupportsMultipleWords() {
+        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("weather") }, [.advanced])
+        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("accent color") }, [.appearance])
+        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("time leave") }, [.alerts])
+        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("undated") }, [.sources])
+        XCTAssertTrue(SettingsCategory.allCases.filter { $0.matches("nonexistent") }.isEmpty)
+        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("  ") }.count, 5)
+    }
+}
+
+
+extension FixesAndFeaturesTests {
+    @MainActor func testReminderNotificationUsesExplicitAlarmAndSkipsPastTimes() {
+        let reminder = EKReminder(eventStore: EKEventStore())
+        reminder.dueDateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date(25, hour: 10))
+        reminder.alarms = [EKAlarm(absoluteDate: date(25, hour: 9)), EKAlarm(absoluteDate: date(24, hour: 8))]
+        XCTAssertEqual(ReminderNotifications.dates(for: reminder, now: date(24, hour: 12), option: .none, calendar: calendar), [date(25, hour: 9)])
+        reminder.isCompleted = true
+        XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24), calendar: calendar).isEmpty)
+    }
+    @MainActor func testReminderNotificationRespectsDisabledDefaultsAndUntimedTasks() {
+        let reminder = EKReminder(eventStore: EKEventStore())
+        reminder.dueDateComponents = calendar.dateComponents([.year, .month, .day], from: date(25))
+        XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24), dateOnly: false, calendar: calendar).isEmpty)
+        XCTAssertEqual(ReminderNotifications.dates(for: reminder, now: date(24), dateOnly: true, minute: 540, calendar: calendar), [date(25, hour: 9)])
+        reminder.dueDateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date(25, hour: 10))
+        XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24), option: .none, calendar: calendar).isEmpty)
+    }
+    @MainActor func testReminderNotificationDoesNotConvertLocationAlarmToTimeAlert() {
+        let reminder = EKReminder(eventStore: EKEventStore())
+        reminder.dueDateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date(25, hour: 10))
+        let alarm = EKAlarm(); alarm.structuredLocation = EKStructuredLocation(title: "Home"); alarm.proximity = .enter
+        reminder.alarms = [alarm]
+        XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24), calendar: calendar).isEmpty)
+    }
+}
+
+
+extension FixesAndFeaturesTests {
+    @MainActor func testNotificationTapSurvivesColdLaunchUntilHandled() {
+        let defaults = makeDefaults()
+        let initial = ReminderNotificationRoute(defaults: defaults)
+        initial.open("first-reminder")
+        let afterLaunch = ReminderNotificationRoute(defaults: defaults)
+        XCTAssertEqual(afterLaunch.reminderID, "first-reminder")
+        afterLaunch.open("newer-reminder")
+        afterLaunch.handled("first-reminder")
+        XCTAssertEqual(afterLaunch.reminderID, "newer-reminder")
+        afterLaunch.handled("newer-reminder")
+        XCTAssertNil(ReminderNotificationRoute(defaults: defaults).reminderID)
+    }
+}

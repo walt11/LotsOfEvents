@@ -2,9 +2,11 @@ import SwiftUI
 import EventKit
 import EventKitUI
 import WidgetKit
+import UserNotifications
 
 @main
 struct LotsOfEventsApp: App {
+    @UIApplicationDelegateAdaptor(LotsOfEventsAppDelegate.self) private var appDelegate
     init() {
         AccentStore.migrateFromAppDefaults()
         AppTheme.migrateFromAppearance()
@@ -67,6 +69,27 @@ final class AgendaModel: ObservableObject {
     /// Whether Settings is showing the App Theme gallery; lives here so it survives the rebuild a theme change causes.
     @Published var showingThemePicker = false
     @Published var sheet: AppSheet?
+    @Published var inspectorSelection: AppSheet?
+    func inspect(_ event: EKEvent) {
+        if let id = event.contactDateID, let record = ContactDates.records.first(where: { $0.id == id }) {
+            sheet = .contactDate(record, event.startDate)
+            return
+        }
+        #if targetEnvironment(macCatalyst)
+        if case .search = sheet { sheet = nil }
+        inspectorSelection = .event(event)
+        #else
+        sheet = .event(event)
+        #endif
+    }
+    func inspect(_ reminder: EKReminder) {
+        #if targetEnvironment(macCatalyst)
+        if case .search = sheet { sheet = nil }
+        inspectorSelection = .reminder(reminder, nil)
+        #else
+        sheet = .reminder(reminder, nil)
+        #endif
+    }
     private var revision = 0
     private var pendingRefresh: Task<Void, Never>?
     /// Coalesces bursts of triggers (store notifications, saves, sheet dismissals) into one fetch.
@@ -78,12 +101,28 @@ final class AgendaModel: ObservableObject {
             await refresh()
         }
     }
+    func moveReminderLists(from offsets: IndexSet, to destination: Int) {
+        lists.move(fromOffsets: offsets, toOffset: destination)
+        Preferences.defaults.set(lists.map(\.calendarIdentifier), forKey: "reminderListOrder")
+    }
+    private func orderedReminderLists(_ calendars: [EKCalendar]) -> [EKCalendar] {
+        let saved = Preferences.defaults.stringArray(forKey: "reminderListOrder") ?? []
+        let ranks = Dictionary(saved.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        return calendars.enumerated().sorted {
+            let left = ranks[$0.element.calendarIdentifier] ?? Int.max
+            let right = ranks[$1.element.calendarIdentifier] ?? Int.max
+            return left == right ? $0.offset < $1.offset : left < right
+        }.map(\.element)
+    }
     func refresh() async {
         revision += 1
         let current = revision
         loading = true
+        do { try await ContactDateSync.refresh() }
+        catch { ContactDateSync.clear(); self.error = "Could not refresh contact dates: \(error.localizedDescription)" }
+        guard current == revision else { return }
         calendars = EKEventStore.authorizationStatus(for: .event) == .fullAccess ? store.calendars(for: .event) : []
-        lists = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : []
+        lists = orderedReminderLists(EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : [])
         if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
         if !lists.isEmpty { Preferences.migrate(reminders: true, available: lists.map(\.calendarIdentifier)) }
         let wantsCompleted = includeCompleted
@@ -103,6 +142,7 @@ final class AgendaModel: ObservableObject {
         generation += 1
         loading = false
         lastRefresh = .now
+        await ReminderNotifications.update(reminders: fetched)
     }
     /// When data was last fetched, so returning to the app right after launch doesn't fetch it all again.
     private(set) var lastRefresh = Date.distantPast
@@ -128,6 +168,7 @@ struct UndoAction: Identifiable {
 struct AgendaView: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
+    var embedded = false
     @StateObject private var agenda = ContinuousAgenda()
     var body: some View {
         NavigationStack {
@@ -137,6 +178,7 @@ struct AgendaView: View {
                 .galleryTitle("Agenda")
                 .navigationBarTitleDisplayMode(.inline)
                 .tabToolbar(model: model, today: { model.agendaReturnToToday += 1 }) { CalendarSetsMenu(model: model) }
+                .toolbar(embedded ? .hidden : .visible, for: .navigationBar)
                 .tint(accent)
         }
     }
@@ -146,8 +188,8 @@ struct AgendaView: View {
                 if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
                     Section {
                         Label("Bring your calendars together", systemImage: "calendar.badge.checkmark").font(.headline)
-                        Text("Connect Apple Calendar to see events from accounts synced with your iPhone.").foregroundStyle(.secondary)
-                        Button("Connect calendars") { Task { await model.request(.event) } }
+                        Text("Connect Apple Calendar to see events from the accounts on this device.").foregroundStyle(.secondary)
+                        Button("Connect Calendars") { Task { await model.request(.event) } }
                     }
                 }
                 ForEach(ContinuousAgenda.sections(agenda.days, today: .now)) { section in
@@ -182,7 +224,7 @@ struct AgendaView: View {
                         }
                     }
                 }
-                if !agenda.days.isEmpty && (model.calendarAccess || model.reminderAccess) {
+                if !agenda.days.isEmpty && (model.calendarAccess || model.reminderAccess || ContactDates.enabled) {
                     // Loads the next 30 days when this row scrolls into view.
                     HStack { Spacer(); ProgressView(); Spacer() }
                         .listRowBackground(Color.clear)
@@ -271,5 +313,13 @@ struct EventEditor: UIViewControllerRepresentable {
         let parent: EventEditor
         init(parent: EventEditor) { self.parent = parent }
         func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) { parent.dismiss() }
+    }
+}
+
+
+@MainActor final class LotsOfEventsAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = ReminderNotificationDelegate.shared
+        return true
     }
 }

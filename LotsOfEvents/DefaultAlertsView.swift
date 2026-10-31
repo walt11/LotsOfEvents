@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Default alert times, laid out like Apple Calendar's and Reminders' settings.
 struct DefaultAlertsView: View {
+    static let deliveryNote = "Calendar event alerts are delivered by Apple Calendar. Reminder alerts can also be delivered by LotsOfEvents when enabled in Settings → Alerts. To avoid duplicates, turn off Apple Reminders notifications in system Settings; your saved reminder alarms are preserved."
     // The same keys and defaults as AlertDefaults, in the shared App Group.
     @AppStorage("alertEvent", store: Preferences.defaults) private var eventAlert = EventAlertOption.minutes15.rawValue
     @AppStorage("alertAllDayEvent", store: Preferences.defaults) private var allDayAlert = AllDayAlertOption.dayOf.rawValue
@@ -36,7 +37,7 @@ struct DefaultAlertsView: View {
                 Text("Reminders with only a date get an alert on their due day at this time, like the Today Notification in Apple Reminders. Leave it off if Reminders already notifies you, to avoid two alerts.")
             }
             Section {
-                Text("Alerts are delivered by Apple’s Calendar and Reminders, so they appear on all your devices and follow your Focus and notification settings. To change how they look or sound, open iOS Settings → Apps → Calendar or Reminders → Notifications.")
+                Text(Self.deliveryNote)
                     .font(.footnote).foregroundStyle(GalleryPalette.muted)
             }.listRowBackground(Color.clear)
         }

@@ -52,7 +52,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Show your selected calendars in your agenda and widget, and create events.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Show how old friends are turning on their birthdays.</string>
+	<string>Show birthdays, anniversaries, and other contact dates in your calendar, agenda, and widgets, and optionally show birthday ages.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Show the weather forecast in your calendar and work out when to leave for events.</string>
 	<key>NSMicrophoneUsageDescription</key>

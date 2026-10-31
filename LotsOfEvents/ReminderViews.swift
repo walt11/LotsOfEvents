@@ -109,11 +109,11 @@ struct ReminderLine: View {
             }
             .buttonStyle(.borderless).disabled(!reminder.isWritable)
             .accessibilityLabel(reminder.isCompleted ? "Mark \(reminder.title ?? "reminder") incomplete" : "Complete \(reminder.title ?? "reminder")")
-            Button { model.sheet = .reminder(reminder, nil) } label: {
+            Button { model.inspect(reminder) } label: {
                 layout {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            if reminder.priority != 0 { Text(ReminderPriority.badge(reminder.priority)).foregroundStyle(.orange).fontWeight(.bold) }
+                            if reminder.priority != 0 { Text(ReminderPriority.badge(reminder.priority)).foregroundStyle(GalleryPalette.warning).fontWeight(.bold) }
                             Text(reminder.title ?? "Reminder").font(.subheadline.weight(.medium))
                                 .strikethrough(reminder.isCompleted).foregroundStyle(reminder.isCompleted ? GalleryPalette.muted : GalleryPalette.ink)
                         }
@@ -136,8 +136,8 @@ struct ReminderLine: View {
                         Text(ReminderDueText.label(due: due, timed: reminder.dueDateComponents?.hour != nil))
                             .font(.caption.weight(.semibold)).lineLimit(1).fixedSize()
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .foregroundStyle(late ? Color.red : GalleryPalette.ink)
-                            .background(late ? Color.red.opacity(0.12) : GalleryPalette.line.opacity(0.5), in: Capsule())
+                            .foregroundStyle(late ? GalleryPalette.alert : GalleryPalette.ink)
+                            .background(late ? GalleryPalette.alert.opacity(0.1) : GalleryPalette.line.opacity(0.5), in: Capsule())
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -234,7 +234,7 @@ struct ReminderFocusView: View {
                             .swipeActions(edge: .trailing) { SnoozeButtons(model: model, reminder: reminder) }
                     }
                 } header: {
-                    SectionHeader(title: section.title, trailing: "\(section.items.count)", tint: section.late ? .red : GalleryPalette.muted)
+                    SectionHeader(title: section.title, trailing: "\(section.items.count)", tint: section.late ? GalleryPalette.alert : GalleryPalette.muted)
                 }
             }
             if scope == .today && !doneToday.isEmpty {
@@ -250,7 +250,7 @@ struct ReminderFocusView: View {
                 }.listRowBackground(GalleryPalette.card)
             }
             if scope == .done && !showEarlier {
-                Button("Show earlier completed reminders") { showEarlier = true }
+                Button("Show Earlier Completed Reminders") { showEarlier = true }
                     .frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
         }
@@ -492,7 +492,8 @@ struct ReminderCardsView: View {
     }
     /// Lists with open reminders first, then empty ones, each group in the account's order.
     private var shownLists: [EKCalendar] {
-        lists.filter { !items(in: $0).isEmpty } + lists.filter { items(in: $0).isEmpty }
+        if Preferences.defaults.stringArray(forKey: "reminderListOrder") != nil { return lists }
+        return lists.filter { !items(in: $0).isEmpty } + lists.filter { items(in: $0).isEmpty }
     }
 
     var body: some View {
@@ -642,5 +643,33 @@ struct ReminderCardsView: View {
                 draftFocused = true
             }
         } catch { model.error = error.localizedDescription }
+    }
+}
+
+
+/// Reorders app presentation only; calendar contents and account membership stay intact.
+struct ReminderListOrderView: View {
+    @ObservedObject var model: AgendaModel
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(model.lists, id: \.calendarIdentifier) { list in
+                        HStack {
+                            Circle().fill(Color(cgColor: list.cgColor)).frame(width: 10, height: 10)
+                            VStack(alignment: .leading) {
+                                Text(list.title)
+                                Text(list.source.title).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }.onMove(perform: model.moveReminderLists)
+                } footer: { Text("Drag the handles to arrange your lists. Changes are saved automatically in this app.") }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Reorder Lists")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .frame(minWidth: 300, minHeight: 360)
     }
 }

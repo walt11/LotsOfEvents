@@ -2,11 +2,14 @@ import SwiftUI
 import EventKit
 import EventKitUI
 import WidgetKit
+import Contacts
 
 enum AppSheet: Identifiable {
+    case contactDate(ContactDateRecord, Date)
     case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar), search, sources(reminders: Bool), importICS([ICSEvent]), settings
     var id: String {
         switch self {
+        case .contactDate(let record, let date): return "contact-date-\(record.id)-\(date.timeIntervalSince1970)"
         case .newList: return "new-list"
         case .search: return "search"
         case .importICS: return "import-ics"
@@ -25,6 +28,7 @@ enum AppSheet: Identifiable {
 struct MainView: View {
     @AppAccent private var accent
     @StateObject private var model = AgendaModel()
+    @ObservedObject private var notificationRoute = ReminderNotificationRoute.shared
     @Environment(\.scenePhase) private var phase
     /// Opens to the section chosen in Settings → Tabs.
     @State private var tab = min(2, max(0, Preferences.defaults.integer(forKey: AppTabs.startKey)))
@@ -36,6 +40,16 @@ struct MainView: View {
     /// Saving custom colors rebuilds the app even when the Custom theme is already chosen.
     @AppStorage(CustomAppColors.key, store: Preferences.defaults) private var customColorsID = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
+    private func openNotifiedReminder() async {
+        guard phase == .active, let id = notificationRoute.reminderID else { return }
+        model.sheet = nil
+        model.inspectorSelection = nil
+        tab = 2
+        #if targetEnvironment(macCatalyst)
+        Preferences.defaults.set(MacView.reminders.rawValue, forKey: "macView")
+        #endif
+        notificationRoute.handled(id)
+    }
     var body: some View {
         Group {
             #if targetEnvironment(macCatalyst)
@@ -50,7 +64,6 @@ struct MainView: View {
         .foregroundStyle(GalleryPalette.ink)
         .scrollContentBackground(.hidden)
         .preferredColorScheme((AppTheme(rawValue: themeID) ?? .graphite).scheme)
-        .modifier(TextSizeModifier(size: (AppTextSize(rawValue: textSizeID) ?? .automatic).dynamicType))
         .tint(accent)
         .task { await model.refresh() }
         // After each refresh: the next-event Live Activity, time-to-leave alerts, and the forecast.
@@ -65,14 +78,21 @@ struct MainView: View {
             if phase == .active && Date.now.timeIntervalSince(model.lastRefresh) > 2 { model.scheduleRefresh() }
         }
         // Widgets reload only when calendar or reminder data actually changed (including the app's own saves).
+        .onReceive(NotificationCenter.default.publisher(for: .CNContactStoreDidChange)) { _ in model.scheduleRefresh() }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
             model.scheduleRefresh()
             WidgetReloader.schedule()
+        }
+        .task(id: "\(notificationRoute.reminderID ?? "")-\(phase == .active)") {
+            await openNotifiedReminder()
         }
         .onOpenURL { url in
             if url.isFileURL { model.importCalendarFile(url); return }
             guard url.scheme == "lotsofevents" else { return }
             if url.host == "new" { model.sheet = .newEvent(Date.now.roundedUpToHalfHour()) }
+            else if url.host == "plan-time", let slot = WidgetCompanionData.eventInterval(from: url) {
+                model.sheet = .newEvent(slot.start, end: slot.end)
+            }
             else if url.host == "quick-add" {
                 // The widget's + opens straight into Quick Add; `?type=reminder` starts in reminder mode.
                 // `day=<seconds since 1970>` comes from a widget's + and starts Quick Add on that day.
@@ -91,9 +111,15 @@ struct MainView: View {
         }
         .sheet(item: $model.sheet, onDismiss: { model.scheduleRefresh() }) { sheet in
             switch sheet {
+            case .contactDate(let record, let date): ContactDateDetails(record: record, date: date)
             case .newEvent(let date, let end): EventEditor(store: model.store, startDate: date, endDate: end)
             case .duplicate(let event): EventEditor(store: model.store, startDate: event.startDate, template: event)
-            case .event(let event): EventDetailsSheet(event: event) { model.sheet = .duplicate(event) }
+            case .event(let event):
+                #if targetEnvironment(macCatalyst)
+                MacEventDetails(model: model, event: event)
+                #else
+                EventDetailsSheet(event: event) { model.sheet = .duplicate(event) }
+                #endif
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
             case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
             case .newList: NewListView(model: model)
@@ -111,7 +137,14 @@ struct MainView: View {
         .overlay(alignment: .bottom) {
             if let undo = model.undo {
                 UndoToast(undo: undo) { model.undo = nil }
+                    #if targetEnvironment(macCatalyst)
+                    // No tab bar to clear on the Mac: a compact bar just above the window's bottom edge.
+                    .frame(maxWidth: 460)
+                    .padding(.bottom, 16)
+                    #else
+                    // Clears the tab bar.
                     .padding(.bottom, 90)
+                    #endif
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -126,6 +159,7 @@ struct MainView: View {
                 }
             }
         } message: { Text(model.error ?? "") }
+        .modifier(TextSizeModifier(size: (AppTextSize(rawValue: textSizeID) ?? .automatic).dynamicType))
     }
     private static let sections: [(title: String, symbol: String)] = [("Calendar", "calendar"), ("Agenda", "list.bullet.rectangle"), ("Reminders", "checklist"), ("Settings", "gearshape")]
     private var tabs: some View {
@@ -148,11 +182,11 @@ struct MainView: View {
                 bottomTab(index: tabOrder[2])
                 bottomTab(index: 3)
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 8).padding(.vertical, 3)
             // Like the system tab bar, labels stop growing at large sizes; touch and hold shows them enlarged.
             .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .gallerySurface(radius: 22)
-            .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
+            .padding(.horizontal, 10).padding(.top, 3).padding(.bottom, 2)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardShown = true }
@@ -166,6 +200,7 @@ struct MainView: View {
                 }
             }
             .navigationTitle("LotsOfEvents")
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
             .safeAreaInset(edge: .bottom) {
                 Button { quickAdd() } label: {
                     Label("Quick Add", systemImage: "plus").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -176,11 +211,20 @@ struct MainView: View {
             }
         } detail: {
             // A paged TabView inside the detail column hides each section's navigation bar, so show the section directly.
-            switch tab {
-            case 0: CalendarHome(model: model)
-            case 1: AgendaView(model: model)
-            case 2: RemindersHome(model: model)
-            default: SourcesView(model: model)
+            Group {
+                switch tab {
+                case 0: CalendarHome(model: model)
+                case 1: AgendaView(model: model)
+                case 2: RemindersHome(model: model)
+                default: SourcesView(model: model)
+                }
+            }
+            .toolbar {
+                // Keep creation reachable when the sidebar collapses or is hidden on iPad/Duo.
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Quick Add", systemImage: "plus") { quickAdd() }
+                        .contextMenu { fullEditorButtons }
+                }
             }
         }
         // Keep the sidebar beside the content in portrait too, instead of floating over a dimmed view.
@@ -190,7 +234,7 @@ struct MainView: View {
     private var addButton: some View {
         Button { quickAdd() } label: {
             Image(systemName: "plus").font(.title2.weight(.semibold)).foregroundStyle(_accent.contrastingText)
-                .frame(width: 50, height: 50).background(accent, in: Circle())
+                .frame(width: 44, height: 44).background(accent, in: Circle())
                 .shadow(color: accent.opacity(0.15), radius: 3, y: 2)
         }
         .buttonStyle(.plain)
@@ -216,9 +260,9 @@ struct MainView: View {
                 Image(systemName: symbol).font(.system(size: 19, weight: .medium))
                 Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity).frame(height: 52)
+            .frame(maxWidth: .infinity).frame(height: 48)
             .foregroundStyle(tab == index ? accent : Color.secondary)
-            .background(tab == index ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 20))
+            .background(tab == index ? accent.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 12))
         }.buttonStyle(.plain).accessibilityAddTraits(tab == index ? .isSelected : [])
             .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
     }
@@ -229,18 +273,22 @@ extension AgendaModel {
     var calendarAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     var reminderAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     func events(in range: DateInterval) -> [EKEvent] {
-        guard calendarAccess else { return [] }
         let selected = calendars.filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
-        guard !selected.isEmpty else { return [] }
-        return store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: selected))
-            .sorted { $0.startDate < $1.startDate }
+        let native = calendarAccess && !selected.isEmpty
+            ? store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: selected)) : []
+        let contacts = ContactDates.events(store: store, in: range, excludingBirthdays: Set(native.compactMap(\.birthdayContactIdentifier)))
+        return (native + contacts).sorted { $0.startDate < $1.startDate }
     }
     func open(_ item: AgendaItem) {
+        if let id = item.contactDateID, let record = ContactDates.records.first(where: { $0.id == id }) {
+            sheet = .contactDate(record, item.date)
+            return
+        }
         if item.reminder {
-            if let reminder = store.calendarItem(withIdentifier: item.sourceID ?? item.id) as? EKReminder { sheet = .reminder(reminder, nil) }
+            if let reminder = store.calendarItem(withIdentifier: item.sourceID ?? item.id) as? EKReminder { inspect(reminder) }
             else { error = "This reminder no longer exists. Refresh your agenda." }
         } else {
-            if let event = event(for: item) { sheet = .event(event) }
+            if let event = event(for: item) { inspect(event) }
             else { error = "This event changed or was removed. Refresh your agenda." }
         }
     }
@@ -533,10 +581,25 @@ enum TabReselect {
     static func returnsToToday(selecting index: Int, from current: Int) -> Bool { index == current && index <= 1 }
 }
 
-/// Applies the app's own text size, or leaves the iPhone's setting alone when it's Automatic.
+/// Automatic starts slightly larger and preserves larger system accessibility sizes.
 private struct TextSizeModifier: ViewModifier {
     let size: DynamicTypeSize?
+    @Environment(\.dynamicTypeSize) private var systemSize
+    #if targetEnvironment(macCatalyst)
+    private var macSize: DynamicTypeSize {
+        switch size {
+        case .xxLarge: .accessibility1
+        case .xxxLarge: .accessibility2
+        case .some(let selected): selected
+        case nil: max(systemSize, .xxxLarge)
+        }
+    }
+    #endif
     func body(content: Content) -> some View {
-        if let size { content.dynamicTypeSize(size) } else { content }
+        #if targetEnvironment(macCatalyst)
+        content.dynamicTypeSize(macSize)
+        #else
+        content.dynamicTypeSize(size ?? max(systemSize, .xLarge))
+        #endif
     }
 }

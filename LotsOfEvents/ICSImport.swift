@@ -368,8 +368,8 @@ struct ICSImportView: View {
                     }
                     Text(event.summary).font(.caption).foregroundStyle(GalleryPalette.muted)
                     if let location = event.location { Text(location).font(.caption).foregroundStyle(GalleryPalette.muted).lineLimit(1) }
-                    if let issue = event.importIssue { Text(issue).font(.caption).foregroundStyle(.orange) }
-                    if existing.contains(event.id) { Text("Already in your calendar").font(.caption.weight(.medium)).foregroundStyle(.orange) }
+                    if let issue = event.importIssue { Text(issue).font(.caption).foregroundStyle(GalleryPalette.warning) }
+                    if existing.contains(event.id) { Text("Already in your calendar").font(.caption.weight(.medium)).foregroundStyle(GalleryPalette.warning) }
                 }
                 Spacer(minLength: 0)
             }

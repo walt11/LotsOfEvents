@@ -5,11 +5,13 @@ import WidgetKit
 struct RemindersHome: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
+    var embedded = false
     @AppStorage("reminderLayout") private var layout = ReminderLayout.focus
     @AppStorage("reminderFocusScope") private var scope = FocusScope.today
     /// Lists shown in the Reminders tab, saved between launches; empty means all lists.
     @AppStorage("reminderTabLists") private var savedListIDs = ""
     @AppStorage("reminderSortByPriority") private var sortByPriority = false
+    @State private var orderingLists = false
     @State private var showEarlier = false
     /// The chosen lists that still exist, so a deleted list can't hide everything.
     private var listIDs: Set<String> {
@@ -46,7 +48,18 @@ struct RemindersHome: View {
                     AccessCard(title: "Make room for what matters", description: "Connect Apple Reminders to manage all your lists, including undated and overdue tasks.") { Task { await model.request(.reminder) } }
                 } else {
                     VStack(spacing: 0) {
-                        ChipBar(options: ReminderMode.allCases, selection: mode) { $0.rawValue }
+                        HStack(spacing: 0) {
+                            ChipBar(options: [.today, .upcoming, .lists], selection: mode) { $0.rawValue }
+                            Menu {
+                                Button("Anytime", systemImage: "tray") { mode.wrappedValue = .anytime }
+                                Button("Completed", systemImage: "checkmark.circle") { mode.wrappedValue = .done }
+                            } label: {
+                                Label(scope == .anytime && layout == .focus ? "Anytime" : scope == .done && layout == .focus ? "Completed" : "More", systemImage: "line.3.horizontal.decrease")
+                                    .font(.subheadline).fixedSize().frame(minHeight: 44)
+                            }
+                            .padding(.trailing, embedded ? 8 : 16)
+                            if embedded { filters.padding(.trailing, 16) }
+                        }
                         switch layout {
                         case .focus:
                             let todayIDs = Set(model.completedToday.map(\.calendarItemIdentifier))
@@ -76,7 +89,12 @@ struct RemindersHome: View {
             .onChange(of: model.lastCreatedListID) { _, id in
                 if let id, !listIDs.isEmpty { setList(id, included: true) }
             }
-            .tabToolbar(model: model) {
+            .sheet(isPresented: $orderingLists) { ReminderListOrderView(model: model) }
+            .tabToolbar(model: model) { filters }
+            .toolbar(embedded ? .hidden : .visible, for: .navigationBar)
+        }
+    }
+    private var filters: some View {
                     Menu {
                         Section("Lists") {
                             Button("All lists", systemImage: listIDs.isEmpty ? "checkmark" : "") { savedListIDs = "" }
@@ -94,6 +112,9 @@ struct RemindersHome: View {
                             }
                         }
                         Section {
+                            Button("Reorder Lists", systemImage: "arrow.up.arrow.down") { orderingLists = true }
+                                .disabled(model.lists.count < 2)
+                                .menuActionDismissBehavior(.enabled)
                             Button("New List…", systemImage: "plus") { model.sheet = .newList }
                         }
                     } label: {
@@ -102,9 +123,8 @@ struct RemindersHome: View {
                     }
                     .menuActionDismissBehavior(.disabled)
                     .accessibilityValue(listIDs.isEmpty ? "All lists" : "\(listIDs.count) lists")
-            }
-        }
     }
+
 }
 
 /// EventKit priorities: 1–4 high, 5 medium, 6–9 low, 0 none.

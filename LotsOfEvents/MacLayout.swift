@@ -10,34 +10,47 @@ struct MacLayout: View {
     @AppStorage("macSidebar", store: Preferences.defaults) private var showSidebar = true
     @AppStorage("macInspector", store: Preferences.defaults) private var showInspector = true
     @AppStorage("macView", store: Preferences.defaults) private var viewID = MacView.month.rawValue
+    @AppStorage("macSidebarWidth", store: Preferences.defaults) private var sidebarWidth = 224.0
+    @AppStorage("macInspectorWidth", store: Preferences.defaults) private var inspectorWidth = 340.0
     private var view: MacView { MacView(rawValue: viewID) ?? .month }
     private var calendar: Calendar { .current }
     private var date: Date { model.calendarDate }
 
     var body: some View {
         GeometryReader { geometry in
-            let panes = Panes(width: geometry.size.width, sidebar: showSidebar, inspector: showInspector)
+            let panes = Panes(width: geometry.size.width, sidebar: showSidebar, inspector: showInspector, sidebarWidth: sidebarWidth, inspectorWidth: inspectorWidth)
             HStack(spacing: 0) {
                 if panes.sidebar {
-                    MacSidebar(model: model).frame(width: 248)
+                    MacSidebar(selectedView: view, select: select, model: model).frame(width: sidebarWidth)
                         .transition(.move(edge: .leading).combined(with: .opacity))
+                    MacPaneDivider(width: $sidebarWidth, limits: 200...max(200, min(320, geometry.size.width - 572 - (panes.inspector ? inspectorWidth : 0))), reversed: false)
                 }
                 VStack(spacing: 0) {
-                    header(panes).padding(.top, panes.sidebar ? 0 : 28)
-                    ChipBar(options: MacView.allCases, selection: Binding(get: { view }, set: select)) { $0.title }
+                    header(panes)
                     content
                 }
-                .frame(minWidth: 560)
+                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
                 if panes.inspector {
-                    MacUpNextPanel(model: model).frame(width: 290)
+                    MacPaneDivider(width: $inspectorWidth, limits: 300...max(300, min(480, geometry.size.width - 572 - (panes.sidebar ? sidebarWidth : 0))), reversed: true)
+                    inspector.frame(width: inspectorWidth)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            // The title bar is hidden, so the panes start at the top of the window instead of below an empty strip.
-            .ignoresSafeArea(.container, edges: .top)
+            // Respect the native title-bar safe area: rapid clicks on navigation controls
+            // must not be interpreted as a title-bar double click that zooms the window.
             .background(GalleryPalette.paper)
             .onAppear { if let mode = view.calendarMode { model.calendarMode = mode } }
             .background(MacWindowStyle())
+            .onChange(of: model.inspectorSelection?.id) { _, id in
+                guard id != nil else { return }
+                if panes.roomForOne {
+                    showInspector = true
+                    if !panes.roomForBoth { showSidebar = false }
+                }
+            }
+            .sheet(item: Binding(get: { panes.roomForOne ? nil : model.inspectorSelection }, set: { model.inspectorSelection = $0 })) { _ in
+                inspector.frame(minWidth: 460, minHeight: 500)
+            }
             .onChange(of: viewID) { _, _ in
                 if let mode = view.calendarMode { model.calendarMode = mode }
             }
@@ -64,93 +77,80 @@ struct MacLayout: View {
 
     // MARK: Header
 
-    /// Which side panes fit: the sidebar from 900 points wide, both from 1200.
+    /// Saved pane widths determine when side panels collapse.
     private struct Panes {
         let width: CGFloat
         let sidebar: Bool
         let inspector: Bool
-        var roomForBoth: Bool { width >= 1200 }
-        var roomForOne: Bool { width >= 900 }
-        init(width: CGFloat, sidebar wantsSidebar: Bool, inspector wantsInspector: Bool) {
-            self.width = width
-            sidebar = wantsSidebar && width >= 900
-            inspector = wantsInspector && width >= (sidebar ? 1200 : 900)
+        let sidebarWidth: Double
+        let inspectorWidth: Double
+        var roomForBoth: Bool { width >= 572 + sidebarWidth + inspectorWidth }
+        var roomForOne: Bool { width >= 566 + max(sidebarWidth, inspectorWidth) }
+        init(width: CGFloat, sidebar wantsSidebar: Bool, inspector wantsInspector: Bool, sidebarWidth: Double, inspectorWidth: Double) {
+            self.width = width; self.sidebarWidth = sidebarWidth; self.inspectorWidth = inspectorWidth
+            sidebar = wantsSidebar && width >= 566 + sidebarWidth
+            inspector = wantsInspector && width >= 566 + inspectorWidth + (sidebar ? sidebarWidth + 6 : 0)
         }
     }
 
     private func header(_ panes: Panes) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Showing a pane that doesn't fit beside the other makes room by hiding the other, so the buttons always respond.
+        HStack(spacing: 12) {
             Button("Sidebar", systemImage: "sidebar.left") {
                 withAnimation(.snappy) {
                     if panes.sidebar { showSidebar = false }
                     else { showSidebar = true; if !panes.roomForBoth { showInspector = false } }
                 }
-            }
-                .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(GalleryPalette.muted)
-                .disabled(!panes.roomForOne)
-                .help(panes.roomForOne ? "Show or hide the sidebar" : "Make the window wider to show the sidebar")
-                .keyboardShortcut("s", modifiers: [.command, .control])
-            VStack(alignment: .leading, spacing: 0) {
-                Text(overline).font(.subheadline.weight(.semibold)).foregroundStyle(accent)
-                Text(title).font(.system(size: 28, weight: .bold)).foregroundStyle(GalleryPalette.ink).lineLimit(1)
-            }
-            .contentTransition(.numericText())
-            .animation(.snappy, value: title)
-            Spacer(minLength: 12)
-            Button { model.sheet = .search } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                    Text("Search").lineLimit(1)
-                    Text("⌘F").font(.caption.weight(.medium)).foregroundStyle(GalleryPalette.muted)
+            }.labelStyle(.iconOnly).disabled(!panes.roomForOne).keyboardShortcut("s", modifiers: [.command, .control])
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.title3.bold()).foregroundStyle(GalleryPalette.ink).lineLimit(1)
+                if !panes.sidebar {
+                    Menu {
+                        Button("Calendar") { select(MacView.allCases.first { $0.calendarMode == model.calendarMode } ?? .month) }
+                        Button("Agenda") { select(.agenda) }
+                        Button("Reminders") { select(.reminders) }
+                    } label: { Label(view.calendarMode == nil ? view.title : "Calendar", systemImage: "chevron.down").font(.caption) }
                 }
-                .font(.subheadline).foregroundStyle(GalleryPalette.muted)
-                .padding(.horizontal, 12).frame(height: 32)
-                .gallerySurface(radius: 16)
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut("f")
-            if view != .agenda && view != .reminders {
-                HStack(spacing: 0) {
-                    Button("Back", systemImage: "chevron.left") { shift(-1) }
-                        .keyboardShortcut(.leftArrow, modifiers: .command)
-                    Button("Today") { model.calendarDate = .now }
-                        .font(.subheadline.weight(.semibold)).padding(.horizontal, 6)
-                        .keyboardShortcut("t")
-                    Button("Forward", systemImage: "chevron.right") { shift(1) }
-                        .keyboardShortcut(.rightArrow, modifiers: .command)
-                }
-                .labelStyle(.iconOnly).buttonStyle(.borderless)
-                .padding(.horizontal, 8).frame(height: 32)
-                .gallerySurface(radius: 16)
+            Spacer(minLength: 0)
+            if view.calendarMode != nil {
+                HStack(spacing: 10) {
+                    Button("Previous", systemImage: "chevron.left") { shift(-1) }.labelStyle(.iconOnly).keyboardShortcut(.leftArrow, modifiers: .command)
+                    Button("Today") { model.calendarDate = .now }.keyboardShortcut("t")
+                    Button("Next", systemImage: "chevron.right") { shift(1) }.labelStyle(.iconOnly).keyboardShortcut(.rightArrow, modifiers: .command)
+                }.font(.subheadline)
+                Picker("View", selection: Binding(get: { view }, set: select)) {
+                    ForEach(MacView.allCases.filter { $0.calendarMode != nil }) { Text($0.title).tag($0) }
+                }.pickerStyle(.menu).labelsHidden().fixedSize().accessibilityLabel("Calendar view")
+            } else if view == .agenda {
+                Button("Today") { model.agendaReturnToToday += 1 }.keyboardShortcut("t")
             }
-            Button("Up next", systemImage: "sidebar.right") {
+            if view != .reminders { CalendarSetsMenu(model: model) }
+            Button("Search", systemImage: "magnifyingglass") { model.sheet = .search }.labelStyle(.iconOnly).keyboardShortcut("f")
+            Button("Quick Add", systemImage: "plus") { model.sheet = .quickAdd(reminder: view == .reminders) }
+                .labelStyle(.iconOnly).font(.headline).foregroundStyle(accent).help("Quick Add (⌘K)")
+            Button("Inspector", systemImage: "sidebar.right") {
                 withAnimation(.snappy) {
                     if panes.inspector { showInspector = false }
                     else { showInspector = true; if !panes.roomForBoth { showSidebar = false } }
                 }
-            }
-                .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(GalleryPalette.muted)
-                .disabled(!panes.roomForOne)
-                .help(panes.roomForOne ? "Show or hide Up next" : "Make the window wider to show Up next")
-                .keyboardShortcut("i", modifiers: [.command, .option])
+            }.labelStyle(.iconOnly).disabled(!panes.roomForOne).keyboardShortcut("i", modifiers: [.command, .option])
         }
-        .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 8)
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 16).frame(minHeight: 58)
+        .overlay(alignment: .bottom) { Rectangle().fill(GalleryPalette.line).frame(height: 0.5) }
     }
 
-    /// The small accent line above the title: the year, or what kind of range is shown.
-    private var overline: String {
-        switch view {
-        case .year: return "Year"
-        case .agenda: return "Coming up"
-        case .reminders: return "Your lists"
-        case .day: return date.formatted(.dateTime.weekday(.wide))
-        default: return date.formatted(.dateTime.year())
+    @ViewBuilder private var inspector: some View {
+        switch model.inspectorSelection {
+        case .event(let event): MacEventDetails(model: model, event: event, embedded: true).id(event.occurrenceKey)
+        case .reminder(let reminder?, _): MacReminderInspector(model: model, reminder: reminder).id(reminder.calendarItemIdentifier)
+        default: MacUpNextPanel(model: model)
         }
     }
+
     private var title: String {
         switch view {
-        case .month: return date.formatted(.dateTime.month(.wide))
+        case .month: return date.formatted(.dateTime.month(.wide).year())
         case .year: return date.formatted(.dateTime.year())
         case .agenda: return "Agenda"
         case .reminders: return "Reminders"
@@ -165,13 +165,14 @@ struct MacLayout: View {
     @ViewBuilder private var content: some View {
         switch view {
         case .month: MacMonthView(model: model)
-        case .agenda: AgendaView(model: model)
-        case .reminders: RemindersHome(model: model)
+        case .agenda: AgendaView(model: model, embedded: true)
+        case .reminders: RemindersHome(model: model, embedded: true)
         default: CalendarHome(model: model, embedded: true)
         }
     }
 
     private func select(_ option: MacView) {
+        if option != view { model.inspectorSelection = nil }
         viewID = option.rawValue
         if let mode = option.calendarMode { model.calendarMode = mode }
     }
@@ -218,13 +219,22 @@ enum MacView: String, CaseIterable, Identifiable {
 
 /// Today at the top with New, a small month card, then calendars and lists as chips: filled when shown, outlined when hidden.
 struct MacSidebar: View {
+    @State private var orderingLists = false
+    let selectedView: MacView
+    let select: (MacView) -> Void
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
-    @ObservedObject private var weather = WeatherStore.shared
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                todayCard
+                VStack(spacing: 2) {
+                    destination("Calendar", symbol: "calendar", selected: selectedView.calendarMode != nil) {
+                        select(MacView.allCases.first { $0.calendarMode == model.calendarMode } ?? .month)
+                    }
+                    destination("Agenda", symbol: "list.bullet.rectangle", selected: selectedView == .agenda) { select(.agenda) }
+                    destination("Reminders", symbol: "checklist", selected: selectedView == .reminders) { select(.reminders) }
+                }
+                Divider()
                 MacMiniMonth(model: model).padding(10).gallerySurface(radius: 16)
                 chips(title: "Calendars", sources: model.calendars, reminders: false, access: model.calendarAccess) {
                     Task { await model.request(.event) }
@@ -232,44 +242,23 @@ struct MacSidebar: View {
                 chips(title: "Lists", sources: model.lists, reminders: true, access: model.reminderAccess) {
                     Task { await model.request(.reminder) }
                 }
-                Button { model.sheet = .settings } label: {
-                    Label("Settings", systemImage: "gearshape").font(.subheadline).foregroundStyle(GalleryPalette.muted)
-                }
-                .buttonStyle(.plain).padding(.top, 4)
             }
-            // Just below the window's close, minimize, and zoom buttons.
-            .padding(.horizontal, 14).padding(.top, 36).padding(.bottom, 16)
+            .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 16)
         }
         .scrollIndicators(.never)
+        // The window safe area now reserves the native title bar above this sidebar.
         .background(GalleryPalette.card.opacity(0.45))
+        .sheet(isPresented: $orderingLists) { ReminderListOrderView(model: model) }
         .overlay(alignment: .trailing) { Rectangle().fill(GalleryPalette.line).frame(width: 0.5) }
     }
 
-    private var todayCard: some View {
-        TimelineView(.everyMinute) { context in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(context.date.formatted(.dateTime.weekday(.wide))).font(.title2.bold()).foregroundStyle(GalleryPalette.ink)
-                        Text(context.date.formatted(.dateTime.month(.wide).day())).font(.subheadline).foregroundStyle(GalleryPalette.muted)
-                    }
-                    Spacer(minLength: 0)
-                    if let forecast = weather.forecast(for: context.date) { WeatherSummary(forecast: forecast) }
-                }
-                Menu {
-                    Button("New Event…", systemImage: "calendar.badge.plus") { model.sheet = .newEvent(model.calendarCreationDate) }
-                    Button("New Reminder…", systemImage: "checklist") { model.sheet = .reminder(nil, model.activeReminderList) }
-                    Button("Quick Add…", systemImage: "text.badge.plus") { model.sheet = .quickAdd(reminder: false) }
-                } label: {
-                    Label("New", systemImage: "plus").font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity).frame(height: 30)
-                        .foregroundStyle(_accent.contrastingText)
-                        .background(accent, in: Capsule())
-                }
-                .menuIndicator(.hidden).buttonStyle(.plain)
-            }
-            .padding(14).gallerySurface(radius: 16)
-        }
+    private func destination(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol).font(.subheadline.weight(selected ? .semibold : .regular))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).frame(height: 36)
+                .foregroundStyle(selected ? accent : GalleryPalette.ink)
+                .background(selected ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder private func chips(title: String, sources: [EKCalendar], reminders: Bool, access: Bool, connect: @escaping () -> Void) -> some View {
@@ -278,6 +267,15 @@ struct MacSidebar: View {
             if !access {
                 Button("Connect \(reminders ? "Reminders" : "Calendar")", action: connect).buttonStyle(.bordered)
             }
+            if reminders {
+                Button("Reorder Lists", systemImage: "arrow.up.arrow.down") { orderingLists = true }
+                    .font(.caption).buttonStyle(.plain).disabled(sources.count < 2)
+                FlowLayout(spacing: 6) {
+                    ForEach(sources, id: \.calendarIdentifier) { source in
+                        chip(source, reminders: true, all: sources)
+                    }
+                }
+            } else {
             let accounts = Dictionary(grouping: sources, by: { $0.source.title }).sorted { $0.key < $1.key }
             ForEach(accounts, id: \.key) { account, entries in
                 if accounts.count > 1 {
@@ -288,6 +286,7 @@ struct MacSidebar: View {
                         chip(source, reminders: reminders, all: sources)
                     }
                 }
+            }
             }
         }
     }
@@ -423,7 +422,9 @@ struct MacMonthView: View {
     private var calendar: Calendar { .current }
     private var date: Date { model.calendarDate }
     private var days: [Date] { CalendarDates.compactMonthDays(containing: date) }
-    private let gap: CGFloat = 6
+    @ScaledMetric(relativeTo: .subheadline) private var eventRowHeight: CGFloat = 22
+    @ScaledMetric(relativeTo: .headline) private var dateRowHeight: CGFloat = 30
+    private let gap: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 6) {
@@ -466,7 +467,7 @@ struct MacMonthView: View {
             if weekNumbers { Color.clear.frame(width: 26) }
             ForEach(0..<7, id: \.self) { index in
                 let weekday = (index + calendar.firstWeekday - 1) % 7
-                Text(symbols[weekday]).font(.caption.weight(.semibold)).foregroundStyle(GalleryPalette.muted)
+                Text(symbols[weekday]).font(.subheadline.weight(.semibold)).foregroundStyle(GalleryPalette.muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 8)
             }
@@ -478,21 +479,21 @@ struct MacMonthView: View {
         let selected = calendar.isDate(day, inSameDayAs: date)
         let today = calendar.isDateInToday(day)
         let items = entries(on: day)
-        // Room for the date row, then lines of about 17 points.
-        let capacity = max(0, Int((height - 34) / 17))
+        // Match capacity to the scaled text so larger fonts never overlap rows.
+        let capacity = max(0, Int((height - dateRowHeight - 16) / (eventRowHeight + 1)))
         let shown = items.count > capacity ? max(0, capacity - 1) : items.count
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 6) {
-                Text(day.formatted(.dateTime.day())).font(.subheadline.weight(today ? .bold : .semibold)).monospacedDigit()
+                Text(day.formatted(.dateTime.day())).font(.headline.weight(today ? .bold : .semibold)).monospacedDigit()
                     .foregroundStyle(today ? _accent.contrastingText : inMonth ? GalleryPalette.ink : GalleryPalette.muted)
-                    .frame(minWidth: 24, minHeight: 24)
+                    .frame(minWidth: dateRowHeight, minHeight: dateRowHeight)
                     .background(today ? accent : .clear, in: Circle())
                 if calendar.component(.day, from: day) == 1 {
-                    Text(day.formatted(.dateTime.month(.abbreviated))).font(.caption.weight(.semibold)).foregroundStyle(accent)
+                    Text(day.formatted(.dateTime.month(.abbreviated))).font(.subheadline.weight(.semibold)).foregroundStyle(accent)
                 }
                 Spacer(minLength: 0)
                 if let forecast = WeatherStore.shared.forecast(for: day) {
-                    Image(systemName: forecast.symbol).symbolRenderingMode(.multicolor).font(.caption)
+                    Image(systemName: forecast.symbol).symbolRenderingMode(.multicolor).font(.subheadline)
                 }
             }
             .padding(.bottom, 3)
@@ -506,13 +507,20 @@ struct MacMonthView: View {
         }
         .padding(6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(inMonth ? GalleryPalette.card : GalleryPalette.card.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(selected ? accent : today ? accent.opacity(0.5) : GalleryPalette.line, lineWidth: selected ? 1.5 : 0.5)
+        .background {
+            ZStack {
+                inMonth ? GalleryPalette.paper : GalleryPalette.card.opacity(0.35)
+                // Follow the user's calendar locale rather than assuming Saturday/Sunday.
+                if calendar.isDateInWeekend(day) { GalleryPalette.ink.opacity(0.055) }
+                if selected { accent.opacity(0.07) }
+            }
         }
-        .opacity(inMonth ? 1 : 0.55)
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            Rectangle().strokeBorder(selected ? accent.opacity(0.7) : GalleryPalette.line, lineWidth: selected ? 1.5 : 0.5)
+        }
+        // Days from the months either side are quieter, but their events stay readable.
+        .opacity(inMonth ? 1 : 0.75)
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             model.sheet = .newEvent(calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         }
@@ -526,10 +534,10 @@ struct MacMonthView: View {
         case .event(let event):
             Group {
                 if event.isAllDay {
-                    Text(event.title ?? "Event").font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(event.title ?? "Event").font(.subheadline.weight(.semibold)).lineLimit(1)
                         .foregroundStyle(GalleryPalette.ink)
                         .padding(.horizontal, 6)
-                        .frame(maxWidth: .infinity, minHeight: 15, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: eventRowHeight, alignment: .leading)
                         .background(event.calendarColor.opacity(0.28), in: RoundedRectangle(cornerRadius: 4))
                 } else {
                     HStack(spacing: 5) {
@@ -538,14 +546,14 @@ struct MacMonthView: View {
                         Text(event.title ?? "Event").lineLimit(1).foregroundStyle(GalleryPalette.ink)
                         Spacer(minLength: 0)
                     }
-                    .font(.caption)
+                    .font(.subheadline)
                 }
             }
-            .frame(height: 16)
+            .frame(height: eventRowHeight)
             .contentShape(Rectangle())
-            .onTapGesture { model.sheet = .event(event) }
+            .onTapGesture { model.inspect(event) }
             .contextMenu {
-                Button("Open", systemImage: "arrow.up.forward.app") { model.sheet = .event(event) }
+                Button("Open", systemImage: "arrow.up.forward.app") { model.inspect(event) }
                 Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
                 if let link = MeetingLink.url(for: event) {
                     Button("Join \(MeetingLink.service(link))", systemImage: "video") { UIApplication.shared.open(link) }
@@ -564,9 +572,9 @@ struct MacMonthView: View {
                 Text(reminder.title ?? "Reminder").lineLimit(1).foregroundStyle(GalleryPalette.ink)
                 Spacer(minLength: 0)
             }
-            .font(.caption).frame(height: 16)
+            .font(.subheadline).frame(height: eventRowHeight)
             .contentShape(Rectangle())
-            .onTapGesture { model.sheet = .reminder(reminder, nil) }
+            .onTapGesture { model.inspect(reminder) }
             .contextMenu {
                 Button("Complete", systemImage: "checkmark.circle") { model.toggle(reminder) }
                 SnoozeButtons(model: model, reminder: reminder)
@@ -616,227 +624,248 @@ struct MacMonthView: View {
 
 // MARK: - Up next
 
-/// The right-hand panel: the next event as a countdown card, tasks with today's progress and a field to add one,
-/// and the chosen day's schedule.
+/// A compact event strip and a task-first inspector. Details expand inside the list so
+/// opening a reminder doesn't replace the pane or discard its scroll position.
 struct MacUpNextPanel: View {
     @AppAccent private var accent
     @ObservedObject var model: AgendaModel
     @State private var draft = ""
     @State private var destinationID = ""
+    @State private var listID = ""
+    @State private var filter = TaskFilter.today
+    @State private var collapsed: Set<String> = ["Later", "Anytime"]
+    @State private var expandedID: String?
+    @State private var showDay = true
     @FocusState private var adding: Bool
     private var calendar: Calendar { .current }
+    private enum TaskFilter: String, CaseIterable { case today = "Today", upcoming = "Upcoming", all = "All" }
+    private var shownLists: [EKCalendar] { model.lists.filter { Preferences.selected($0.calendarIdentifier, reminders: true) } }
+    private var writableLists: [EKCalendar] { model.lists.filter(\.allowsContentModifications) }
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             nextEvent
+            Divider()
+            DisclosureGroup(isExpanded: $showDay) {
+                MacDaySummary(model: model).frame(height: 170)
+            } label: {
+                Label("Day summary · \(model.calendarDate.formatted(.dateTime.month(.abbreviated).day()))", systemImage: "calendar")
+                    .font(.caption.weight(.medium)).foregroundStyle(GalleryPalette.muted)
+            }
+            Divider()
             tasksCard.frame(maxHeight: .infinity)
-            MacDaySummary(model: model).frame(height: 210).gallerySurface(radius: 16)
+            if model.reminderAccess { composer }
         }
-        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
+        .padding(12)
         .background(GalleryPalette.card.opacity(0.45))
         .overlay(alignment: .leading) { Rectangle().fill(GalleryPalette.line).frame(width: 0.5) }
+        .onChange(of: model.generation) { _, _ in
+            if !listID.isEmpty && !shownLists.contains(where: { $0.calendarIdentifier == listID }) { listID = "" }
+            if let expandedID, !model.reminders.contains(where: { $0.calendarItemIdentifier == expandedID && !$0.isCompleted }) { self.expandedID = nil }
+        }
     }
-
-    // MARK: Next event
 
     private var nextEvent: some View {
         TimelineView(.everyMinute) { context in
             let now = context.date
-            let upcoming = model.events(in: DateInterval(start: now, duration: 7 * 86_400))
-                .first { !$0.isAllDay && $0.endDate > now }
+            let end = calendar.date(byAdding: .day, value: 7, to: now)!
+            let event = model.events(in: DateInterval(start: now, end: end)).first { !$0.isAllDay && $0.endDate > now }
             let _ = model.generation
-            VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(title: "Up next")
-                if let event = upcoming {
-                    Text(countdown(event, now: now)).font(.caption.weight(.bold)).textCase(.uppercase)
-                        .foregroundStyle(event.calendarColor)
-                    Text(event.title ?? "Event").font(.headline).foregroundStyle(GalleryPalette.ink).lineLimit(2)
-                    Text(calendar.isDateInToday(event.startDate) ? event.timeRange
-                         : "\(event.startDate.formatted(.dateTime.weekday(.wide))) · \(event.timeRange)")
-                        .font(.caption).foregroundStyle(GalleryPalette.muted)
-                    if let location = event.location, !location.isEmpty {
-                        Label(location, systemImage: "mappin").font(.caption).foregroundStyle(GalleryPalette.muted).lineLimit(1)
-                    }
-                    HStack {
-                        Button("Details") { model.sheet = .event(event) }.buttonStyle(.bordered)
-                        if let link = MeetingLink.url(for: event) { JoinButton(url: link) }
-                    }
-                    .controlSize(.small).padding(.top, 2)
+            HStack(spacing: 8) {
+                if let event {
+                    RoundedRectangle(cornerRadius: 2).fill(event.calendarColor).frame(width: 3, height: 36)
+                    Button { model.inspect(event) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("UP NEXT · \(countdown(event, now: now))").font(.caption2.weight(.semibold)).foregroundStyle(GalleryPalette.muted)
+                            Text(event.title ?? "Event").font(.subheadline.weight(.medium)).foregroundStyle(GalleryPalette.ink).lineLimit(1)
+                            Text(event.timeRange).font(.caption2).foregroundStyle(GalleryPalette.muted).lineLimit(1)
+                        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }.buttonStyle(.plain).help("Show event details")
+                    if let link = MeetingLink.url(for: event) { JoinButton(url: link).controlSize(.small) }
                 } else {
-                    Text("Nothing else this week").font(.subheadline).foregroundStyle(GalleryPalette.muted)
+                    Label("No upcoming events this week", systemImage: "calendar").font(.caption).foregroundStyle(GalleryPalette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background {
-                RoundedRectangle(cornerRadius: 16).fill(GalleryPalette.card)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(LinearGradient(colors: [(upcoming?.calendarColor ?? accent).opacity(0.22), .clear], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    }
-            }
-            .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(GalleryPalette.line, lineWidth: 0.5) }
         }
     }
-
     private func countdown(_ event: EKEvent, now: Date) -> String {
-        if event.startDate <= now { return "Now · ends \(event.endDate.formatted(date: .omitted, time: .shortened))" }
+        if event.startDate <= now { return "Now" }
         let minutes = Int(event.startDate.timeIntervalSince(now) / 60)
         if minutes < 60 { return "In \(max(1, minutes)) min" }
-        if calendar.isDateInToday(event.startDate) {
-            let hours = minutes / 60, rest = minutes % 60
-            return rest == 0 ? "In \(hours) hr" : "In \(hours) hr \(rest) min"
-        }
-        return calendar.isDateInTomorrow(event.startDate) ? "Tomorrow" : event.startDate.formatted(.dateTime.weekday(.wide))
+        if calendar.isDate(event.startDate, inSameDayAs: now) { return "In \(minutes / 60) hr\(minutes % 60 == 0 ? "" : " \(minutes % 60) min")" }
+        return calendar.isDateInTomorrow(event.startDate) ? "Tomorrow" : event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
     }
-
-    // MARK: Tasks
 
     private var tasksCard: some View {
         let groups = grouped()
-        let dueToday = groups.first { $0.title == "Today" }?.items.count ?? 0
-        let overdue = groups.first { $0.title == "Overdue" }?.items.count ?? 0
-        // A reminder whose list was deleted has no calendar, and EventKit's implicitly unwrapped one would crash.
-        let done = model.completedToday.filter { $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } ?? false }.count
-        let total = done + dueToday + overdue
+        let count = groups.reduce(0) { $0 + $1.items.count }
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle().stroke(GalleryPalette.line, lineWidth: 4)
-                    Circle().trim(from: 0, to: total == 0 ? 0 : CGFloat(done) / CGFloat(total))
-                        .stroke(accent, style: StrokeStyle(lineWidth: 4, lineCap: .round)).rotationEffect(.degrees(-90))
-                }
-                .frame(width: 26, height: 26)
-                .animation(.snappy, value: done)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Tasks").font(.headline).foregroundStyle(GalleryPalette.ink)
-                    Text(total == 0 ? "Nothing due today" : "\(done) of \(total) done today").font(.caption).foregroundStyle(GalleryPalette.muted)
-                }
+            HStack {
+                Text("Tasks").font(.headline).foregroundStyle(GalleryPalette.ink)
+                Text("\(count)").font(.caption).foregroundStyle(GalleryPalette.muted)
                 Spacer()
+                Menu {
+                    Picker("Lists", selection: $listID) {
+                        Text("All selected lists").tag("")
+                        ForEach(shownLists, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
+                    }
+                } label: {
+                    Label(listID.isEmpty ? "Lists" : shownLists.first(where: { $0.calendarIdentifier == listID })?.title ?? "Lists", systemImage: "line.3.horizontal.decrease")
+                        .font(.caption).lineLimit(1)
+                }.help("Filter reminder lists").accessibilityLabel("Task list filter")
             }
-            .accessibilityElement(children: .combine)
+            Picker("Tasks shown", selection: $filter) {
+                ForEach(TaskFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.segmented)
             if !model.reminderAccess {
                 Button("Connect Reminders") { Task { await model.request(.reminder) } }.buttonStyle(.bordered)
                 Spacer(minLength: 0)
             } else {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill").foregroundStyle(accent)
-                    TextField("Add a task", text: $draft).textFieldStyle(.plain).font(.subheadline)
-                        .focused($adding).onSubmit(add)
-                }
-                .padding(.horizontal, 10).frame(height: 30)
-                .background(GalleryPalette.paper, in: RoundedRectangle(cornerRadius: 8))
-                Picker("Save to", selection: Binding(get: { destination?.calendarIdentifier ?? "" }, set: { destinationID = $0 })) {
-                    ForEach(model.lists.filter(\.allowsContentModifications), id: \.calendarIdentifier) { list in
-                        Text(list.title).tag(list.calendarIdentifier)
-                    }
-                }
-                .font(.caption)
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        if groups.allSatisfy({ $0.items.isEmpty }) {
-                            Label("All caught up", systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(GalleryPalette.muted)
-                                .padding(.top, 8)
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        if count == 0 {
+                            Label(filter == .today ? "Nothing due today" : filter == .upcoming ? "No upcoming tasks" : "All caught up", systemImage: "checkmark.circle")
+                                .font(.subheadline).foregroundStyle(GalleryPalette.muted).padding(.vertical, 12)
                         }
                         ForEach(groups, id: \.title) { group in
                             if !group.items.isEmpty {
-                                SectionHeader(title: group.title, trailing: "\(group.items.count)",
-                                              tint: group.title == "Overdue" ? .red : GalleryPalette.muted)
-                                    .padding(.top, 8)
-                                ForEach(group.items, id: \.calendarItemIdentifier) { reminder in row(reminder) }
+                                DisclosureGroup(isExpanded: Binding(get: { !collapsed.contains(group.title) }, set: { expanded in
+                                    if expanded { collapsed.remove(group.title) } else { collapsed.insert(group.title) }
+                                })) {
+                                    ForEach(group.items, id: \.calendarItemIdentifier) { row($0) }
+                                } label: {
+                                    HStack {
+                                        Text(group.title).font(.caption.weight(.semibold))
+                                        Spacer()
+                                        Text("\(group.items.count)").font(.caption2).monospacedDigit()
+                                    }.foregroundStyle(group.title == "Overdue" ? GalleryPalette.alert : GalleryPalette.muted)
+                                }.padding(.top, 5)
                             }
                         }
-                    }
+                    }.padding(.bottom, 6)
                 }
-                .scrollIndicators(.never)
+                .scrollIndicators(.automatic)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .gallerySurface(radius: 16)
     }
 
     private func row(_ reminder: EKReminder) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Button { model.toggle(reminder) } label: {
-                Image(systemName: "circle").foregroundStyle(reminder.calendarColor)
+        let expanded = expandedID == reminder.calendarItemIdentifier
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 6) {
+                Button { model.toggle(reminder) } label: {
+                    Image(systemName: "circle").font(.system(size: 16)).foregroundStyle(reminder.calendarColor).frame(width: 22, height: 25)
+                }.buttonStyle(.plain).disabled(!reminder.isWritable).accessibilityLabel("Complete \(reminder.title ?? "reminder")")
+                Button { withAnimation(.snappy) { expandedID = expanded ? nil : reminder.calendarItemIdentifier } } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(reminder.title ?? "Reminder").font(.subheadline).foregroundStyle(GalleryPalette.ink).lineLimit(2)
+                            Spacer(minLength: 0)
+                            if let due = ReminderDates.due(reminder) {
+                                Text(dueLabel(due, timed: reminder.dueDateComponents?.hour != nil)).font(.caption2).foregroundStyle(GalleryPalette.muted).lineLimit(1).fixedSize()
+                            }
+                        }
+                        if listID.isEmpty { Text(reminder.calendarTitle).font(.caption2).foregroundStyle(GalleryPalette.muted).lineLimit(1) }
+                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("\(expanded ? "Collapse" : "Expand") \(reminder.title ?? "reminder") details")
             }
-            .buttonStyle(.plain).accessibilityLabel("Complete \(reminder.title ?? "reminder")")
-            Button { model.sheet = .reminder(reminder, nil) } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(reminder.title ?? "Reminder").font(.subheadline).foregroundStyle(GalleryPalette.ink).lineLimit(2)
-                    Text(detail(reminder)).font(.caption).foregroundStyle(GalleryPalette.muted).lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            if expanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let due = ReminderDates.due(reminder) {
+                        Label(due.formatted(date: .abbreviated, time: reminder.dueDateComponents?.hour == nil ? .omitted : .shortened), systemImage: "calendar").font(.caption)
+                    }
+                    if let notes = reminder.notes, !notes.isEmpty { Text(notes).font(.caption).textSelection(.enabled) }
+                    if let url = reminder.url { Link(url.host() ?? url.absoluteString, destination: url).font(.caption).lineLimit(1) }
+                    HStack {
+                        Button("Edit", systemImage: "pencil") { model.sheet = .reminder(reminder, nil) }.disabled(!reminder.isWritable)
+                        Menu("Snooze", systemImage: "clock") { SnoozeButtons(model: model, reminder: reminder) }.disabled(!reminder.isWritable)
+                    }.buttonStyle(.bordered).controlSize(.small)
+                }.foregroundStyle(GalleryPalette.muted).padding(.leading, 28).padding(.bottom, 4)
             }
-            .buttonStyle(.plain)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .contextMenu {
-            SnoozeButtons(model: model, reminder: reminder)
-            Divider()
-            Button("Delete Reminder", systemImage: "trash", role: .destructive) {
-                do { try model.delete(reminder) } catch { model.error = error.localizedDescription }
+            if reminder.isWritable {
+                SnoozeButtons(model: model, reminder: reminder)
+                Divider()
+                Button("Delete Reminder", systemImage: "trash", role: .destructive) {
+                    do { try model.delete(reminder) } catch { model.error = error.localizedDescription }
+                }
             }
         }
     }
-
-    /// "Tomorrow, 9:00 AM · Work", or just the list for undated ones.
-    private func detail(_ reminder: EKReminder) -> String {
-        guard let due = ReminderDates.due(reminder) else { return reminder.calendarTitle }
-        let day = calendar.isDateInToday(due) ? "Today" : calendar.isDateInTomorrow(due) ? "Tomorrow" : due.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-        let when = reminder.dueDateComponents?.hour != nil ? "\(day), \(due.formatted(date: .omitted, time: .shortened))" : day
-        return "\(when) · \(reminder.calendarTitle)"
+    private func dueLabel(_ due: Date, timed: Bool) -> String {
+        if calendar.isDateInToday(due) { return timed ? due.formatted(date: .omitted, time: .shortened) : "Today" }
+        return calendar.isDateInTomorrow(due) ? "Tomorrow" : due.formatted(.dateTime.month(.abbreviated).day())
     }
-
     private func grouped() -> [(title: String, items: [EKReminder])] {
         let open = model.reminders.filter { reminder in
             guard !reminder.isCompleted, let id = reminder.calendar?.calendarIdentifier else { return false }
-            return Preferences.selected(id, reminders: true)
+            return Preferences.selected(id, reminders: true) && (listID.isEmpty || listID == id)
         }
         let today = calendar.startOfDay(for: .now)
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
         let week = calendar.date(byAdding: .day, value: 8, to: today)!
         func due(_ reminder: EKReminder) -> Date? { ReminderDates.due(reminder) }
-        let sorted = open.sorted { (due($0) ?? .distantFuture) < (due($1) ?? .distantFuture) }
-        return [
+        let sorted = open.sorted {
+            let lhs = due($0) ?? .distantFuture, rhs = due($1) ?? .distantFuture
+            return lhs == rhs ? ($0.title ?? "").localizedStandardCompare($1.title ?? "") == .orderedAscending : lhs < rhs
+        }
+        let groups: [(title: String, items: [EKReminder])] = [
             ("Overdue", sorted.filter { due($0).map { $0 < today } ?? false }),
             ("Today", sorted.filter { due($0).map { $0 >= today && $0 < tomorrow } ?? false }),
             ("Next 7 days", sorted.filter { due($0).map { $0 >= tomorrow && $0 < week } ?? false }),
             ("Later", sorted.filter { due($0).map { $0 >= week } ?? false }),
-            ("Anytime", open.filter { due($0) == nil }.sorted { ($0.title ?? "") < ($1.title ?? "") }),
+            ("Anytime", sorted.filter { due($0) == nil })
         ]
+        return groups.filter { filter == .all || (filter == .today ? ["Overdue", "Today"].contains($0.title) : ["Next 7 days", "Later"].contains($0.title)) }
     }
-
     private var destination: EKCalendar? {
-        let writable = model.lists.filter(\.allowsContentModifications)
-        return writable.first { $0.calendarIdentifier == destinationID }
-            ?? writable.first { Preferences.selected($0.calendarIdentifier, reminders: true) }
-            ?? writable.first { $0.calendarIdentifier == model.store.defaultCalendarForNewReminders()?.calendarIdentifier }
-            ?? writable.first
+        writableLists.first { $0.calendarIdentifier == destinationID }
+            ?? writableLists.first { $0.calendarIdentifier == listID }
+            ?? writableLists.first { Preferences.selected($0.calendarIdentifier, reminders: true) }
+            ?? writableLists.first { $0.calendarIdentifier == model.store.defaultCalendarForNewReminders()?.calendarIdentifier }
+            ?? writableLists.first
     }
-
-    /// Adds the typed task to the explicitly displayed destination list.
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                TextField("Add a task", text: $draft).textFieldStyle(.plain).font(.subheadline).focused($adding).onSubmit(add)
+                    .disabled(destination == nil)
+                Button(action: add) { Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(accent) }
+                    .buttonStyle(.plain).disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || destination == nil)
+                    .accessibilityLabel("Add task")
+            }
+            HStack {
+                Text("Save to").font(.caption2).foregroundStyle(GalleryPalette.muted)
+                Picker("Save to", selection: Binding(get: { destination?.calendarIdentifier ?? "" }, set: { destinationID = $0 })) {
+                    if writableLists.isEmpty { Text("No writable lists").tag("") }
+                    ForEach(writableLists, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
+                }.labelsHidden().font(.caption).controlSize(.small)
+                Spacer(minLength: 0)
+            }
+        }.padding(10).background(GalleryPalette.paper, in: RoundedRectangle(cornerRadius: 10))
+    }
     private func add() {
         let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
-        guard let list = destination else {
-            model.error = "Choose a default list for new reminders in the Reminders app first."
-            return
-        }
+        guard let list = destination else { model.error = "Choose a writable reminder list first."; return }
         let reminder = EKReminder(eventStore: model.store)
-        reminder.title = title
-        reminder.calendar = list
+        reminder.title = title; reminder.calendar = list
         do {
             try model.store.save(reminder, commit: true)
             Preferences.setSelected(list.calendarIdentifier, enabled: true, reminders: true, available: model.lists.map(\.calendarIdentifier))
-            draft = ""
-            adding = true
+            // A newly added undated task must remain visible even when Today was selected.
+            filter = .all; listID = list.calendarIdentifier; collapsed.remove("Anytime")
+            expandedID = reminder.calendarItemIdentifier
+            draft = ""; adding = true
             model.scheduleRefresh()
         } catch { model.error = error.localizedDescription }
     }
 }
 
-/// The chosen day's events, at the bottom of Up next.
+/// The chosen day's events, above the task list in the inspector.
 struct MacDaySummary: View {
     @ObservedObject var model: AgendaModel
     var body: some View {
@@ -856,7 +885,7 @@ struct MacDaySummary: View {
                             EventRow(color: event.calendarColor, title: event.title ?? "Event", detail: event.location,
                                      time: event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened),
                                      birthday: event.isBirthday, needsReply: event.needsReply,
-                                     joinURL: event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.sheet = .event(event) }
+                                     joinURL: event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }
                         }
                     }
                 }
@@ -916,6 +945,62 @@ struct MacCalendarCommands: Commands {
             ForEach(Array(MacView.allCases.enumerated()), id: \.offset) { index, view in
                 Button(view.title) { send(view.rawValue) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+            }
+        }
+    }
+}
+
+
+/// Drag a divider to resize a pane. Widths persist in the shared app preferences.
+private struct MacPaneDivider: View {
+    @Binding var width: Double
+    let limits: ClosedRange<Double>
+    let reversed: Bool
+    @State private var startingWidth: Double?
+    var body: some View {
+        Rectangle().fill(GalleryPalette.line.opacity(0.5)).frame(width: 6)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1).onChanged { value in
+                if startingWidth == nil { startingWidth = width }
+                width = min(limits.upperBound, max(limits.lowerBound, (startingWidth ?? width) + value.translation.width * (reversed ? -1 : 1)))
+            }.onEnded { _ in startingWidth = nil })
+            .accessibilityLabel(reversed ? "Inspector width" : "Sidebar width")
+            .accessibilityValue("\(Int(width)) points")
+            .accessibilityAdjustableAction { direction in
+                width = min(limits.upperBound, max(limits.lowerBound, width + (direction == .increment ? 20 : -20)))
+            }
+            .help("Drag to resize")
+    }
+}
+
+private struct MacReminderInspector: View {
+    @ObservedObject var model: AgendaModel
+    let reminder: EKReminder
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(reminder.title ?? "Reminder").font(.title2.bold()).foregroundStyle(GalleryPalette.ink)
+                    // The list's color marks the dot; as text, pale colors like yellow would be hard to read.
+                    Label { Text(reminder.calendarTitle).foregroundStyle(GalleryPalette.ink) } icon: {
+                        Image(systemName: "circle.fill").foregroundStyle(reminder.calendarColor)
+                    }.font(.subheadline)
+                    if let due = ReminderDates.due(reminder) {
+                        Label(due.formatted(date: .abbreviated, time: reminder.dueDateComponents?.hour == nil ? .omitted : .shortened), systemImage: "calendar")
+                    }
+                    if reminder.isWritable {
+                        Button(reminder.isCompleted ? "Mark Incomplete" : "Complete", systemImage: reminder.isCompleted ? "arrow.uturn.backward" : "checkmark.circle") { model.toggle(reminder) }
+                            .buttonStyle(.borderedProminent)
+                        Menu("Snooze", systemImage: "clock") { SnoozeButtons(model: model, reminder: reminder) }
+                    }
+                    if let notes = reminder.notes, !notes.isEmpty { Text(notes).font(.callout).textSelection(.enabled) }
+                    if let url = reminder.url { Link(url.host() ?? url.absoluteString, destination: url) }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            }
+            .background(GalleryPalette.paper).navigationTitle("Reminder").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { model.inspectorSelection = nil } }
+                ToolbarItem(placement: .primaryAction) { Button("Edit") { model.sheet = .reminder(reminder, nil) }.disabled(!reminder.isWritable) }
             }
         }
     }

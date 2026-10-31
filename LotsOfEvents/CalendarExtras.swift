@@ -13,7 +13,7 @@ import WidgetKit
 
 extension EKEvent {
     /// One occurrence of a possibly repeating event.
-    var occurrenceKey: String { "\(calendarItemIdentifier)-\(startDate.timeIntervalSince1970)" }
+    var occurrenceKey: String { "\(contactDateID ?? calendarItemIdentifier)-\(startDate.timeIntervalSince1970)" }
 }
 
 // MARK: - Rows
@@ -25,7 +25,7 @@ struct JoinButton: View {
         Link(destination: url) {
             Label("Join", systemImage: "video.fill").font(.caption.weight(.semibold))
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Color.green.opacity(0.18), in: Capsule()).foregroundStyle(.green)
+                .background(GalleryPalette.success.opacity(0.15), in: Capsule()).foregroundStyle(GalleryPalette.success)
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("Join \(MeetingLink.service(url)) call")
@@ -39,8 +39,8 @@ struct EventBadges: View {
     var body: some View {
         if needsReply || conflict {
             HStack(spacing: 6) {
-                if needsReply { Label("Needs reply", systemImage: "envelope.badge").foregroundStyle(.blue) }
-                if conflict { Label("Overlaps", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+                if needsReply { Label("Needs reply", systemImage: "envelope.badge").foregroundStyle(GalleryPalette.accent) }
+                if conflict { Label("Overlaps", systemImage: "exclamationmark.triangle.fill").foregroundStyle(GalleryPalette.warning) }
             }.font(.caption2.weight(.medium)).labelStyle(.titleAndIcon)
         }
     }
@@ -338,7 +338,7 @@ struct CalendarSetsView: View {
                 }
                 .onDelete { sets.remove(atOffsets: $0) }
                 .onMove { sets.move(fromOffsets: $0, toOffset: $1) }
-                if sets.isEmpty { Text("No sets yet. Use Save Current Calendars as Set in the Calendar tab's set menu.").foregroundStyle(.secondary) }
+                if sets.isEmpty { Text("No sets yet. In Calendar or Agenda, open the filter menu and choose Save Current Calendars as Set.").foregroundStyle(.secondary) }
             } footer: {
                 Text("A set remembers which calendars and reminder lists are shown. To switch sets with a Focus, go to Settings → Focus, choose a Focus, then Add Filter and choose LotsOfEvents.")
             }
@@ -392,5 +392,147 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
         CalendarSet.apply(CalendarSet.saved.first { $0.id.uuidString == calendarSet?.id })
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
+    }
+}
+
+// MARK: - Reminder notifications
+
+@MainActor enum ReminderNotifications {
+    static let key = "appReminderNotifications"
+    static let statusKey = "appReminderNotificationStatus"
+    static let pendingOpenKey = "notificationReminderID"
+    static var enabled: Bool { Preferences.defaults.object(forKey: key) as? Bool ?? true }
+    private static var revision = 0
+
+    /// Explicit alarms win. An item without alarms uses the app's due-time defaults.
+    static func dates(for reminder: EKReminder, now: Date, option: ReminderAlertOption = AlertDefaults.reminder,
+                      dateOnly: Bool = AlertDefaults.dateOnlyEnabled, minute: Int = AlertDefaults.dateOnlyMinute,
+                      calendar: Calendar = .current) -> [Date] {
+        guard !reminder.isCompleted else { return [] }
+        let due = ReminderDates.due(reminder)
+        let alarms = reminder.alarms ?? []
+        let dates: [Date]
+        if !alarms.isEmpty {
+            dates = alarms.compactMap { alarm in
+                // Location alerts stay with Apple's Reminders; don't turn them into time alerts.
+                guard alarm.structuredLocation == nil else { return nil }
+                return alarm.absoluteDate ?? due?.addingTimeInterval(alarm.relativeOffset)
+            }
+        } else if let due {
+            dates = [AlertDefaults.reminderAlarmDate(due: due, timed: reminder.dueDateComponents?.hour != nil,
+                         option: option, dateOnly: dateOnly, dateOnlyMinute: minute, calendar: calendar)].compactMap { $0 }
+        } else { dates = [] }
+        return Array(Set(dates.filter { $0 > now })).sorted()
+    }
+
+    private static var pendingUpdate: Task<Void, Never>?
+    static func update(reminders: [EKReminder]) async {
+        revision += 1
+        let current = revision
+        let previous = pendingUpdate
+        previous?.cancel()
+        let next = Task { @MainActor in
+            // Finish any in-flight add before reconciling; otherwise a stale alert can be re-added after removal.
+            await previous?.value
+            guard current == revision else { return }
+            await reconcile(reminders: reminders, current: current)
+        }
+        pendingUpdate = next
+        await next.value
+    }
+    private static func reconcile(reminders: [EKReminder], current: Int) async {
+        let center = UNUserNotificationCenter.current()
+        let pending = await center.pendingNotificationRequests()
+        guard current == revision else { return }
+        let own = pending.filter { $0.identifier.hasPrefix("reminder-") }
+        let permitted = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess
+        guard enabled && permitted else {
+            center.removePendingNotificationRequests(withIdentifiers: own.map(\.identifier))
+            let delivered = await center.deliveredNotifications()
+            guard current == revision else { return }
+            center.removeDeliveredNotifications(withIdentifiers: delivered.map(\.request.identifier).filter { $0.hasPrefix("reminder-") })
+            Preferences.defaults.set("", forKey: statusKey)
+            return
+        }
+        var settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            settings = await center.notificationSettings()
+        }
+        guard current == revision else { return }
+        guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
+            center.removePendingNotificationRequests(withIdentifiers: own.map(\.identifier))
+            Preferences.defaults.set("Allow notifications for LotsOfEvents in system Settings to receive reminder alerts.", forKey: statusKey)
+            return
+        }
+        let now = Date.now
+        let active = reminders.filter { !$0.isCompleted && $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true }
+        // Leave eight notification slots for time-to-leave alerts, and preserve any other app requests.
+        let capacity = max(0, 56 - pending.filter { !$0.identifier.hasPrefix("reminder-") && !$0.identifier.hasPrefix("leave-") }.count)
+        let planned = active.flatMap { reminder in dates(for: reminder, now: now).map { (reminder, $0) } }
+            .sorted { $0.1 < $1.1 }.prefix(capacity)
+        let ids = Set(planned.map { "reminder-\($0.0.calendarItemIdentifier)-\(Int($0.1.timeIntervalSince1970))" })
+        center.removePendingNotificationRequests(withIdentifiers: own.map(\.identifier).filter { !ids.contains($0) })
+        let activeIDs = Set(active.map(\.calendarItemIdentifier))
+        let delivered = await center.deliveredNotifications()
+        guard current == revision else { return }
+        center.removeDeliveredNotifications(withIdentifiers: delivered.compactMap { notification in
+            guard notification.request.identifier.hasPrefix("reminder-"),
+                  let id = notification.request.content.userInfo["reminderID"] as? String,
+                  !activeIDs.contains(id) else { return nil }
+            return notification.request.identifier
+        })
+        var failed = false
+        for (reminder, date) in planned {
+            guard current == revision else { return }
+            let content = UNMutableNotificationContent()
+            content.title = reminder.title ?? "Reminder"
+            content.body = reminder.calendar?.title ?? ""
+            content.sound = .default
+            content.threadIdentifier = "reminder-list-\(reminder.calendar?.calendarIdentifier ?? "")"
+            content.userInfo = ["reminderID": reminder.calendarItemIdentifier]
+            var components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+            components.timeZone = .current
+            let request = UNNotificationRequest(identifier: "reminder-\(reminder.calendarItemIdentifier)-\(Int(date.timeIntervalSince1970))", content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false))
+            do { try await center.add(request) } catch { failed = true }
+        }
+        guard current == revision else { return }
+        Preferences.defaults.set(failed ? "Some reminder alerts could not be scheduled. Reopen the app to retry." : "", forKey: statusKey)
+    }
+}
+
+@MainActor final class ReminderNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = ReminderNotificationDelegate()
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let id = response.notification.request.content.userInfo["reminderID"] as? String else { return }
+        await MainActor.run {
+            ReminderNotificationRoute.shared.open(id)
+        }
+    }
+}
+
+
+/// Retains notification taps across cold launch and inactive-to-active scene transitions.
+@MainActor final class ReminderNotificationRoute: ObservableObject {
+    static let shared = ReminderNotificationRoute()
+    @Published private(set) var reminderID: String?
+    private let defaults: UserDefaults
+    init(defaults: UserDefaults = Preferences.defaults) {
+        self.defaults = defaults
+        reminderID = defaults.string(forKey: ReminderNotifications.pendingOpenKey)
+    }
+    func open(_ id: String) {
+        defaults.set(id, forKey: ReminderNotifications.pendingOpenKey)
+        reminderID = id
+    }
+    func handled(_ id: String) {
+        guard reminderID == id else { return }
+        defaults.removeObject(forKey: ReminderNotifications.pendingOpenKey)
+        reminderID = nil
     }
 }

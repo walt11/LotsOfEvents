@@ -46,10 +46,12 @@ struct ThreeDayProvider: AppIntentTimelineProvider {
     private let base = AgendaProvider(threeDay: true)
     func placeholder(in context: Context) -> AgendaEntry { base.placeholder(in: context) }
     func snapshot(for configuration: ThreeDayConfigurationIntent, in context: Context) async -> AgendaEntry {
-        context.isPreview ? placeholder(in: context) : await base.entry(theme: configuration.theme, sources: configuration.sources, tasks: configuration.tasks, accent: configuration.accent)
+        var entry = context.isPreview ? placeholder(in: context) : await base.entry(theme: configuration.theme, sources: configuration.sources, tasks: configuration.tasks, accent: configuration.accent)
+        entry.look = configuration.look
+        return entry
     }
     func timeline(for configuration: ThreeDayConfigurationIntent, in context: Context) async -> Timeline<AgendaEntry> {
-        await base.timeline(theme: configuration.theme, sources: configuration.sources, tasks: configuration.tasks, accent: configuration.accent)
+        await base.timeline(theme: configuration.theme, sources: configuration.sources, tasks: configuration.tasks, accent: configuration.accent).styled(configuration.look)
     }
 }
 
@@ -67,7 +69,7 @@ struct ThreeDayAgendaWidget: Widget {
 
 struct ThreeDayAgendaView: View {
     let entry: AgendaEntry
-    private let look = WidgetLook.saved
+    private var look: WidgetLook { entry.look }
     @Environment(\.colorScheme) private var colorScheme
     private var accent: (color: Color, onColor: Color, custom: Bool) { entry.theme.widgetAccent(appRGB: entry.accentRGB, chosen: entry.accent) }
     private var muted: Color { entry.theme.secondary(colorScheme) }
@@ -78,6 +80,8 @@ struct ThreeDayAgendaView: View {
     private var rowHeight: CGFloat { look.row(18) }
     private var taskHeight: CGFloat { look.row(19) }
     private var labelHeight: CGFloat { look.row(13) }
+    /// The day tabs grow with the text size so the weekday and date stay inside the highlight.
+    private var tabHeight: CGFloat { (34 * look.textSize.scale).rounded() }
 
     private enum Line: Identifiable {
         case label(String, alert: Bool), event(AgendaItem), task(WidgetTask)
@@ -93,8 +97,8 @@ struct ThreeDayAgendaView: View {
     private func height(_ line: Line) -> CGFloat {
         switch line {
         case .label: labelHeight
-        case .event: rowHeight
-        case .task: taskHeight
+        case .event(let item): look.row(!item.allDay && look.showTimes ? 29 : 18)
+        case .task(let task): look.row(task.timed && look.showTimes ? 29 : 19)
         }
     }
 
@@ -116,25 +120,56 @@ struct ThreeDayAgendaView: View {
         }
     }
 
+    /// Never end on a section label with none of its rows.
+    private static func withoutTrailingLabels(_ count: Int, in lines: [Line], from start: Int) -> Int {
+        var count = count
+        while count > 1 && lines[start + count - 1].isLabel { count -= 1 }
+        return count
+    }
+
+    /// The days after the selected one, each under its own heading, to fill space the selected day leaves empty
+    /// in the large widget.
+    private var laterLines: [Line] {
+        let calendar = Calendar.current
+        let selected = calendar.startOfDay(for: entry.selectedDay)
+        return days.filter { $0 > selected }.flatMap { day -> [Line] in
+            let events = WidgetAgendaLayout.items(on: day, from: entry.items).map { Line.event($0) }
+            let tasks = entry.showTasks
+                ? entry.tasks.filter { !$0.overdue && $0.due.map { calendar.isDate($0, inSameDayAs: day) } ?? false }.map { Line.task($0) } : []
+            let rows = events + tasks
+            let heading = calendar.isDateInTomorrow(day) ? "TOMORROW" : day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()).uppercased()
+            return rows.isEmpty ? [] : [.label(heading, alert: false)] + rows
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let lines = self.lines
+            let selectedLines = self.lines
+            // An empty day keeps its note above the days after it.
+            // Below the day tabs (and their 7-point gap) and above the 16-point bar of buttons.
+            let room = max(0, geometry.size.height - tabHeight - 22 - (selectedLines.isEmpty ? 20 : 0))
+            let selectedMax = WidgetScroll.maxStart(selectedLines.map(height), in: room)
+            // In the large widget, when the selected day fits with room to spare, the days after it fill the rest under
+            // their own headings. Small and medium widgets show only the selected day, since rows under the
+            // highlighted tab read as that day's.
+            let large = geometry.size.height > 300
+            let lines = large && selectedMax == 0 ? selectedLines + laterLines : selectedLines
             let heights = lines.map(height)
-            let room = max(0, geometry.size.height - 62)
-            let maxStart = WidgetScroll.maxStart(heights, in: room)
+            let maxStart = selectedMax
             let start = min(max(0, entry.dayPage), maxStart)
             let shown = WidgetScroll.visible(heights, from: start, in: room)
-            // Never end on a section label with none of its rows.
-            let count = shown > 1 && lines[start + shown - 1].isLabel ? shown - 1 : shown
+            let count = Self.withoutTrailingLabels(shown, in: lines, from: start)
             let step = WidgetScroll.step(visible: count)
             VStack(alignment: .leading, spacing: 0) {
-                dayTabs.padding(.bottom, 7)
+                dayTabs.padding(.bottom, 5)
                 if !entry.connected {
                     Text("Open the app to connect calendars and reminders.").font(.caption).foregroundStyle(muted)
-                } else if lines.isEmpty {
-                    Text("No items for this day").font(.caption).foregroundStyle(muted).padding(.top, 4)
                 } else {
-                    ForEach(lines[start..<start + count]) { line($0) }
+                    if selectedLines.isEmpty {
+                        Text("No items for this day").font(.caption).foregroundStyle(muted).padding(.top, 4).frame(height: 20, alignment: .top)
+                    }
+                    // By position: a multi-day event can appear under more than one day.
+                    ForEach(Array(lines[start..<start + count].enumerated()), id: \.offset) { line($0.element) }
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
@@ -145,19 +180,10 @@ struct ThreeDayAgendaView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                // Quick Add, opened on the day selected in this widget.
-                .overlay(alignment: .trailing) {
-                    if look.showAddButton {
-                    Link(destination: URL(string: "lotsofevents://quick-add?day=\(Int(entry.selectedDay.timeIntervalSince1970))")!) {
-                        Image(systemName: "plus").font(look.font(12, .semibold)).frame(width: 28, height: 22)
-                    }
-                    .accessibilityLabel("Add to \(entry.selectedDay.formatted(.dateTime.weekday(.wide)))")
-                    }
-                }
                 .buttonStyle(.plain).foregroundStyle(muted).frame(height: 16)
             }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
-        .padding(12)
+        .padding(WidgetContentLayout.insets)
         .foregroundStyle(entry.theme.text(colorScheme))
         .containerBackground(for: .widget) { entry.theme.backgroundView(colorScheme) }
         .widgetURL(URL(string: "lotsofevents://agenda"))
@@ -169,11 +195,11 @@ struct ThreeDayAgendaView: View {
                 let selected = Calendar.current.isDate(day, inSameDayAs: entry.selectedDay)
                 Button(intent: SelectWidgetDayIntent(day: day)) {
                     VStack(spacing: 0) {
-                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(look.font(11, .semibold))
-                        Text(day.formatted(.dateTime.day())).font(look.font(19, .medium, theme: entry.theme == .gallery ? .serif : .default))
+                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(look.font(10, .semibold))
+                        Text(day.formatted(.dateTime.day())).font(look.font(17, .medium, theme: entry.theme == .gallery ? .serif : .default))
                     }
-                    .offset(y: DayTabMetrics.offset(weekdaySize: 11, weekdayWeight: .semibold, dateSize: 19, dateWeight: .medium))
-                    .frame(maxWidth: .infinity).frame(height: 38)
+                    .offset(y: DayTabMetrics.offset(weekdaySize: 10, weekdayWeight: .semibold, dateSize: 17, dateWeight: .medium))
+                    .frame(maxWidth: .infinity).frame(height: tabHeight)
                     // On a custom background the accent can vanish, so unselected days use the readable text color.
                     .foregroundStyle(selected ? accent.onColor : entry.theme == .custom && !accent.custom ? entry.theme.text(colorScheme) : accent.color)
                     .background(selected ? accent.color : .clear, in: RoundedRectangle(cornerRadius: 11))
@@ -181,6 +207,11 @@ struct ThreeDayAgendaView: View {
                 }.buttonStyle(.plain)
                     .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
                     .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            if look.showAddButton {
+                Link(destination: URL(string: "lotsofevents://quick-add?day=\(Int(entry.selectedDay.timeIntervalSince1970))")!) {
+                    Image(systemName: "plus").font(look.font(12, .medium)).frame(width: 20, height: tabHeight)
+                }.foregroundStyle(muted).accessibilityLabel("Add to selected day")
             }
         }
     }
@@ -201,26 +232,29 @@ struct ThreeDayAgendaView: View {
             Text(title).font(look.font(8, .semibold, theme: entry.theme == .gallery ? .monospaced : .default))
                 .foregroundStyle(alert ? .red : muted).frame(height: labelHeight, alignment: .bottomLeading)
         case .event(let item):
-            // One line per item, with the start time on the right, so more fit.
             HStack(spacing: 5) {
-                if look.showColorBars { RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 4, height: 13) }
-                Text(item.title).font(look.font(12, .medium)).lineLimit(1)
-                Spacer(minLength: 2)
-                if !item.allDay && look.showTimes {
-                    Text(item.widgetStartLabel).font(look.font(10)).monospacedDigit().lineLimit(1).foregroundStyle(muted)
+                if look.showColorBars { RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 3, height: item.allDay ? 13 : 23) }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+                    if !item.allDay && look.showTimes {
+                        Text(item.widgetTimeLabel).font(look.font(9)).monospacedDigit().lineLimit(1).foregroundStyle(muted)
+                    }
                 }
-            }.frame(height: rowHeight)
+                Spacer(minLength: 0)
+            }.frame(height: height(line))
         case .task(let task):
             HStack(spacing: 2) {
                 Button(intent: CompleteWidgetReminderIntent(task: task)) {
                     Image(systemName: "circle").font(look.font(14)).foregroundStyle(task.color).frame(width: 22, height: taskHeight)
                 }.buttonStyle(.plain).disabled(!task.writable).accessibilityLabel("Complete \(task.title)")
-                Text(task.title).font(look.font(12)).lineLimit(1)
-                Spacer(minLength: 2)
-                if task.timed && !task.overdue && look.showTimes, let label = task.trailingLabel {
-                    Text(label).font(look.font(10)).monospacedDigit().foregroundStyle(muted).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(task.title).font(look.font(11)).lineLimit(1)
+                    if task.timed && look.showTimes, let due = task.due {
+                        Text(due.formatted(date: .omitted, time: .shortened)).font(look.font(9)).foregroundStyle(muted).lineLimit(1)
+                    }
                 }
-            }.frame(height: taskHeight)
+                Spacer(minLength: 0)
+            }.frame(height: height(line))
         }
     }
 }

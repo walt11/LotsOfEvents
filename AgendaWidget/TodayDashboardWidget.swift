@@ -9,7 +9,7 @@ struct TodayDashboardWidgetView: View {
     let size: CGSize
     /// Set by the in-app preview, where there's no widget family in the environment.
     var previewFamily: WidgetFamily? = nil
-    private let look = WidgetLook.saved
+    private var look: WidgetLook { entry.look }
     @Environment(\.colorScheme) private var scheme
     @Environment(\.widgetFamily) private var environmentFamily
     private var family: WidgetFamily { previewFamily ?? environmentFamily }
@@ -31,7 +31,7 @@ struct TodayDashboardWidgetView: View {
 
     // Rows are one line each so as much of the day fits as possible; the buttons keep full-size tap areas.
     // Heights follow the widget look's density and text size.
-    private static let spacing: CGFloat = 2
+    private static let spacing: CGFloat = 4
     private var headerHeight: CGFloat { look.row(18) }
     private var eventHeight: CGFloat { look.row(16) }
     private var taskHeight: CGFloat { look.row(19) }
@@ -40,10 +40,10 @@ struct TodayDashboardWidgetView: View {
     var body: some View {
         let lines = self.lines
         // A row that starts mid-section repeats its section's label on top, so reserve room for it.
-        let room = size.height - headerHeight - Self.spacing
+        let room = max(0, size.height - headerHeight - Self.spacing)
         let heights = lines.map(height)
         let maxStart = WidgetScroll.maxStart(heights, in: room - labelHeight)
-        let start = min(entry.page, maxStart)
+        let start = min(max(0, entry.page), maxStart)
         let sticky = start > 0 && !lines[start].isLabel ? lines[start].section : nil
         let shown = WidgetScroll.visible(heights, from: start, in: room - (sticky == nil ? 0 : labelHeight))
         // Never end on a section label with none of its rows.
@@ -158,7 +158,7 @@ struct TodayDashboardWidgetView: View {
                 }.accessibilityLabel("Quick add")
             }
         }
-        .lineLimit(1)
+        .lineLimit(1).minimumScaleFactor(0.8)
         .frame(height: headerHeight)
     }
 

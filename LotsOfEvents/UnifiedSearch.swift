@@ -30,7 +30,7 @@ struct UnifiedSearchResults: View {
                         EventRow(color: event.calendarColor, title: event.title ?? "Untitled event",
                                  detail: [event.startDate.formatted(date: .abbreviated, time: .omitted), event.location].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                                  time: event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened),
-                                 birthday: event.isBirthday) { model.sheet = .event(event) }
+                                 birthday: event.isBirthday) { model.inspect(event) }
                             .listRowBackground(GalleryPalette.card)
                     }
                 } header: { SectionHeader(title: "Events", trailing: "\(events.count)") }

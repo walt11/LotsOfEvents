@@ -40,7 +40,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
             return (c.paper, c.card, c.ink, c.muted, c.line, c.accent, c.onAccent)
         }
     }
-    /// The matching Home Screen icon; nil is the primary (Graphite) icon. Made by scripts/GenerateThemeIcons.swift.
+    /// The matching Home Screen icon; nil uses Agenda Pulse with the system appearance. Packaged by scripts/GenerateThemeIcons.swift.
     /// Custom has no icon of its own, so choosing it leaves the icon as it was.
     var iconName: String? { self == .graphite || self == .custom ? nil : "AppIcon-\(title)" }
     /// Carries over the old appearance setting once: Light keeps a light theme, anything else gets Graphite.
@@ -90,7 +90,7 @@ struct CustomAppColors: Equatable {
     }
 }
 
-/// How large the app's text is; Automatic follows the iPhone's Text Size setting.
+/// Automatic uses a comfortable minimum while respecting larger system text sizes.
 enum AppTextSize: String, CaseIterable, Identifiable {
     case automatic, small, large, extraLarge
     static let key = "appTextSize"
@@ -107,7 +107,7 @@ enum AppTextSize: String, CaseIterable, Identifiable {
         switch self {
         case .automatic: nil
         case .small: .small
-        case .large: .xLarge
+        case .large: .xxLarge
         case .extraLarge: .xxxLarge
         }
     }
@@ -147,6 +147,12 @@ enum GalleryPalette {
     static var accent: Color { hex(AppTheme.current.colors.accent) }
     /// Text drawn on the default accent.
     static var onAccent: Color { hex(AppTheme.current.colors.onAccent) }
+    // Red, green, and orange for text and small labels. The system's bright versions are under 3.5:1 on light
+    // backgrounds, so light themes use deeper shades that keep at least 4.5:1; dark themes keep the bright ones.
+    static var alert: Color { readable(light: 0xC4281C, dark: 0xFF6961) }
+    static var success: Color { readable(light: 0x17712F, dark: 0x30D158) }
+    static var warning: Color { readable(light: 0xA85B00, dark: 0xFFB340) }
+    private static func readable(light: UInt, dark: UInt) -> Color { hex(AppTheme.current.scheme == .light ? light : dark) }
 }
 
 extension View {
@@ -171,8 +177,7 @@ extension View {
 private struct GalleryRowModifier: ViewModifier {
     @AppStorage(AppDensity.key, store: Preferences.defaults) private var densityID = AppDensity.standard.rawValue
     func body(content: Content) -> some View {
-        content.padding(.horizontal, 10).padding(.vertical, (AppDensity(rawValue: densityID) ?? .standard).rowPadding)
-            .gallerySurface(radius: 12)
+        content.padding(.vertical, (AppDensity(rawValue: densityID) ?? .standard).rowPadding)
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 }

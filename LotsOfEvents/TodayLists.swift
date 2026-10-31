@@ -51,7 +51,7 @@ struct TodayListsView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }.listRowBackground(Color.clear)
         }
-        .navigationTitle("Undated in Today").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Undated Tasks in Today").navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden).background(GalleryPalette.paper)
     }
     /// "None", one list's name, or a count.

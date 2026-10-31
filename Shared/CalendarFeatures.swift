@@ -58,6 +58,19 @@ extension EKEvent {
         return me.participantStatus == .pending
     }
     var isBirthday: Bool { calendar?.type == .birthday }
+    /// Whether the event takes up its time for Open Time. Birthdays never do, and all-day events only when marked busy,
+    /// since holiday and other subscribed calendars don't track availability and would otherwise fill every day.
+    var blocksTime: Bool {
+        Self.blocksTime(availability: availability, allDay: isAllDay, canceled: status == .canceled, birthday: isBirthday)
+    }
+    static func blocksTime(availability: EKEventAvailability, allDay: Bool, canceled: Bool = false, birthday: Bool = false) -> Bool {
+        guard !canceled, !birthday else { return false }
+        switch availability {
+        case .free: return false
+        case .notSupported: return !allDay
+        default: return true
+        }
+    }
 }
 
 /// A named group of calendars and reminder lists, like "Work" or "Personal", stored as the ones it hides

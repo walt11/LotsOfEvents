@@ -1,0 +1,41 @@
+{
+  "build": "23",
+  "note": "Screenshots use fictional sample events and tasks. Unchanged screens are retained; calendar, agenda and widget views were refreshed for the current release.",
+  "screenshots": {
+    "iPhone": [
+      "iPhone/iphone-01-agenda.png",
+      "iPhone/iphone-02-calendar.png",
+      "iPhone/iphone-03-reminders.png",
+      "iPhone/iphone-04-quick-add.png",
+      "iPhone/iphone-05-settings.png"
+    ],
+    "iPad": [
+      "iPad/01-agenda.png",
+      "iPad/02-calendar.png",
+      "iPad/03-reminders.png",
+      "iPad/04-settings.png",
+      "iPad/05-widgets.png"
+    ],
+    "Duo": [
+      "Duo/01-agenda.png",
+      "Duo/02-calendar.png",
+      "Duo/03-reminders.png",
+      "Duo/04-settings.png",
+      "Duo/05-widgets.png"
+    ],
+    "Mac": [
+      "Mac/01-calendar.png",
+      "Mac/02-agenda.png",
+      "Mac/03-reminders.png",
+      "Mac/04-week.png",
+      "Mac/05-three-day.png"
+    ],
+    "Watch": [
+      "Watch/01-today.png",
+      "Watch/02-upcoming.png",
+      "Watch/03-tomorrow.png",
+      "Watch/04-days-ahead.png",
+      "Watch/05-reminders.png"
+    ]
+  }
+}

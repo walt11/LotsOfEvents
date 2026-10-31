@@ -33,7 +33,7 @@ final class WidgetStyleStore: ObservableObject {
 
 /// The widgets the editor can preview, each with the sizes it comes in.
 enum PreviewWidget: String, CaseIterable, Identifiable {
-    case upcoming, threeDay, split, next, five, month, focus
+    case upcoming, threeDay, split, next, five, month, focus, open, tomorrow, catchUp
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -44,6 +44,9 @@ enum PreviewWidget: String, CaseIterable, Identifiable {
         case .five: DashboardKind.five.title
         case .month: DashboardKind.month.title
         case .focus: DashboardKind.focus.title
+        case .open: DashboardKind.open.title
+        case .tomorrow: DashboardKind.tomorrow.title
+        case .catchUp: DashboardKind.catchUp.title
         }
     }
     var families: [WidgetFamily] {
@@ -59,6 +62,9 @@ enum PreviewWidget: String, CaseIterable, Identifiable {
         case .five: .five
         case .month: .month
         case .focus: .focus
+        case .open: .open
+        case .tomorrow: .tomorrow
+        case .catchUp: .catchUp
         default: nil
         }
     }
@@ -84,6 +90,11 @@ extension WidgetFamily {
 
 /// One place to style every widget, with a live preview of the real widget designs.
 struct WidgetEditorView: View {
+    #if targetEnvironment(macCatalyst)
+    static let editHint = "Control-click it and choose Edit"
+    #else
+    static let editHint = "touch and hold it on the Home Screen, then choose Edit Widget"
+    #endif
     @AppAccent private var accent
     @StateObject private var store = WidgetStyleStore()
     @State private var widget = PreviewWidget.threeDay
@@ -126,7 +137,7 @@ struct WidgetEditorView: View {
                 Button("Reset Widget Style", role: .destructive) { confirmingReset = true }
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(GalleryPalette.card, in: RoundedRectangle(cornerRadius: 16))
-                Text("Changes apply to every LotsOfEvents widget. Colors apply to widgets using the Custom theme; editing them switches widgets to Custom. Each widget can still choose its own theme and accent in Edit Widget.")
+                Text("Changes apply to every LotsOfEvents widget. Colors apply to widgets using the Custom theme; editing them switches widgets to Custom. Each widget can still choose its own theme, accent, font, text size, and spacing: \(WidgetEditorView.editHint).")
                     .font(.footnote).foregroundStyle(GalleryPalette.muted).padding(.horizontal, 4)
             }
             .padding(.horizontal).padding(.vertical, 16)
@@ -134,6 +145,7 @@ struct WidgetEditorView: View {
 
     // MARK: Preview
 
+    @State private var previewWidth: CGFloat = 320
     private var preview: some View {
         VStack(spacing: 10) {
             Menu {
@@ -164,7 +176,8 @@ struct WidgetEditorView: View {
                     // Theme colors and the look are read when widget views are built, so rebuild on any change.
                     .id(previewKey)
             }
-            .frame(height: family.previewSize.height * previewScale(family.previewSize, width: UIScreen.main.bounds.width - 32))
+            .frame(height: family.previewSize.height * previewScale(family.previewSize, width: previewWidth))
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { previewWidth = $0 }
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
             .background(wallpaper, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -185,7 +198,7 @@ struct WidgetEditorView: View {
     }
     /// Fits the widget in the width, and keeps a large widget short enough to leave room for the controls.
     private func previewScale(_ size: CGSize, width: CGFloat) -> CGFloat {
-        min(1, (width - 32) / size.width, 260 / size.height)
+        max(0, min(1, (width - 32) / size.width, 260 / size.height))
     }
     private var previewKey: String {
         "\(store.themeID)-\(store.custom.hashValue)-\(store.look.hashValue)-\(previewScheme)-\(widget.rawValue)-\(family)"
@@ -224,7 +237,7 @@ struct WidgetEditorView: View {
         if !agenda.items.isEmpty { agendaEntry = agenda }
         let threeDay = await AgendaProvider(threeDay: true).entry(theme: .app, sources: nil, tasks: true)
         if !threeDay.items.isEmpty || !threeDay.tasks.isEmpty { threeDayEntry = threeDay }
-        for kind in [DashboardKind.split, .next, .five, .month, .focus] {
+        for kind in [DashboardKind.split, .next, .five, .month, .focus, .open, .tomorrow, .catchUp] {
             let entry = await DashboardProvider(kind: kind).load(theme: .app, sources: nil, days: kind == .split ? EventsTasksProvider.upcomingDays : 1)
             if !entry.items.isEmpty || !entry.tasks.isEmpty { dashboardEntries[kind] = entry }
         }
@@ -399,7 +412,9 @@ enum WidgetPreviewData {
         return entry
     }
     static func dashboard(_ kind: DashboardKind) -> DashboardEntry {
-        DashboardEntry(date: .now, items: items, tasks: tasks, calendarAccess: true, reminderAccess: true, hasLists: true,
+        var entry = DashboardEntry(date: at(0, 9), items: items, tasks: tasks, calendarAccess: true, reminderAccess: true, hasLists: true,
                        selectedDay: Calendar.current.startOfDay(for: .now), days: kind == .split ? EventsTasksProvider.upcomingDays : 1)
+        if kind == .next { entry.preparation = tasks.last }
+        return entry
     }
 }
