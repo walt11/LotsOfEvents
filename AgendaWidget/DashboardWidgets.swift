@@ -7,6 +7,7 @@ import EventKit
 // Events + Tasks moved to a new kind when it got its own options: iOS kept applying the old options to the old kind.
 enum DashboardKind: String {
     case next = "NextUp", split = "EventsTasksDays", five = "FiveDayStrip", month = "MonthAgenda", focus = "FocusList", open = "OpenTime", tomorrow = "TomorrowBrief", catchUp = "CatchUp"
+    var interactionKey: String { "\(rawValue).interactedAt" }
     var title: String {
         switch self { case .next: return "Next Up"; case .split: return "Events + Tasks"; case .five: return "Five-Day Strip"; case .month: return "Month + Agenda"; case .focus: return "Focus List"; case .open: return "Open Time"; case .tomorrow: return "Tomorrow Brief"; case .catchUp: return "Catch Up" }
     }
@@ -46,6 +47,7 @@ struct DashboardEntry: StyledEntry {
     var startHour = 9
     var endHour = 17
     var minimumMinutes = 30
+    var completionUndo: WidgetUndoRecord? = nil
 }
 
 struct DashboardProvider: AppIntentTimelineProvider {
@@ -81,15 +83,20 @@ struct DashboardProvider: AppIntentTimelineProvider {
             let eventDates = entry.items.filter { !$0.reminder && !$0.allDay }.flatMap { [$0.eventStartDate ?? $0.date, $0.endDate ?? $0.date] }
             let dueDates = kind == .catchUp ? entry.tasks.filter(\.timed).compactMap { $0.due?.addingTimeInterval(1) } : []
             let ticks = kind == .open ? (1...12).map { entry.date.addingTimeInterval(Double($0) * 300) } : []
-            let transitions = Set(eventDates + dueDates + ticks)
-                .filter { $0 > entry.date && $0 < cutoff }.sorted()
-            let future = transitions.map { date -> DashboardEntry in
+            let resetDate = WidgetDayNavigation.resetDate(key: kind.interactionKey)
+            var transitions = Set(kind == .next || kind == .open || kind == .catchUp ? eventDates + dueDates + ticks : [])
+            if let resetDate { transitions.insert(resetDate) }
+            if let undo = entry.completionUndo { transitions.insert(undo.expires) }
+            let future = transitions.filter { $0 > entry.date && $0 < cutoff }.sorted().map { date -> DashboardEntry in
                 var updated = entry
-                // Copy all configured appearance and companion options to future entries.
                 updated.date = date
+                if let resetDate, date >= resetDate {
+                    updated.selectedDay = Calendar.current.startOfDay(for: date)
+                    updated.page = 0
+                }
                 return updated
             }
-            return Timeline(entries: [entry] + (kind == .next || kind == .open || kind == .catchUp ? future : []), policy: .after(min(entry.date.addingTimeInterval(900), midnight)))
+            return Timeline(entries: [entry] + future, policy: .after(min(entry.date.addingTimeInterval(900), midnight)))
         }
     }
     func load(theme: WidgetThemeOption, sources: [SourceEntity]?, days taskDays: Int = 1, accent: WidgetAccentOption = .app) async -> DashboardEntry {
@@ -114,14 +121,19 @@ struct DashboardProvider: AppIntentTimelineProvider {
             if !calendar.isDate(pagedOn, inSameDayAs: now) { entry.page = 0 }
         }
         if (kind == .month || kind == .five) && !calendar.isDate(saved, inSameDayAs: entry.selectedDay) { entry.page = 0 }
+        if !WidgetDayNavigation.isActive(at: now, key: kind.interactionKey) {
+            entry.selectedDay = calendar.startOfDay(for: now)
+            entry.page = 0
+        }
         let from = kind == .month ? calendar.dateInterval(of: .month, for: now)!.start : now
-        let days = kind == .month ? calendar.range(of: .day, in: .month, for: now)!.count : kind == .next ? 14 : 5
+        let days = kind == .split ? taskDays : kind == .month ? calendar.range(of: .day, in: .month, for: now)!.count : kind == .next ? 14 : 5
         // Events + Tasks and Focus List fetch their reminders below, so skip them here rather than fetching twice.
         let agendaLists = [.split, .focus, .open, .tomorrow, .catchUp, .next].contains(kind) ? Set<String>() : listIDs
         entry.items = await AgendaQuery.load(store: store, now: from, days: days, calendarIDs: calendarIDs, listIDs: agendaLists)
         if entry.reminderAccess && ([.split, .focus, .tomorrow, .catchUp].contains(kind)) {
             (entry.hasLists, entry.tasks) = await Self.tasks(store: store, listIDs: listIDs, now: now, days: kind == .split ? taskDays : nil)
         }
+        entry.completionUndo = WidgetUndoRecord.current
         entry.startHour = startHour; entry.endHour = endHour; entry.minimumMinutes = minimumMinutes
         if kind == .next, entry.reminderAccess, let preparationID,
            let reminder = store.calendarItem(withIdentifier: preparationID) as? EKReminder, !reminder.isCompleted {
@@ -154,7 +166,7 @@ struct DashboardProvider: AppIntentTimelineProvider {
 /// Events + Tasks uses its own options, which add the choice of just today or today and the days ahead.
 struct EventsTasksProvider: AppIntentTimelineProvider {
     private let base = DashboardProvider(kind: .split)
-    static let upcomingDays = 5
+    static var upcomingDays: Int { Preferences.days }
     func placeholder(in context: Context) -> DashboardEntry { base.placeholder(in: context) }
     func snapshot(for configuration: EventsTasksConfigurationIntent, in context: Context) async -> DashboardEntry {
         var entry = context.isPreview ? placeholder(in: context) : await base.load(theme: configuration.theme, sources: configuration.sources, days: days(configuration), accent: configuration.accent)
@@ -175,6 +187,7 @@ struct DashboardDayIntent: AppIntent {
     init(kind: DashboardKind, date: Date) { self.kind = kind.rawValue; timestamp = date.timeIntervalSince1970 }
     func perform() async throws -> some IntentResult {
         guard let kind = DashboardKind(rawValue: kind), kind == .five || kind == .month else { return .result() }
+        Preferences.defaults.set(Date.now.timeIntervalSince1970, forKey: kind.interactionKey)
         Preferences.defaults.set(timestamp, forKey: "\(kind.rawValue).day")
         Preferences.defaults.set(0, forKey: "\(kind.rawValue).page")
         WidgetCenter.shared.reloadTimelines(ofKind: kind.rawValue)
@@ -190,6 +203,11 @@ struct DashboardPageIntent: AppIntent {
     init(kind: DashboardKind, page: Int) { self.kind = kind.rawValue; self.page = page }
     func perform() async throws -> some IntentResult {
         guard let kind = DashboardKind(rawValue: kind) else { return .result() }
+        let now = Date.now
+        if !WidgetDayNavigation.isActive(at: now, key: kind.interactionKey) {
+            Preferences.defaults.set(Calendar.current.startOfDay(for: now).timeIntervalSince1970, forKey: "\(kind.rawValue).day")
+        }
+        Preferences.defaults.set(now.timeIntervalSince1970, forKey: kind.interactionKey)
         Preferences.defaults.set(max(0, page), forKey: "\(kind.rawValue).page")
         Preferences.defaults.set(Date.now.timeIntervalSince1970, forKey: "\(kind.rawValue).pagedOn")
         WidgetCenter.shared.reloadTimelines(ofKind: kind.rawValue)
@@ -218,6 +236,7 @@ struct CompleteWidgetReminderIntent: AppIntent {
         if !reminder.isCompleted {
             reminder.isCompleted = true
             try store.save(reminder, commit: true)
+            WidgetUndoRecord(token: UUID().uuidString, identifier: reminder.calendarItemIdentifier, title: reminder.title ?? "Task", completedAt: reminder.completionDate ?? .now).save()
         }
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
@@ -355,6 +374,7 @@ struct DashboardView: View {
         // Measure and paginate inside the same safe content margins used by every layout.
         .padding(WidgetContentLayout.insets)
         .foregroundStyle(entry.theme.text(scheme))
+        .overlay(alignment: .bottom) { WidgetUndoButton(record: entry.completionUndo, date: entry.date) }
         .containerBackground(for: .widget) { entry.theme.backgroundView(scheme) }
         .widgetURL(URL(string: kind == .focus || kind == .catchUp ? "lotsofevents://reminders" : "lotsofevents://agenda"))
     }
@@ -373,7 +393,10 @@ struct DashboardView: View {
         // One line per event, with the start time on the right, so more fit.
         HStack(spacing: 5) {
             if look.showColorBars { RoundedRectangle(cornerRadius: 1.5).fill(item.color).frame(width: 3, height: 12) }
-            Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+            HStack(spacing: 3) {
+                                if let symbol = item.dateSymbol { Image(systemName: symbol).foregroundStyle(item.color) }
+                                Text(item.title).lineLimit(1)
+                            }.font(look.font(11, .medium))
             Spacer(minLength: 2)
             if !item.allDay && look.showTimes { Text(item.widgetStartLabel).font(look.font(9)).monospacedDigit().foregroundStyle(secondary).lineLimit(1) }
         }.frame(height: look.row(16))
@@ -467,7 +490,10 @@ struct DashboardView: View {
                         HStack(spacing: 5) {
                             if look.showColorBars { Capsule().fill(item.color).frame(width: 3, height: item.allDay ? 12 : 23) }
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+                                HStack(spacing: 3) {
+                                if let symbol = item.dateSymbol { Image(systemName: symbol).foregroundStyle(item.color) }
+                                Text(item.title).lineLimit(1)
+                            }.font(look.font(11, .medium))
                                 if !item.allDay && look.showTimes { Text(item.widgetTimeLabel).font(look.font(9)).foregroundStyle(secondary).lineLimit(1) }
                             }
                             Spacer(minLength: 0)
@@ -692,4 +718,29 @@ struct TomorrowBriefWidget: Widget {
 }
 struct CatchUpWidget: Widget {
     var body: some WidgetConfiguration { DashboardConfiguration(kind: .catchUp).body }
+}
+
+struct UndoWidgetReminderIntent: AppIntent {
+    static let title: LocalizedStringResource = "Undo task completion"
+    @Parameter(title: "Completion") var token: String
+    init() {}
+    init(token: String) { self.token = token }
+    func perform() async throws -> some IntentResult {
+        try WidgetUndoRecord.undo(token: token)
+        return .result()
+    }
+}
+
+struct WidgetUndoButton: View {
+    let record: WidgetUndoRecord?
+    let date: Date
+    var body: some View {
+        if let record, record.expires > date {
+            Button(intent: UndoWidgetReminderIntent(token: record.token)) {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+                    .font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+            }.buttonStyle(.plain).accessibilityLabel("Undo completion of \(record.title)")
+        }
+    }
 }

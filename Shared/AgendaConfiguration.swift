@@ -178,7 +178,7 @@ struct EventsTasksConfigurationIntent: WidgetConfigurationIntent {
     @Parameter(title: "Text Size", default: .app) var textSize: WidgetTextSizeOption
     @Parameter(title: "Spacing", default: .app) var spacing: WidgetSpacingOption
     // A toggle rather than a menu: a plain Bool reaches the widget reliably, where a menu choice reverted to its default.
-    @Parameter(title: "Include Upcoming Days", default: false) var upcoming: Bool
+    @Parameter(title: "Include Upcoming Days", description: "When enabled, uses Days Ahead from the app’s widget settings. Otherwise, shows today only.", default: false) var upcoming: Bool
     @Parameter(title: "Calendars and Lists", description: "Leave empty to use the selections in the app's Sources screen.") var sources: [SourceEntity]?
     var look: WidgetLook { .forWidget(font: font, size: textSize, spacing: spacing) }
 }

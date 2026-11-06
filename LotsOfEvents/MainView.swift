@@ -5,10 +5,12 @@ import WidgetKit
 import Contacts
 
 enum AppSheet: Identifiable {
+    case weeklyPlanner
     case contactDate(ContactDateRecord, Date)
     case newEvent(Date, end: Date? = nil), event(EKEvent), duplicate(EKEvent), reminder(EKReminder?, String?), quickAdd(reminder: Bool, day: Date? = nil), newList, editList(EKCalendar), search, sources(reminders: Bool), importICS([ICSEvent]), settings
     var id: String {
         switch self {
+        case .weeklyPlanner: return "weekly-planner"
         case .contactDate(let record, let date): return "contact-date-\(record.id)-\(date.timeIntervalSince1970)"
         case .newList: return "new-list"
         case .search: return "search"
@@ -86,6 +88,15 @@ struct MainView: View {
         .task(id: "\(notificationRoute.reminderID ?? "")-\(phase == .active)") {
             await openNotifiedReminder()
         }
+        .task(id: "\(notificationRoute.contactDateID ?? "")-\(phase == .active)-\(model.generation)") {
+            guard phase == .active, let id = notificationRoute.contactDateID else { return }
+            if let record = ContactDates.records.first(where: { $0.id == id }) {
+                let date = Date(timeIntervalSince1970: Preferences.defaults.double(forKey: "pendingContactDateTimestamp"))
+                model.sheet = .contactDate(record, date)
+                notificationRoute.contactDateID = nil
+                Preferences.defaults.removeObject(forKey: "pendingContactDateID")
+            }
+        }
         .onOpenURL { url in
             if url.isFileURL { model.importCalendarFile(url); return }
             guard url.scheme == "lotsofevents" else { return }
@@ -111,6 +122,7 @@ struct MainView: View {
         }
         .sheet(item: $model.sheet, onDismiss: { model.scheduleRefresh() }) { sheet in
             switch sheet {
+            case .weeklyPlanner: WeeklyPlanner(model: model)
             case .contactDate(let record, let date): ContactDateDetails(record: record, date: date)
             case .newEvent(let date, let end): EventEditor(store: model.store, startDate: date, endDate: end)
             case .duplicate(let event): EventEditor(store: model.store, startDate: event.startDate, template: event)
@@ -118,7 +130,7 @@ struct MainView: View {
                 #if targetEnvironment(macCatalyst)
                 MacEventDetails(model: model, event: event)
                 #else
-                EventDetailsSheet(event: event) { model.sheet = .duplicate(event) }
+                EventDetailsSheet(event: event, model: model) { model.sheet = .duplicate(event) }
                 #endif
             case .reminder(let reminder, let list): ReminderEditor(model: model, reminder: reminder, defaultListID: list)
             case .quickAdd(let reminder, let day): QuickAddView(model: model, reminder: reminder, presetDay: day)
@@ -273,7 +285,7 @@ extension AgendaModel {
     var calendarAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     var reminderAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     func events(in range: DateInterval) -> [EKEvent] {
-        let selected = calendars.filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
+        let selected = calendars.filter { !(ContactDates.enabled && $0.type == .birthday) }.filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
         let native = calendarAccess && !selected.isEmpty
             ? store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: selected)) : []
         let contacts = ContactDates.events(store: store, in: range, excludingBirthdays: Set(native.compactMap(\.birthdayContactIdentifier)))
@@ -337,10 +349,14 @@ extension AgendaModel {
     func move(_ event: EKEvent, to shifted: Date) {
         let originalStart = event.startDate!, originalEnd = event.endDate!
         guard shifted != originalStart, event.isWritable else { return }
+        let previousPreparation = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: false))
+        let previousTravel = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: true))
         event.startDate = shifted
         event.endDate = shifted.addingTimeInterval(originalEnd.timeIntervalSince(originalStart))
         do {
             try store.save(event, span: .thisEvent, commit: true)
+            Preferences.defaults.set(previousPreparation, forKey: PlanningPreferences.bufferKey(event, travel: false))
+            Preferences.defaults.set(previousTravel, forKey: PlanningPreferences.bufferKey(event, travel: true))
             let title = event.title ?? "Event"
             undo = UndoAction(message: "Moved “\(title)” to \(shifted.formatted(.dateTime.weekday(.abbreviated).hour().minute()))") { [weak self] in
                 guard let self else { return }
@@ -512,12 +528,15 @@ struct UndoToast: View {
 struct EventDetailsSheet: View {
     @AppAccent private var accent
     let event: EKEvent
+    let model: AgendaModel
     let onDuplicate: () -> Void
+    @State private var planning = false
     var body: some View {
         EventDetails(event: event)
             .ignoresSafeArea(edges: .bottom)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 12) {
+                    if !event.isAllDay { Button("Plan", systemImage: "clock.badge.checkmark") { planning = true } }
                     if let place = event.location, !place.isEmpty, MeetingLink.url(url: nil, location: place, notes: nil) == nil {
                         Button { directions() } label: {
                             Label("Directions\(TravelAlerts.estimates[event.occurrenceKey].map { " · \(Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))" } ?? "")",
@@ -531,6 +550,7 @@ struct EventDetailsSheet: View {
                 .padding(.horizontal).padding(.top, 8).padding(.bottom, 4)
                 .background(.bar)
             }
+            .sheet(isPresented: $planning) { EventPlanningView(event: event, model: model) }
     }
     private func directions() {
         let query = event.structuredLocation?.geoLocation.map { "daddr=\($0.coordinate.latitude),\($0.coordinate.longitude)" }

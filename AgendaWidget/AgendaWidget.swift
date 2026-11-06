@@ -17,7 +17,7 @@ struct PageAgendaIntent: AppIntent {
 }
 
 struct AgendaEntry: StyledEntry {
-    let date: Date
+    var date: Date
     let items: [AgendaItem]
     var page: Int
     let connected: Bool
@@ -34,6 +34,7 @@ struct AgendaEntry: StyledEntry {
     var showTasks = false
     var tasks: [WidgetTask] = []
     var hasLists = false
+    var completionUndo: WidgetUndoRecord? = nil
     /// Font, text size, and spacing: the Widget editor's, with this widget's own options on top.
     var look = WidgetLook.saved
 }
@@ -59,7 +60,24 @@ struct AgendaProvider: AppIntentTimelineProvider {
     func timeline(theme: WidgetThemeOption, sources: [SourceEntity]?, tasks: Bool = false, accent: WidgetAccentOption = .app) async -> Timeline<AgendaEntry> {
         let entry = await entry(theme: theme, sources: sources, tasks: tasks, accent: accent)
         let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
-        return Timeline(entries: [entry], policy: .after(min(Date.now.addingTimeInterval(900), midnight)))
+        var entries = [entry]
+        if let resetDate = WidgetDayNavigation.resetDate(key: threeDay ? WidgetDayNavigation.interactionKey : "agendaPagedOn"), resetDate > entry.date,
+           resetDate < midnight {
+            var reset = entry
+            reset.date = resetDate
+            reset.selectedDay = Calendar.current.startOfDay(for: resetDate)
+            reset.dayPage = 0
+            reset.page = 0
+            entries.append(reset)
+        }
+        if threeDay, let undo = entry.completionUndo, undo.expires > entry.date, undo.expires < midnight {
+            var expired = entries.last ?? entry
+            expired.date = undo.expires
+            if let resetDate = WidgetDayNavigation.resetDate(), resetDate > undo.expires { expired = entry; expired.date = undo.expires }
+            entries.append(expired)
+            entries.sort { $0.date < $1.date }
+        }
+        return Timeline(entries: entries, policy: .after(min(Date.now.addingTimeInterval(900), midnight)))
     }
     func entry(theme: WidgetThemeOption, sources: [SourceEntity]?, tasks: Bool = false, accent: WidgetAccentOption = .app) async -> AgendaEntry {
         let now = Date.now
@@ -75,10 +93,12 @@ struct AgendaProvider: AppIntentTimelineProvider {
         let start = Calendar.current.startOfDay(for: now)
         let end = Calendar.current.date(byAdding: .day, value: 3, to: start)!
         let saved = Date(timeIntervalSince1970: Preferences.defaults.double(forKey: "selectedWidgetDay"))
-        let selected = saved >= start && saved < end ? saved : start
-        var entry = AgendaEntry(date: now, items: items, page: Preferences.defaults.integer(forKey: "page"), connected: ContactDates.enabled || EKEventStore.authorizationStatus(for: .event) == .fullAccess || EKEventStore.authorizationStatus(for: .reminder) == .fullAccess, theme: theme.theme ?? .selected, selectedDay: selected, dayPage: saved == selected ? Preferences.defaults.integer(forKey: "dayWidgetPage") : 0, days: threeDay ? 3 : Preferences.days)
+        let active = !threeDay || WidgetDayNavigation.isActive(at: now)
+        let selected = active && saved >= start && saved < end ? saved : start
+        var entry = AgendaEntry(date: now, items: items, page: Preferences.defaults.integer(forKey: "page"), connected: ContactDates.enabled || EKEventStore.authorizationStatus(for: .event) == .fullAccess || EKEventStore.authorizationStatus(for: .reminder) == .fullAccess, theme: theme.theme ?? .selected, selectedDay: selected, dayPage: active && saved == selected ? Preferences.defaults.integer(forKey: "dayWidgetPage") : 0, days: threeDay ? 3 : Preferences.days)
         let pagedOn = Date(timeIntervalSince1970: Preferences.defaults.double(forKey: "agendaPagedOn"))
-        if !Calendar.current.isDate(pagedOn, inSameDayAs: now) { entry.page = 0 }
+        if !Calendar.current.isDate(pagedOn, inSameDayAs: now) || !WidgetDayNavigation.isActive(at: now, key: "agendaPagedOn") { entry.page = 0 }
+        entry.completionUndo = WidgetUndoRecord.current
         entry.accent = accent
         entry.loadedDays = loaded
         if tasks && EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
@@ -188,7 +208,10 @@ struct AgendaWidgetView: View {
                                 .frame(width: 3, height: 12)
                         }
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+                            HStack(spacing: 3) {
+                                if let symbol = item.dateSymbol { Image(systemName: symbol).foregroundStyle(item.color) }
+                                Text(item.title).lineLimit(1)
+                            }.font(look.font(11, .medium))
                             if !item.allDay && look.showTimes {
                                 Text(item.widgetTimeLabel).font(look.font(9)).monospacedDigit()
                                     .foregroundStyle(entry.theme.secondary(colorScheme)).lineLimit(1)

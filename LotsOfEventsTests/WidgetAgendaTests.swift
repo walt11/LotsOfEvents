@@ -37,6 +37,20 @@ final class WidgetAgendaTests: XCTestCase {
         let result = WidgetAgendaLayout.items(on: tomorrow, from: [ending, multi, reminder], calendar: calendar)
         XCTAssertEqual(Set(result.map(\.id)), ["multi", "reminder"])
     }
+    func testThreeDayTodayKeepsFinishedMorningEventsInTheAfternoon() {
+        let start = calendar.startOfDay(for: day)
+        let afternoon = start.addingTimeInterval(15 * 3600)
+        var morning = item("morning", date: start.addingTimeInterval(9 * 3600), allDay: false)
+        morning.endDate = start.addingTimeInterval(10 * 3600)
+        var evening = item("evening", date: start.addingTimeInterval(18 * 3600), allDay: false)
+        evening.endDate = start.addingTimeInterval(19 * 3600)
+        let range = AgendaQuery.window(now: afternoon, days: 3, calendar: calendar)
+        XCTAssertEqual(range.start, start)
+        XCTAssertTrue(range.contains(morning.date))
+        let rows = WidgetAgendaLayout.items(on: afternoon, from: [evening, morning], calendar: calendar)
+        XCTAssertEqual(rows.map(\.id), ["morning", "evening"])
+        XCTAssertEqual(WidgetScroll.visible([29, 29], from: 0, in: 100), 2)
+    }
     func testTimeRangeAndReminderTimeUseDifferentFormats() {
         var event = item("event", allDay: false)
         event.endDate = day.addingTimeInterval(3600)

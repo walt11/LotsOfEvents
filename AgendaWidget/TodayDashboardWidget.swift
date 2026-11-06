@@ -194,7 +194,10 @@ struct TodayDashboardWidgetView: View {
         let past = !item.allDay && (item.endDate ?? item.date) <= entry.date
         return HStack(spacing: 5) {
             if look.showColorBars { RoundedRectangle(cornerRadius: 1.5).fill(item.color).frame(width: 3, height: 12) }
-            Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+            HStack(spacing: 3) {
+                                if let symbol = item.dateSymbol { Image(systemName: symbol).foregroundStyle(item.color) }
+                                Text(item.title).lineLimit(1)
+                            }.font(look.font(11, .medium))
             Spacer(minLength: 2)
             if !item.allDay && look.showTimes { Text(item.widgetStartLabel).font(look.font(9)).monospacedDigit().foregroundStyle(muted).lineLimit(1) }
         }

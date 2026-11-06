@@ -122,6 +122,7 @@ final class AgendaModel: ObservableObject {
         catch { ContactDateSync.clear(); self.error = "Could not refresh contact dates: \(error.localizedDescription)" }
         guard current == revision else { return }
         calendars = EKEventStore.authorizationStatus(for: .event) == .fullAccess ? store.calendars(for: .event) : []
+        Preferences.defaults.set(calendars.filter { $0.type == .birthday }.map(\.calendarIdentifier), forKey: ContactDates.birthdayCalendarIDsKey)
         lists = orderedReminderLists(EKEventStore.authorizationStatus(for: .reminder) == .fullAccess ? store.calendars(for: .reminder) : [])
         if !calendars.isEmpty { Preferences.migrateCalendars(available: calendars.map(\.calendarIdentifier)) }
         if !lists.isEmpty { Preferences.migrate(reminders: true, available: lists.map(\.calendarIdentifier)) }
@@ -142,7 +143,14 @@ final class AgendaModel: ObservableObject {
         generation += 1
         loading = false
         lastRefresh = .now
+        if let completion = WidgetUndoRecord.current, completion.expires > .now, undo == nil {
+            undo = UndoAction(message: "Completed “\(completion.title)” from widget") { [weak self] in
+                do { try WidgetUndoRecord.undo(token: completion.token); self?.scheduleRefresh() }
+                catch { self?.error = error.localizedDescription }
+            }
+        }
         await ReminderNotifications.update(reminders: fetched)
+        await ContactOccasionAlerts.update()
     }
     /// When data was last fetched, so returning to the app right after launch doesn't fetch it all again.
     private(set) var lastRefresh = Date.distantPast
@@ -208,7 +216,12 @@ struct AgendaView: View {
                                 Text("Nothing scheduled").font(.caption).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             }
-                            ForEach(day.items) { item in itemRow(item, conflict: conflicts.contains(item.id)) }
+                            if day.items.contains(where: { $0.contactDateID != nil }) {
+                                CompactContactDates(items: day.items, model: model)
+                                    .galleryRow()
+                                    .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 6, trailing: 16))
+                            }
+                            ForEach(day.items.filter { $0.contactDateID == nil }) { item in itemRow(item, conflict: conflicts.contains(item.id)) }
                         } header: {
                             HStack {
                                 SectionHeader(title: dayTitle(day.date))
@@ -251,7 +264,7 @@ struct AgendaView: View {
     }
     private func itemRow(_ item: AgendaItem, conflict: Bool = false) -> some View {
         EventRow(color: item.color, title: item.title, detail: item.agendaDetail, time: item.timeLabel,
-                 birthday: item.birthday, needsReply: item.needsReply, conflict: conflict,
+                 birthday: item.birthday, contactDateSymbol: item.contactDateSymbol, needsReply: item.needsReply, conflict: conflict,
                  joinURL: (item.endDate ?? item.date) > .now ? item.joinURL : nil) { model.open(item) } leading: {
             if item.reminder {
                 Button { if let reminder = model.reminder(withID: item.id) { model.toggle(reminder) } } label: {

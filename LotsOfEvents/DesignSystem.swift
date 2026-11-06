@@ -47,6 +47,7 @@ struct EventRow<Leading: View>: View {
     var detail: String? = nil
     var time: String? = nil
     var birthday = false
+    var contactDateSymbol: String? = nil
     var needsReply = false
     var conflict = false
     var joinURL: URL? = nil
@@ -61,7 +62,7 @@ struct EventRow<Leading: View>: View {
                     RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 5) {
-                            if birthday { Image(systemName: "gift.fill").foregroundStyle(color).accessibilityLabel("Birthday") }
+                            if let symbol = birthday ? "gift.fill" : contactDateSymbol { Image(systemName: symbol).foregroundStyle(color).accessibilityLabel(symbol == "gift.fill" ? "Birthday" : symbol == "heart.fill" ? "Anniversary" : "Date from Contacts") }
                             Text(title).font(.subheadline.weight(.medium)).foregroundStyle(GalleryPalette.ink)
                         }
                         EventBadges(needsReply: needsReply, conflict: conflict)
@@ -81,9 +82,9 @@ struct EventRow<Leading: View>: View {
 }
 
 extension EventRow where Leading == EmptyView {
-    init(color: Color, title: String, detail: String? = nil, time: String? = nil, birthday: Bool = false, needsReply: Bool = false,
+    init(color: Color, title: String, detail: String? = nil, time: String? = nil, birthday: Bool = false, contactDateSymbol: String? = nil, needsReply: Bool = false,
          conflict: Bool = false, joinURL: URL? = nil, dimmed: Bool = false, open: @escaping () -> Void) {
-        self.init(color: color, title: title, detail: detail, time: time, birthday: birthday, needsReply: needsReply,
+        self.init(color: color, title: title, detail: detail, time: time, birthday: birthday, contactDateSymbol: contactDateSymbol, needsReply: needsReply,
                   conflict: conflict, joinURL: joinURL, dimmed: dimmed, open: open, leading: { EmptyView() })
     }
 }
@@ -120,14 +121,14 @@ struct SearchSheet: View {
             Group {
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     ContentUnavailableView("Search everything", systemImage: "magnifyingglass",
-                                           description: Text("Find events by title, place, notes, or calendar, and reminders by title, notes, or list."))
+                                           description: Text("Find events by title, place, notes, or calendar, reminders by title, notes, or list, and dates from Contacts. Filter results by upcoming, past, or completed."))
                 } else {
                     UnifiedSearchResults(model: model, query: query.trimmingCharacters(in: .whitespaces))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(GalleryPalette.paper)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Events and reminders")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Events, tasks, and contact dates")
             .searchFocused($focused)
             .onAppear { focused = true }
             .navigationTitle("Search").navigationBarTitleDisplayMode(.inline)

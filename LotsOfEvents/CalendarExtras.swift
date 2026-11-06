@@ -468,7 +468,8 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
         let now = Date.now
         let active = reminders.filter { !$0.isCompleted && $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true }
         // Leave eight notification slots for time-to-leave alerts, and preserve any other app requests.
-        let capacity = max(0, 56 - pending.filter { !$0.identifier.hasPrefix("reminder-") && !$0.identifier.hasPrefix("leave-") }.count)
+        let reserveContactSlots = ContactDates.enabled && (Preferences.defaults.object(forKey: PlanningPreferences.contactAlerts) as? Int ?? -1) >= 0 ? 12 : 0
+        let capacity = max(0, 56 - reserveContactSlots - pending.filter { !$0.identifier.hasPrefix("reminder-") && !$0.identifier.hasPrefix("leave-") && !$0.identifier.hasPrefix("contact-occasion-") }.count)
         let planned = active.flatMap { reminder in dates(for: reminder, now: now).map { (reminder, $0) } }
             .sorted { $0.1 < $1.1 }.prefix(capacity)
         let ids = Set(planned.map { "reminder-\($0.0.calendarItemIdentifier)-\(Int($0.1.timeIntervalSince1970))" })
@@ -508,6 +509,16 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
         [.banner, .list, .sound]
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+           let id = response.notification.request.content.userInfo["contactDateID"] as? String,
+           let date = response.notification.request.content.userInfo["contactDateTimestamp"] as? Double {
+            await MainActor.run {
+                Preferences.defaults.set(id, forKey: "pendingContactDateID")
+                Preferences.defaults.set(date, forKey: "pendingContactDateTimestamp")
+                ReminderNotificationRoute.shared.contactDateID = id
+            }
+            return
+        }
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
               let id = response.notification.request.content.userInfo["reminderID"] as? String else { return }
         await MainActor.run {
@@ -520,6 +531,7 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
 /// Retains notification taps across cold launch and inactive-to-active scene transitions.
 @MainActor final class ReminderNotificationRoute: ObservableObject {
     static let shared = ReminderNotificationRoute()
+    @Published var contactDateID: String? = Preferences.defaults.string(forKey: "pendingContactDateID")
     @Published private(set) var reminderID: String?
     private let defaults: UserDefaults
     init(defaults: UserDefaults = Preferences.defaults) {

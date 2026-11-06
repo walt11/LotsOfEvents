@@ -34,7 +34,9 @@ struct QuickAddRepeat: Equatable {
     var frequency: EKRecurrenceFrequency
     /// Days of the week (1 = Sunday … 7 = Saturday) for "every Monday" or "every weekday"; empty otherwise.
     var weekdays: [Int] = []
+    var monthDay: Int? = nil
     var title: String {
+        if let monthDay { return "Every month on day \(monthDay)" }
         if weekdays == [2, 3, 4, 5, 6] { return "Every weekday" }
         if weekdays.count == 1 { return "Every \(Calendar.current.weekdaySymbols[weekdays[0] - 1])" }
         switch frequency {
@@ -48,7 +50,7 @@ struct QuickAddRepeat: Equatable {
     var rule: EKRecurrenceRule {
         EKRecurrenceRule(recurrenceWith: frequency, interval: 1,
                          daysOfTheWeek: weekdays.isEmpty ? nil : weekdays.compactMap { EKWeekday(rawValue: $0).map(EKRecurrenceDayOfWeek.init) },
-                         daysOfTheMonth: nil, monthsOfTheYear: nil, weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: nil)
+                         daysOfTheMonth: monthDay.map { [NSNumber(value: $0)] }, monthsOfTheYear: nil, weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: nil)
     }
 }
 
@@ -62,6 +64,13 @@ enum QuickAddParser {
         options: .caseInsensitive)
     /// Finds a repeat phrase and returns it with the phrase removed from the text.
     static func extractRepeat(_ text: String) -> (repeats: QuickAddRepeat?, rest: String) {
+        let monthly = try! NSRegularExpression(pattern: #"\b(?:every\s+month|monthly)\s+on\s+(?:the\s+)?(first|second|third|fourth|fifth|[1-9]|[12][0-9]|3[01])(?:st|nd|rd|th)?\b"#, options: .caseInsensitive)
+        if let match = monthly.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let range = Range(match.range, in: text), let numberRange = Range(match.range(at: 1), in: text) {
+            let value = text[numberRange].lowercased()
+            let day = Int(value) ?? ["first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5][value]!
+            return (QuickAddRepeat(frequency: .monthly, monthDay: day), text.replacingCharacters(in: range, with: " ").split(whereSeparator: \.isWhitespace).joined(separator: " "))
+        }
         guard let match = repeatPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let range = Range(match.range, in: text) else { return (nil, text) }
         let phrase = text[range].lowercased()
@@ -81,6 +90,21 @@ enum QuickAddParser {
         let (repeats, withoutRepeat) = extractRepeat(text.trimmingCharacters(in: .whitespacesAndNewlines))
         var result = parseDate(withoutRepeat, calendar: calendar)
         result.repeats = repeats
+        if let monthDay = repeats?.monthDay {
+            let now = Date.now
+            let today = calendar.startOfDay(for: now)
+            var components = DateComponents(day: monthDay)
+            if let parsedDate = result.date, !result.allDay {
+                let time = calendar.dateComponents([.hour, .minute], from: parsedDate)
+                components.hour = time.hour; components.minute = time.minute
+            }
+            let base = result.date ?? today
+            let start = calendar.dateInterval(of: .month, for: base)!.start
+            if let next = calendar.nextDate(after: max(start.addingTimeInterval(-1), today.addingTimeInterval(-1)), matching: components, matchingPolicy: .strict) {
+                result.date = next
+                if components.hour == nil { result.allDay = true }
+            }
+        }
         // "every Monday" with no date starts on the next Monday (or today, if it is one).
         if let weekday = repeats?.weekdays.first, repeats?.weekdays.count == 1 {
             let today = calendar.startOfDay(for: .now)

@@ -1,5 +1,6 @@
 import SwiftUI
 import Contacts
+import EventKit
 import WidgetKit
 
 private actor ContactDateReader {
@@ -33,6 +34,7 @@ private actor ContactDateReader {
         return status == .authorized || status == .limited
     }
     static func refresh() async throws {
+        ContactDates.migrateSettings()
         guard ContactDates.enabled && allowed else { clear(); return }
         let records = try await reader.read()
         // Permission or the setting can change while the read is running.
@@ -54,11 +56,12 @@ private actor ContactDateReader {
 struct ContactDatesSettings: View {
     @ObservedObject var model: AgendaModel
     @AppStorage(ContactDates.enabledKey, store: Preferences.defaults) private var enabled = false
+    @AppStorage(ContactDates.colorKey, store: Preferences.defaults) private var colorRGB = ContactDates.defaultColor
     @State private var connecting = false
     @State private var problem: String?
     var body: some View {
-        Section {
-            Toggle("Dates from Contacts", isOn: Binding(get: { enabled }, set: { on in
+        Group {
+            Toggle("Birthdays & Contact Dates", isOn: Binding(get: { enabled }, set: { on in
                 if !on { enabled = false; ContactDateSync.clear(); model.scheduleRefresh(); return }
                 connecting = true
                 Task {
@@ -74,13 +77,22 @@ struct ContactDatesSettings: View {
             })).disabled(connecting)
             if connecting { ProgressView("Connecting Contacts…") }
             if enabled {
+                NavigationLink("Choose Contacts & Occasions") { ContactDateSelectionView(model: model) }
+                ColorPicker("Contact Dates Color", selection: Binding(
+                    get: { GalleryPalette.hex(UInt(colorRGB)) },
+                    set: { colorRGB = Int(StoredColor($0).hex) }
+                ), supportsOpacity: false)
+                .onChange(of: colorRGB) { _, _ in
+                    model.scheduleRefresh()
+                    WidgetReloader.schedule()
+                }
                 Text("\(ContactDates.records.count) dated fields available").font(.footnote).foregroundStyle(.secondary)
                 if CNContactStore.authorizationStatus(for: .contacts) == .limited {
                     Text("Only contacts you have shared with LotsOfEvents are included.").font(.footnote).foregroundStyle(.secondary)
                 }
             }
-        } header: { Text("Contacts") } footer: {
-            Text("Show birthdays, anniversaries, and custom dates as yearly, all-day events in the calendar, agenda, and widgets. Existing calendar birthdays are not duplicated. Edit dates in Contacts. February 29 appears on February 28 in other years. Contact dates stay on your devices.")
+            Text("Show birthdays, anniversaries, and custom dates as yearly, all-day events in the calendar, agenda, and widgets. Includes ages and years when an original year is saved. Apple’s Birthdays calendar is hidden in LotsOfEvents while this is on; your calendar selection is restored when it is off. Edit dates in Contacts. February 29 appears on February 28 in other years. Contact dates stay on your devices.")
+                .font(.footnote).foregroundStyle(.secondary)
         }
         .listRowBackground(GalleryPalette.card)
         .alert("Contacts Access", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
@@ -109,5 +121,51 @@ struct ContactDateDetails: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .frame(idealWidth: 520, idealHeight: 420)
+    }
+}
+
+/// A compact, distinct group for personal occasions, with no repeated all-day labels.
+struct CompactContactDates: View {
+    private struct Entry: Identifiable {
+        let id: String
+        let title: String
+        let symbol: String
+        let open: () -> Void
+    }
+    private let entries: [Entry]
+    init(items: [AgendaItem], model: AgendaModel) {
+        entries = items.filter { $0.contactDateID != nil }.map { item in
+            Entry(id: item.id, title: item.title, symbol: item.dateSymbol ?? "calendar", open: { model.open(item) })
+        }
+    }
+    init(events: [EKEvent], model: AgendaModel) {
+        entries = events.filter { $0.contactDateID != nil }.map { event in
+            Entry(id: "\(event.contactDateID ?? ""):\(event.startDate.timeIntervalSince1970)",
+                  title: event.title ?? "Contact date", symbol: event.dateSymbol ?? "calendar", open: { model.inspect(event) })
+        }
+    }
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(entries) { entry in
+                    Button(action: entry.open) {
+                        HStack(spacing: 8) {
+                            Image(systemName: entry.symbol).foregroundStyle(ContactDates.color)
+                                .frame(width: 18).accessibilityHidden(true)
+                            Text(entry.title).foregroundStyle(GalleryPalette.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .font(.footnote)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows contact date details")
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(ContactDates.color.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
+            .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(ContactDates.color.opacity(0.22), lineWidth: 0.5) }
+        }
     }
 }

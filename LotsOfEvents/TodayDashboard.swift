@@ -28,7 +28,8 @@ struct TodayDashboard: View {
                     SectionHeader(title: "Earlier today")
                     ForEach(earlier) { row($0, dimmed: true) }
                 }
-                ForEach(upcoming) { row($0) }
+                CompactContactDates(items: upcoming, model: model)
+                ForEach(upcoming.filter { $0.contactDateID == nil }) { row($0) }
                 if upcoming.isEmpty && overdue.isEmpty && undated.isEmpty {
                     Text("Nothing else scheduled today").font(.caption).foregroundStyle(GalleryPalette.muted).padding(.vertical, 4)
                 }
@@ -56,7 +57,7 @@ struct TodayDashboard: View {
 
     private func row(_ item: AgendaItem, dimmed: Bool = false, completed: Bool = false) -> some View {
         EventRow(color: item.color, title: item.title, detail: item.agendaDetail, time: completed ? "Done" : item.timeLabel,
-                 birthday: item.birthday, needsReply: item.needsReply, conflict: !dimmed && conflicts.contains(item.id),
+                 birthday: item.birthday, contactDateSymbol: item.contactDateSymbol, needsReply: item.needsReply, conflict: !dimmed && conflicts.contains(item.id),
                  joinURL: (item.endDate ?? item.date) > .now ? item.joinURL : nil, dimmed: dimmed) { model.open(item) } leading: {
             if item.reminder {
                 Button { if let reminder = model.reminder(withID: item.id) { model.toggle(reminder) } } label: {

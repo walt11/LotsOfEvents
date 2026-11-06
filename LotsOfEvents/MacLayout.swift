@@ -68,6 +68,11 @@ struct MacLayout: View {
                     case "newReminder": model.sheet = .reminder(nil, model.activeReminderList)
                     case "quickAdd": model.sheet = .quickAdd(reminder: false)
                     case "settings": model.sheet = .settings
+                    case "planner": model.sheet = .weeklyPlanner
+                    case "search": model.sheet = .search
+                    case "today": model.calendarDate = .now; model.agendaReturnToToday += 1
+                    case "previous": shift(-1)
+                    case "next": shift(1)
                     default: break
                     }
                 }
@@ -114,18 +119,18 @@ struct MacLayout: View {
             Spacer(minLength: 0)
             if view.calendarMode != nil {
                 HStack(spacing: 10) {
-                    Button("Previous", systemImage: "chevron.left") { shift(-1) }.labelStyle(.iconOnly).keyboardShortcut(.leftArrow, modifiers: .command)
-                    Button("Today") { model.calendarDate = .now }.keyboardShortcut("t")
-                    Button("Next", systemImage: "chevron.right") { shift(1) }.labelStyle(.iconOnly).keyboardShortcut(.rightArrow, modifiers: .command)
+                    Button("Previous", systemImage: "chevron.left") { shift(-1) }.labelStyle(.iconOnly)
+                    Button("Today") { model.calendarDate = .now }
+                    Button("Next", systemImage: "chevron.right") { shift(1) }.labelStyle(.iconOnly)
                 }.font(.subheadline)
                 Picker("View", selection: Binding(get: { view }, set: select)) {
                     ForEach(MacView.allCases.filter { $0.calendarMode != nil }) { Text($0.title).tag($0) }
                 }.pickerStyle(.menu).labelsHidden().fixedSize().accessibilityLabel("Calendar view")
             } else if view == .agenda {
-                Button("Today") { model.agendaReturnToToday += 1 }.keyboardShortcut("t")
+                Button("Today") { model.agendaReturnToToday += 1 }
             }
             if view != .reminders { CalendarSetsMenu(model: model) }
-            Button("Search", systemImage: "magnifyingglass") { model.sheet = .search }.labelStyle(.iconOnly).keyboardShortcut("f")
+            Button("Search", systemImage: "magnifyingglass") { model.sheet = .search }.labelStyle(.iconOnly)
             Button("Quick Add", systemImage: "plus") { model.sheet = .quickAdd(reminder: view == .reminders) }
                 .labelStyle(.iconOnly).font(.headline).foregroundStyle(accent).help("Quick Add (⌘K)")
             Button("Inspector", systemImage: "sidebar.right") {
@@ -310,6 +315,7 @@ struct MacSidebar: View {
             .overlay { Capsule().strokeBorder(shown ? color.opacity(0.35) : GalleryPalette.line, lineWidth: 0.75) }
         }
         .buttonStyle(.plain)
+        .disabled(!reminders && source.type == .birthday && ContactDates.enabled)
         .help(shown ? "Hide \(source.title)" : "Show \(source.title)")
         .accessibilityLabel(source.title)
         .accessibilityValue(shown ? "Shown" : "Hidden")
@@ -525,6 +531,7 @@ struct MacMonthView: View {
             model.sheet = .newEvent(calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         }
         .onTapGesture { model.calendarDate = day }
+        .dropDestination(for: String.self) { payloads, _ in model.dropTasks(payloads, on: day) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
     }
@@ -534,7 +541,10 @@ struct MacMonthView: View {
         case .event(let event):
             Group {
                 if event.isAllDay {
-                    Text(event.title ?? "Event").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    HStack(spacing: 4) {
+                        if let symbol = event.dateSymbol { Image(systemName: symbol).foregroundStyle(event.calendarColor) }
+                        Text(event.title ?? "Event").lineLimit(1)
+                    }.font(.subheadline.weight(.semibold))
                         .foregroundStyle(GalleryPalette.ink)
                         .padding(.horizontal, 6)
                         .frame(maxWidth: .infinity, minHeight: eventRowHeight, alignment: .leading)
@@ -575,6 +585,7 @@ struct MacMonthView: View {
             .font(.subheadline).frame(height: eventRowHeight)
             .contentShape(Rectangle())
             .onTapGesture { model.inspect(reminder) }
+            .draggable(ReminderDrag.payload(reminder.calendarItemIdentifier))
             .contextMenu {
                 Button("Complete", systemImage: "checkmark.circle") { model.toggle(reminder) }
                 SnoozeButtons(model: model, reminder: reminder)
@@ -784,6 +795,7 @@ struct MacUpNextPanel: View {
                 }.foregroundStyle(GalleryPalette.muted).padding(.leading, 28).padding(.bottom, 4)
             }
         }
+        .draggable(ReminderDrag.payload(reminder.calendarItemIdentifier))
         .padding(.vertical, 4)
         .contextMenu {
             if reminder.isWritable {
@@ -881,10 +893,11 @@ struct MacDaySummary: View {
             } else {
                 ScrollView {
                     VStack(spacing: 2) {
-                        ForEach(events, id: \.occurrenceKey) { event in
+                        CompactContactDates(events: events, model: model)
+                        ForEach(events.filter { $0.contactDateID == nil }, id: \.occurrenceKey) { event in
                             EventRow(color: event.calendarColor, title: event.title ?? "Event", detail: event.location,
                                      time: event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened),
-                                     birthday: event.isBirthday, needsReply: event.needsReply,
+                                     birthday: event.isBirthday, contactDateSymbol: event.contactDateSymbol, needsReply: event.needsReply,
                                      joinURL: event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }
                         }
                     }
@@ -942,6 +955,12 @@ struct MacCalendarCommands: Commands {
             Button("Settings…") { send("settings") }.keyboardShortcut(",")
         }
         CommandMenu("Navigate") {
+            Button("Weekly Planner") { send("planner") }.keyboardShortcut("p", modifiers: [.command, .shift])
+            Button("Search") { send("search") }.keyboardShortcut("f")
+            Button("Today") { send("today") }.keyboardShortcut("t")
+            Button("Previous") { send("previous") }.keyboardShortcut(.leftArrow, modifiers: .command)
+            Button("Next") { send("next") }.keyboardShortcut(.rightArrow, modifiers: .command)
+            Divider()
             ForEach(Array(MacView.allCases.enumerated()), id: \.offset) { index, view in
                 Button(view.title) { send(view.rawValue) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))

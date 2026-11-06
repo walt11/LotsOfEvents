@@ -151,6 +151,7 @@ struct ReminderLine: View {
                 .accessibilityLabel("Open link \(url.host() ?? url.absoluteString)")
             }
         }
+        .draggable(ReminderDrag.payload(reminder.calendarItemIdentifier))
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Contacts
 import EventKit
 import SwiftUI
 
@@ -10,7 +11,23 @@ struct ContactDateRecord: Codable, Equatable, Identifiable, Sendable {
     let label: String
     let components: DateComponents
     let birthday: Bool
+    var symbol: String {
+        if birthday { return "gift.fill" }
+        let anniversary = CNLabeledValue<NSString>.localizedString(forLabel: CNLabelDateAnniversary)
+        return label.localizedCaseInsensitiveContains("anniversary") || label.localizedCaseInsensitiveCompare(anniversary) == .orderedSame
+            ? "heart.fill" : "calendar"
+    }
     var title: String { "\(name) · \(label)" }
+
+    /// Use the occurrence year, so browsing future anniversaries shows the correct count.
+    func title(on date: Date, timeZone: TimeZone = .current) -> String {
+        guard let originalYear = components.year, originalYear > 0 else { return title }
+        var calendar = components.calendar ?? Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let years = calendar.component(.year, from: date) - originalYear
+        guard years > 0 else { return title }
+        return "\(title) · \(years) \(years == 1 ? "year" : "years")"
+    }
 
     /// Repeats in the date's own calendar, using local all-day boundaries. Dates without a year work too.
     func occurrences(in range: DateInterval, timeZone: TimeZone = .current) -> [Date] {
@@ -42,8 +59,24 @@ struct ContactDateRecord: Codable, Equatable, Identifiable, Sendable {
 enum ContactDates {
     static let enabledKey = "contactDatesEnabled"
     static let cacheKey = "contactDatesCache"
+    static let colorKey = "contactDatesColor"
+    static let defaultColor = 0x8E8E93
+    static var cgColor: CGColor {
+        let rgb = Preferences.defaults.object(forKey: colorKey) as? Int ?? defaultColor
+        return CGColor(red: CGFloat((rgb >> 16) & 255) / 255,
+                       green: CGFloat((rgb >> 8) & 255) / 255,
+                       blue: CGFloat(rgb & 255) / 255, alpha: 1)
+    }
+    static var color: Color { Color(cgColor: cgColor) }
+    static let birthdayCalendarIDsKey = "contactBirthdayCalendarIDs"
+    static func migrateSettings(in defaults: UserDefaults = Preferences.defaults) {
+        guard defaults.object(forKey: "birthdayAges") != nil else { return }
+        if defaults.bool(forKey: "birthdayAges") { defaults.set(true, forKey: enabledKey) }
+        defaults.removeObject(forKey: "birthdayAges")
+    }
     static var enabled: Bool { Preferences.defaults.bool(forKey: enabledKey) }
-    static var records: [ContactDateRecord] {
+    static var records: [ContactDateRecord] { allRecords.filter { PlanningPreferences.contactIsVisible($0.id) } }
+    static var allRecords: [ContactDateRecord] {
         guard enabled, let data = Preferences.defaults.data(forKey: cacheKey) else { return [] }
         return (try? JSONDecoder().decode([ContactDateRecord].self, from: data)) ?? []
     }
@@ -51,23 +84,23 @@ enum ContactDates {
         (records ?? Self.records).flatMap { record -> [AgendaItem] in
             guard !record.birthday || !excludingBirthdays.contains(record.contactID) else { return [] }
             return record.occurrences(in: range).map { date in
-                AgendaItem(id: "contact-date:\(record.id):\(date.timeIntervalSince1970)", title: record.title,
-                           date: date, allDay: true, reminder: false, source: "Contacts", color: .purple,
+                AgendaItem(id: "contact-date:\(record.id):\(date.timeIntervalSince1970)", title: record.title(on: date),
+                           date: date, allDay: true, reminder: false, source: "Contacts", color: Self.color,
                            notes: "From Contacts · repeats every year", endDate: Calendar.current.date(byAdding: .day, value: 1, to: date),
-                           birthday: record.birthday, blocksAvailability: false, contactDateID: record.id)
+                           birthday: record.birthday, blocksAvailability: false, contactDateID: record.id, contactDateSymbol: record.symbol)
             }
         }
     }
     static func events(store: EKEventStore, in range: DateInterval, excludingBirthdays: Set<String> = []) -> [EKEvent] {
         let source = EKCalendar(for: .event, eventStore: store)
-        source.title = "Contacts"; source.cgColor = CGColor(red: 0.64, green: 0.40, blue: 0.73, alpha: 1)
+        source.title = "Contacts"; source.cgColor = Self.cgColor
         return items(in: range, excludingBirthdays: excludingBirthdays).map { item in
             let event = EKEvent(eventStore: store)
             event.title = item.title; event.startDate = item.date; event.endDate = item.endDate
             event.isAllDay = true; event.availability = .free; event.calendar = source
             event.notes = item.notes
             var url = URLComponents(); url.scheme = "lotsofevents"; url.host = "contact-date"
-            url.queryItems = [URLQueryItem(name: "id", value: item.contactDateID)]
+            url.queryItems = [URLQueryItem(name: "id", value: item.contactDateID), URLQueryItem(name: "icon", value: item.contactDateSymbol)]
             event.url = url.url
             return event
         }
@@ -75,6 +108,13 @@ enum ContactDates {
 }
 
 extension EKEvent {
+    var contactDateSymbol: String? {
+        guard contactDateID != nil, let url else { return nil }
+        let icon = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "icon" }?.value
+        return ["gift.fill", "heart.fill", "calendar"].contains(icon ?? "") ? icon : "calendar"
+    }
+    var dateSymbol: String? { isBirthday ? "gift.fill" : contactDateSymbol }
+
     var contactDateID: String? {
         guard let url, url.scheme == "lotsofevents", url.host == "contact-date" else { return nil }
         return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "id" }?.value

@@ -22,8 +22,7 @@ struct SelectWidgetDayIntent: AppIntent {
     init() {}
     init(day: Date) { timestamp = day.timeIntervalSince1970 }
     func perform() async throws -> some IntentResult {
-        Preferences.defaults.set(timestamp, forKey: "selectedWidgetDay")
-        Preferences.defaults.set(0, forKey: "dayWidgetPage")
+        WidgetDayNavigation.select(day: Date(timeIntervalSince1970: timestamp))
         WidgetCenter.shared.reloadTimelines(ofKind: threeDayKind)
         return .result()
     }
@@ -36,7 +35,7 @@ struct PageDayWidgetIntent: AppIntent {
     init() {}
     init(page: Int) { self.page = page }
     func perform() async throws -> some IntentResult {
-        Preferences.defaults.set(max(0, page), forKey: "dayWidgetPage")
+        WidgetDayNavigation.page(page)
         WidgetCenter.shared.reloadTimelines(ofKind: threeDayKind)
         return .result()
     }
@@ -185,6 +184,7 @@ struct ThreeDayAgendaView: View {
         }
         .padding(WidgetContentLayout.insets)
         .foregroundStyle(entry.theme.text(colorScheme))
+        .overlay(alignment: .bottom) { WidgetUndoButton(record: entry.completionUndo, date: entry.date) }
         .containerBackground(for: .widget) { entry.theme.backgroundView(colorScheme) }
         .widgetURL(URL(string: "lotsofevents://agenda"))
     }
@@ -235,7 +235,10 @@ struct ThreeDayAgendaView: View {
             HStack(spacing: 5) {
                 if look.showColorBars { RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 3, height: item.allDay ? 13 : 23) }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(item.title).font(look.font(11, .medium)).lineLimit(1)
+                    HStack(spacing: 3) {
+                                if let symbol = item.dateSymbol { Image(systemName: symbol).foregroundStyle(item.color) }
+                                Text(item.title).lineLimit(1)
+                            }.font(look.font(11, .medium))
                     if !item.allDay && look.showTimes {
                         Text(item.widgetTimeLabel).font(look.font(9)).monospacedDigit().lineLimit(1).foregroundStyle(muted)
                     }

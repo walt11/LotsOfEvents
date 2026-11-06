@@ -22,7 +22,6 @@ struct SourcesView: View {
     @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
     @AppStorage(WeatherStore.key, store: Preferences.defaults) private var showWeather = false
-    @AppStorage(BirthdayAges.key, store: Preferences.defaults) private var birthdayAges = false
     @AppStorage(TravelAlerts.key, store: Preferences.defaults) private var timeToLeave = false
     @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
     @ObservedObject private var weather = WeatherStore.shared
@@ -54,7 +53,6 @@ struct SourcesView: View {
                     }
                 }
                 if category == .sources {
-                ContactDatesSettings(model: model)
                 Section {
                     NavigationLink { SourcePickerView(model: model, reminders: false) } label: {
                         settingsRow("Calendars", symbol: "calendar", color: .blue, detail: selectionSummary(reminders: false))
@@ -62,18 +60,17 @@ struct SourcesView: View {
                     NavigationLink { SourcePickerView(model: model, reminders: true) } label: {
                         settingsRow("Reminder Lists", symbol: "checklist", color: .orange, detail: selectionSummary(reminders: true))
                     }
+                    NavigationLink { ConnectionStatusView(model: model) } label: { settingsRow("Connection Status", symbol: "checkmark.icloud", color: .green, detail: "Permissions, included sources, and refresh status") }
                     NavigationLink { CalendarSetsView(model: model) } label: {
                         settingsRow("Calendar Sets", symbol: "line.3.horizontal.decrease.circle", color: .indigo,
                                     detail: CalendarSet.saved.isEmpty ? "Groups like Work and Personal, with Focus filters" : "\(CalendarSet.saved.count) saved · switch with the filter button")
                     }
-                    NavigationLink { TodayListsView(model: model) } label: {
-                        settingsRow("Undated Tasks in Today", symbol: "sun.max", color: .yellow, detail: TodayListsView.summary(model))
-                    }
+
                 } header: { SectionHeader(title: "Calendars & Reminders") }
                 .listRowBackground(GalleryPalette.card)
 
                 }
-                if category == .advanced {
+                if category == .sources {
                 Section {
                     Toggle(isOn: $weekNumbers) { settingsRow("Week Numbers", symbol: "number", color: .gray, detail: "In Month view and beside dates") }
                     NavigationLink { TimeZonePicker(selection: $secondZoneID) } label: {
@@ -82,12 +79,7 @@ struct SourcesView: View {
                     }
                     Toggle(isOn: $showWeather) { settingsRow("Weather", symbol: "cloud.sun", color: .orange, detail: "Forecast in Day, 3 Day, and Week views") }
                         .onChange(of: showWeather) { _, on in if on { Task { await weather.refresh(force: true) } } }
-                    Toggle(isOn: $birthdayAges) {
-                        settingsRow("Birthday Ages", symbol: "gift", color: .pink, detail: "From birth years in Contacts; needs the Birthdays calendar")
-                    }
-                        .onChange(of: birthdayAges) { _, on in
-                            if on { Task { _ = try? await CNContactStore().requestAccess(for: .contacts); model.objectWillChange.send() } }
-                        }
+                    ContactDatesSettings(model: model)
                 } header: { SectionHeader(title: "Calendar") } footer: {
                     Group {
                         if showWeather, let problem = weather.problem {
@@ -135,12 +127,18 @@ struct SourcesView: View {
                 } header: { SectionHeader(title: "Alerts") }.listRowBackground(GalleryPalette.card)
 
                 }
-                if category == .appearance {
+                if category == .agenda {
                 Section {
+                    NavigationLink { TodayListsView(model: model) } label: {
+                        settingsRow("Undated Tasks in Today", symbol: "sun.max", color: .yellow, detail: TodayListsView.summary(model))
+                    }
+                    Button("Open Weekly Planner", systemImage: "calendar.badge.clock") { model.sheet = .weeklyPlanner }
                     Toggle("Show Earlier Items", isOn: $agendaShowEarlierItems)
                 } header: { SectionHeader(title: "Agenda") } footer: {
                     Text("Show events that ended earlier today and tasks completed today. Unfinished overdue tasks stay visible either way.")
                 }.listRowBackground(GalleryPalette.card)
+                }
+                if category == .appearance {
                 Section {
                     // Kept on the model so the gallery stays open when a new theme rebuilds the app's views.
                     Button { model.showingThemePicker = true } label: {
@@ -184,20 +182,21 @@ struct SourcesView: View {
                         settingsRow("Widget Editor", symbol: "paintpalette", color: .purple, detail: "\(theme.title) · colors, text, and layout")
                     }
                     Stepper(value: $days, in: 2...14) {
-                        settingsRow("Days Ahead", symbol: "arrow.right", color: .blue, detail: "\(days) days in agenda widgets")
+                        settingsRow("Days Ahead", symbol: "arrow.right", color: .blue, detail: "\(days) days · Agenda and Events + Tasks with upcoming days on")
                     }.onChange(of: days) { _, value in
                         Preferences.days = value
                         Preferences.defaults.set(0, forKey: "page")
                         model.scheduleRefresh()
                         WidgetReloader.schedule()
                     }
+                    NavigationLink { WidgetResetSettings() } label: { settingsRow("Widget Auto-Reset", symbol: "arrow.counterclockwise", color: .blue, detail: "Off, 30 seconds, 1 minute, or 5 minutes") }
                     NavigationLink { WidgetGuideView() } label: {
                         settingsRow("Widget Guide", symbol: "square.grid.2x2", color: .indigo, detail: "Adding, customizing, and Quick Add")
                     }
                 } header: { SectionHeader(title: "Widgets") }.listRowBackground(GalleryPalette.card)
 
                 }
-                if category == .advanced {
+                if category == .sources {
                 Section {
                     Button { importing = true } label: {
                         settingsRow("Import Calendar File", symbol: "square.and.arrow.down", color: .teal, detail: "Add the events in an .ics file")
@@ -211,12 +210,13 @@ struct SourcesView: View {
                 }.listRowBackground(GalleryPalette.card)
 
                 }
-                if category == .advanced {
+                if category == .about {
+                    Section { NavigationLink("Keyboard Shortcuts") { KeyboardShortcutsView() } }
                 Section {
                     LabeledContent("Version", value: Self.version)
                 } header: { SectionHeader(title: "About") }.listRowBackground(GalleryPalette.card)
                 }
-                if category == nil {
+                if category == .about {
                     Section {
                         Link(destination: URL(string: "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/index.html")!) {
                             Label("Support", systemImage: "questionmark.circle")
@@ -226,6 +226,8 @@ struct SourcesView: View {
                         }
                     }
                     .listRowBackground(GalleryPalette.card)
+                }
+                if category == nil || category == .about {
                     Section {
                         Text("© 2026 John Walter. All rights reserved.")
                             .font(.footnote)
@@ -270,7 +272,8 @@ struct SourcesView: View {
         case .sources: return model.calendarAccess ? "Calendars: \(selectionSummary(reminders: false)) · lists and sets" : selectionSummary(reminders: false)
         case .alerts: return "Events: \(EventAlertOption(rawValue: eventAlert)?.title ?? "None") · reminders and travel"
         case .widgets: return "\(theme.title) · \(days) days ahead"
-        case .advanced: return "Calendar options, import, and app information"
+        case .agenda: return "Earlier items and undated tasks"
+        case .about: return "Version, support, and privacy"
         }
     }
     private func selectionSummary(reminders: Bool) -> String {
@@ -414,6 +417,7 @@ struct SourcePickerView: View {
                                 Text(source.title)
                             }
                         }
+                        .disabled(!reminders && source.type == .birthday && ContactDates.enabled)
                     }
                 } header: { SectionHeader(title: account) }
             }
@@ -470,7 +474,7 @@ struct WidgetGuideView: View {
 
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case appearance, sources, alerts, widgets, advanced
+    case appearance, sources, agenda, alerts, widgets, about
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -478,7 +482,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .sources: "Calendars & Lists"
         case .alerts: "Alerts"
         case .widgets: "Widgets"
-        case .advanced: "Advanced"
+        case .agenda: "Agenda"
+        case .about: "About"
         }
     }
     var symbol: String {
@@ -487,16 +492,18 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .sources: "calendar"
         case .alerts: "bell"
         case .widgets: "square.grid.2x2"
-        case .advanced: "slider.horizontal.3"
+        case .agenda: "list.bullet.rectangle"
+        case .about: "info.circle"
         }
     }
     var keywords: String {
         switch self {
-        case .appearance: "theme accent color text size spacing density tabs order dark light agenda earlier previous past completed history"
-        case .sources: "calendars reminders lists accounts sets focus undated tasks today contacts anniversaries birthdays dates"
+        case .appearance: "theme accent color text size spacing density tabs order dark light"
+        case .sources: "calendars reminders lists accounts sets focus contacts anniversaries birthdays dates week numbers second time zone weather birthday ages import ics connection status permissions refresh occasions"
         case .alerts: "notifications default alerts travel time to leave countdown live activity"
-        case .widgets: "widgets editor colors text layout days ahead guide"
-        case .advanced: "week numbers second time zone weather birthday ages contacts import ics version about"
+        case .widgets: "widgets editor colors text layout days ahead guide reset timeout"
+        case .agenda: "agenda earlier previous past completed history undated tasks today weekly planner schedule"
+        case .about: "version build support help privacy policy copyright keyboard shortcuts"
         }
     }
     func matches(_ query: String) -> Bool {

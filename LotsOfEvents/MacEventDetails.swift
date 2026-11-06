@@ -14,6 +14,7 @@ struct MacEventDetails: View {
     @State private var confirmDelete = false
     private var calendar: Calendar { .current }
 
+    @State private var planning = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -32,6 +33,7 @@ struct MacEventDetails: View {
                         if event.availability == .free { row("cup.and.saucer", "Shown as free") }
                     }
                     .gallerySurface(radius: 14)
+                    if !event.isAllDay { Button("Preparation & Travel", systemImage: "clock.badge.checkmark") { planning = true } }
                     actions
                     if let attendees = event.attendees, !attendees.isEmpty { invitees(attendees) }
                     if let notes = event.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
@@ -71,6 +73,7 @@ struct MacEventDetails: View {
                 }
             }
         }
+        .sheet(isPresented: $planning) { EventPlanningView(event: event, model: model) }
         .frame(minWidth: embedded ? 0 : 460, idealWidth: embedded ? 340 : 500, minHeight: 480, idealHeight: 600)
     }
 

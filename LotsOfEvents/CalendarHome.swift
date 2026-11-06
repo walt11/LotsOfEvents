@@ -180,6 +180,7 @@ struct CalendarHome: View {
                         }
                     } label: { Label(mode.rawValue, systemImage: "chevron.down").font(.subheadline.weight(.semibold)) }
                     .accessibilityLabel("Calendar view, \(mode.rawValue)")
+                    Button("Weekly Planner", systemImage: "calendar.badge.clock") { model.sheet = .weeklyPlanner }.labelStyle(.iconOnly)
                     CalendarSetsMenu(model: model)
                 }
             }
@@ -283,6 +284,7 @@ struct CalendarHome: View {
         }.buttonStyle(.plain)
             .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted)), \(dayEvents.count) events, \(tasks.count) tasks")
             .accessibilityAddTraits(selected ? .isSelected : [])
+            .dropDestination(for: String.self) { payloads, _ in model.dropTasks(payloads, on: day) }
     }
     /// Twelve small months; days with events are tinted, and tapping a month opens it.
     private var yearGrid: some View {
@@ -362,27 +364,34 @@ struct CalendarHome: View {
                     }
                     if !upcoming.isEmpty {
                         Section {
-                            ForEach(upcoming, id: \.self) { event in eventRow(event, showDate: true) }
+                            ForEach(upcoming, id: \.self) { event in eventRow(event, showDate: true).padding(.horizontal, 4) }
                         } header: { SectionHeader(title: "Coming up") }
                     }
                 } else {
                     let conflicts = Conflicts.ids(dayEvents.filter { !$0.isAllDay }.map { (dragKey($0), $0.startDate, $0.endDate) })
-                    ForEach(dayEvents, id: \.self) { event in eventRow(event, conflict: conflicts.contains(dragKey(event))) }
+                    if dayEvents.contains(where: { $0.contactDateID != nil }) {
+                        CompactContactDates(events: dayEvents, model: model)
+                            .galleryRow()
+                            .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 6, trailing: 0))
+                    }
+                    ForEach(dayEvents.filter { $0.contactDateID == nil }, id: \.self) { event in eventRow(event, conflict: conflicts.contains(dragKey(event))).padding(.horizontal, 4) }
                 }
                 if !tasks.isEmpty {
                     SectionHeader(title: "Tasks")
                         .accessibilityAddTraits(.isHeader)
                         .galleryRow()
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 0, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 0, trailing: 20))
                         .environment(\.defaultMinListRowHeight, 26)
                     ForEach(tasks, id: \.calendarItemIdentifier) { task in
                         taskRow(task).galleryRow()
-                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: 3, leading: 20, bottom: 3, trailing: 20))
                     }
                 }
             }
             .id(day)
+            // Only the contact card uses the full grid width; ordinary rows keep their inset.
             .listStyle(.insetGrouped)
+            .contentMargins(.horizontal, 16, for: .scrollContent)
             .listSectionSpacing(10)
             .contentMargins(.top, 0, for: .scrollContent)
             .appRowHeight(44)
@@ -470,8 +479,9 @@ struct CalendarHome: View {
                 if compact { weekAllDay(columns) }
                 else {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("ALL DAY").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(columns[0].allDay, id: \.self) { eventRow($0).fixedSize(horizontal: false, vertical: true) }
+                        CompactContactDates(events: columns[0].allDay, model: model)
+                        if columns[0].allDay.contains(where: { $0.contactDateID == nil }) { Text("ALL DAY").font(.caption2.weight(.semibold)).foregroundStyle(.secondary) }
+                        ForEach(columns[0].allDay.filter { $0.contactDateID == nil }, id: \.self) { eventRow($0).fixedSize(horizontal: false, vertical: true) }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal).padding(.vertical, 6)
                 }
                 Divider()
@@ -551,6 +561,12 @@ struct CalendarHome: View {
             }
         }
         .contentShape(Rectangle())
+        .dropDestination(for: String.self) { payloads, location in
+            let day = columns[column(at: location.x)].day
+            let minutes = min(1439, max(0, Int(location.y / hourHeight * 60)))
+            let target = calendar.date(bySettingHour: minutes / 60, minute: (minutes % 60 / 15) * 15, second: 0, of: day) ?? day
+            return model.dropTasks(payloads, on: target, timed: true)
+        }
         // Tap an empty slot to add an event at that hour.
         .onTapGesture { location in
             addEvent(hour: min(23, max(0, Int(location.y / hourHeight))), on: columns[column(at: location.x)].day)
@@ -611,6 +627,23 @@ struct CalendarHome: View {
             let moveTarget = active.flatMap { $0.resize ? nil : $0.target }
             let newEnd = active.flatMap { $0.resize ? $0.target : nil }
             let editable = event.isWritable && !event.isAllDay
+            let preparation = PlanningPreferences.bufferMinutes(event)
+            if preparation > 0 {
+                let begin = max(column.day, event.startDate.addingTimeInterval(-Double(preparation * 60)))
+                let bufferTop = hourOffset(begin, dayStart: column.day)
+                let bufferHeight = max(0, top - bufferTop)
+                if bufferHeight > 0 {
+                    Text("Preparation / travel").font(.caption2).lineLimit(1)
+                        .foregroundStyle(event.calendarColor)
+                        .padding(.horizontal, 4)
+                        .frame(width: max(0, slot - 2), height: bufferHeight, alignment: .topLeading)
+                        .background(event.calendarColor.opacity(0.08))
+                        .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(event.calendarColor.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
+                        .clipped()
+                        .offset(x: x + CGFloat(column.layout[index].column) * slot + 1, y: bufferTop)
+                        .allowsHitTesting(false)
+                }
+            }
             eventBlock(event, compact: compact, grip: editable && height >= 30)
                 .frame(width: max(0, slot - 2), height: newEnd.map { max(22, hourOffset($0, dayStart: column.day) - top - 2) } ?? height)
                 .overlay(alignment: .topLeading) { if let moveTarget { dropTime(moveTarget, color: event.calendarColor).offset(y: -20) } }
@@ -696,7 +729,10 @@ struct CalendarHome: View {
                 VStack(spacing: 2) {
                     ForEach(column.allDay.prefix(2), id: \.self) { event in
                         Button { model.inspect(event) } label: {
-                            Text(event.title ?? "Untitled event").font(.system(size: 10, weight: .medium)).lineLimit(1)
+                            HStack(spacing: 3) {
+                                if let symbol = event.dateSymbol { Image(systemName: symbol) }
+                                Text(event.title ?? "Untitled event").lineLimit(1)
+                            }.font(.system(size: 10, weight: .medium))
                                 .padding(.horizontal, 3).frame(maxWidth: .infinity, alignment: .leading).frame(height: 16)
                                 .background(event.calendarColor.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
                         }.buttonStyle(.plain)
@@ -740,11 +776,12 @@ struct CalendarHome: View {
     private func eventRow(_ event: EKEvent, showDate: Bool = false, conflict: Bool = false) -> some View {
         let date = showDate ? event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) : nil
         let place = event.location.flatMap { $0.isEmpty || MeetingLink.url(url: nil, location: $0, notes: nil) != nil ? nil : $0 }
-        let detail = [date, place, event.hasRecurrenceRules ? "Repeats" : nil].compactMap { $0 }.joined(separator: " · ")
+        let preparation = PlanningPreferences.bufferMinutes(event)
+        let detail = [date, place, preparation > 0 ? "\(preparation) min preparation / travel" : nil, event.hasRecurrenceRules ? "Repeats" : nil].compactMap { $0 }.joined(separator: " · ")
         return EventRow(color: event.calendarColor, title: event.isBirthday ? BirthdayAges.title(for: event) : event.title ?? "Untitled event",
                         detail: detail.isEmpty ? nil : detail,
                         time: event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened))\n\(event.endDate.formatted(date: .omitted, time: .shortened))",
-                        birthday: event.isBirthday, needsReply: event.needsReply, conflict: conflict,
+                        birthday: event.isBirthday, contactDateSymbol: event.contactDateSymbol, needsReply: event.needsReply, conflict: conflict,
                         joinURL: !event.isAllDay && event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }
             .contextMenu {
                 Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }

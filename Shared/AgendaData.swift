@@ -23,6 +23,8 @@ struct AgendaItem: Identifiable {
     var birthday = false
     var blocksAvailability = true
     var contactDateID: String? = nil
+    var contactDateSymbol: String? = nil
+    var dateSymbol: String? { birthday ? "gift.fill" : contactDateSymbol }
     /// The Agenda's second line: the list for reminders, otherwise where or how long. The color bar already identifies the calendar.
     var agendaDetail: String? {
         if reminder { return source }
@@ -107,6 +109,8 @@ enum Preferences {
     /// Calendars and reminder lists are both shown unless hidden, so ones added later appear by default.
     /// Older builds stored an explicit list of chosen ones; those choices are kept until migrated.
     static func selected(_ id: String, reminders: Bool, in store: UserDefaults = defaults) -> Bool {
+        if !reminders, store.bool(forKey: ContactDates.enabledKey),
+           (store.stringArray(forKey: ContactDates.birthdayCalendarIDsKey) ?? []).contains(id) { return false }
         let (hiddenKey, legacyKey) = keys(reminders: reminders)
         if let hidden = store.stringArray(forKey: hiddenKey) { return !hidden.contains(id) }
         return store.stringArray(forKey: legacyKey)?.contains(id) ?? true
@@ -186,7 +190,7 @@ enum AgendaQuery {
         var items: [AgendaItem] = []
         var birthdayContacts = Set<String>()
         if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
-            let calendars = store.calendars(for: .event).filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
+            let calendars = store.calendars(for: .event).filter { !(ContactDates.enabled && $0.type == .birthday) }.filter { calendarIDs?.contains($0.calendarIdentifier) ?? Preferences.selected($0.calendarIdentifier, reminders: false) }
             if !calendars.isEmpty {
                 let events = store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: calendars))
                 birthdayContacts = Set(events.compactMap(\.birthdayContactIdentifier))
@@ -505,5 +509,35 @@ enum WidgetCompanionData {
               a.isFinite, b.isFinite, b > a, b - a <= 86400,
               a > 0, b < 32_503_680_000 else { return nil }
         return DateInterval(start: Date(timeIntervalSince1970: a), end: Date(timeIntervalSince1970: b))
+    }
+}
+
+/// Widget navigation expires without a repeating background timer.
+enum WidgetDayNavigation {
+    static let interactionKey = "threeDayWidgetInteractedAt"
+    static let timeout: TimeInterval = 30
+    static func timeout(key: String, in defaults: UserDefaults = Preferences.defaults) -> TimeInterval {
+        let value = defaults.object(forKey: "widgetReset.\(key)") as? Double ?? timeout
+        return [0.0, 30.0, 60.0, 300.0].contains(value) ? value : timeout
+    }
+    static func resetDate(key: String = interactionKey, in defaults: UserDefaults = Preferences.defaults) -> Date? {
+        let seconds = timeout(key: key, in: defaults)
+        guard seconds > 0, let timestamp = defaults.object(forKey: key) as? Double else { return nil }
+        return Date(timeIntervalSince1970: timestamp).addingTimeInterval(seconds)
+    }
+    static func isActive(at now: Date, key: String = interactionKey, in defaults: UserDefaults = Preferences.defaults) -> Bool {
+        timeout(key: key, in: defaults) == 0 || (resetDate(key: key, in: defaults).map { $0 > now } ?? false)
+    }
+    static func select(day: Date, now: Date = .now, in defaults: UserDefaults = Preferences.defaults) {
+        defaults.set(day.timeIntervalSince1970, forKey: "selectedWidgetDay")
+        defaults.set(0, forKey: "dayWidgetPage")
+        defaults.set(now.timeIntervalSince1970, forKey: interactionKey)
+    }
+    static func page(_ page: Int, now: Date = .now, in defaults: UserDefaults = Preferences.defaults) {
+        if !isActive(at: now, in: defaults) {
+            defaults.set(Calendar.current.startOfDay(for: now).timeIntervalSince1970, forKey: "selectedWidgetDay")
+        }
+        defaults.set(max(0, page), forKey: "dayWidgetPage")
+        defaults.set(now.timeIntervalSince1970, forKey: interactionKey)
     }
 }
