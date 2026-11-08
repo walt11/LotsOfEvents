@@ -1,0 +1,35 @@
+Android/iOS parity status — 2026-11-08
+
+Implemented Android counterparts:
+- Agenda, month/day/three-day/week/year calendar navigation, reminders, settings.
+- Month/day arrows and horizontal month/day swipe regions.
+- Shared iOS Light, Dark, Graphite, Midnight, Forest, Studio, and Custom palettes.
+- Accent/custom colors and grouped settings categories.
+- Half-height Quick Add with dictation handoff, event/reminder choice, editable
+  dates, all-day events, and undated local reminders.
+- iCloud calendar discovery, selected calendars, cached reading, nonrecurring
+  event creation/editing/deletion, ETag conflict checks, scheduled/manual sync.
+- Recurring event expansion including exclusions and detached exceptions.
+- Optional birthday/contact dates with icons, annual year counts, gray default.
+- Local reminder lists, list reordering, editing, completion and dated alerts.
+- Weekly planner with scheduling for undated/overdue local reminders.
+- All 11 widget types, including scrollable content, day selectors, task completion,
+  undo, per-instance settings, themes, fonts, sizes, spacing, calendars, and reset.
+
+Not yet equivalent to iOS:
+- Modern iCloud Reminders sync is not supported by Apple's app-password protocol.
+- Live iCloud account verification has not been performed; credentials must be
+  entered by the user in the app on the test device.
+- Recurring events are read-only; recurring-series/occurrence editing and advanced
+  invitation/attendee features are not ported.
+- Quick Add's full natural-language grammar and recurrence parsing are not ported.
+- Timeline drag/resize, ICS import/share, calendar sets, per-contact selection,
+  contact-date notifications, preparation/travel planning and route alerts remain.
+- The Android UI and widgets have not received a pixel-by-pixel visual comparison
+  against current iOS screenshots; do not describe this as an identical finished port.
+- Per-widget calendar and local reminder-list subsets are implemented.
+- Local task notifications are inexact; no ongoing next-event notification yet.
+- No Play Store signing/distribution setup or physical Android device installation.
+
+Verification is tracked by Gradle unit tests, Android runtime tests, lint,
+and development APK builds. No real account secrets are included.

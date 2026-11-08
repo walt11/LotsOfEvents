@@ -1,6 +1,5 @@
 import SwiftUI
 import EventKit
-import WeatherKit
 import CoreLocation
 import MapKit
 import Contacts
@@ -68,7 +67,7 @@ struct EventBadges: View {
     }
 }
 
-// MARK: - Location, weather, and travel
+// MARK: - Location and travel
 
 enum LocationProvider {
     /// A recent location, or a fresh one within a few seconds; nil without permission.
@@ -91,83 +90,6 @@ enum LocationProvider {
             group.cancelAll()
             return first
         }
-    }
-}
-
-/// Daily forecasts for the timeline's day headers, from Apple Weather. Off until turned on in Settings,
-/// since it needs the user's location.
-@MainActor final class WeatherStore: ObservableObject {
-    static let shared = WeatherStore()
-    static let key = "showWeather"
-    struct DayForecast: Equatable {
-        let symbol: String
-        let high: Measurement<UnitTemperature>
-        let low: Measurement<UnitTemperature>
-    }
-    @Published private(set) var days: [Date: DayForecast] = [:]
-    @Published private(set) var attribution: (mark: URL, legal: URL)?
-    /// Why there's no forecast, shown in Settings, since the calendar just leaves it out.
-    @Published private(set) var problem: String?
-    private var fetched: Date?
-    var enabled: Bool { Preferences.defaults.bool(forKey: Self.key) }
-    func forecast(for day: Date) -> DayForecast? { enabled ? days[Calendar.current.startOfDay(for: day)] : nil }
-    func refresh(force: Bool = false) async {
-        guard enabled else { days = [:]; return }
-        if !force, let fetched, Date.now.timeIntervalSince(fetched) < 3 * 3600 { return }
-        guard let location = await LocationProvider.current() else {
-            problem = CLLocationManager().authorizationStatus == .denied
-                ? "Location access is off. Turn it on in Settings → Apps → LotsOfEvents → Location."
-                : "Couldn't find your location. Try again later."
-            return
-        }
-        do {
-            let forecast = try await WeatherService.shared.weather(for: location, including: .daily)
-            days = Dictionary(forecast.forecast.map {
-                (Calendar.current.startOfDay(for: $0.date), DayForecast(symbol: $0.symbolName, high: $0.highTemperature, low: $0.lowTemperature))
-            }, uniquingKeysWith: { first, _ in first })
-            fetched = .now
-            problem = nil
-            if attribution == nil, let info = try? await WeatherService.shared.attribution {
-                attribution = (info.combinedMarkLightURL, info.legalPageURL)
-            }
-        } catch {
-            // Weather is extra; without it the headers simply show the dates.
-            // A sign-in failure means WeatherKit isn't switched on for the app in Apple's developer account yet.
-            problem = (error as NSError).domain.contains("JWTAuthenticator")
-                ? "Apple Weather turned down this app. WeatherKit needs to be enabled for it in the Apple Developer account (App ID → App Services)."
-                : "Apple Weather didn't respond. Try again later."
-        }
-    }
-}
-
-/// Today's conditions with the high and low, for the Today header.
-struct WeatherSummary: View {
-    let forecast: WeatherStore.DayForecast
-    var body: some View {
-        let style = Measurement<UnitTemperature>.FormatStyle(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0)))
-        HStack(spacing: 6) {
-            Image(systemName: forecast.symbol).symbolRenderingMode(.multicolor).font(.title2)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(forecast.high.formatted(style)).font(.headline)
-                Text(forecast.low.formatted(style)).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("High \(forecast.high.formatted(style)), low \(forecast.low.formatted(style))")
-    }
-}
-
-struct WeatherBadge: View {
-    let forecast: WeatherStore.DayForecast
-    var compact = false
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: forecast.symbol).symbolRenderingMode(.multicolor)
-            if !compact { Text(forecast.high.formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))))) }
-        }
-        .font(.caption2).foregroundStyle(.secondary)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("High \(forecast.high.formatted(.measurement(width: .wide, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0)))))")
     }
 }
 

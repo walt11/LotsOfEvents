@@ -498,9 +498,6 @@ struct MacMonthView: View {
                     Text(day.formatted(.dateTime.month(.abbreviated))).font(.subheadline.weight(.semibold)).foregroundStyle(accent)
                 }
                 Spacer(minLength: 0)
-                if let forecast = WeatherStore.shared.forecast(for: day) {
-                    Image(systemName: forecast.symbol).symbolRenderingMode(.multicolor).font(.subheadline)
-                }
             }
             .padding(.bottom, 3)
             ForEach(items.prefix(shown)) { entry in line(entry) }

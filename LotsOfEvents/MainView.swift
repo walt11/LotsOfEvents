@@ -74,7 +74,6 @@ struct MainView: View {
             let soon = model.events(in: DateInterval(start: .now.addingTimeInterval(-6 * 3600), duration: 30 * 3600))
             await NextEventActivity.update(events: soon)
             await TravelAlerts.update(events: soon)
-            await WeatherStore.shared.refresh()
         }
         .onChange(of: phase) { _, phase in
             if phase == .active && Date.now.timeIntervalSince(model.lastRefresh) > 2 { model.scheduleRefresh() }

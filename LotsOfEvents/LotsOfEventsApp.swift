@@ -225,7 +225,6 @@ struct AgendaView: View {
                         } header: {
                             HStack {
                                 SectionHeader(title: dayTitle(day.date))
-                                if let forecast = WeatherStore.shared.forecast(for: day.date) { WeatherBadge(forecast: forecast) }
                             }
                         }
                             .id(day.date.description)

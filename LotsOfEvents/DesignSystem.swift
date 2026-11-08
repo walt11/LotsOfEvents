@@ -103,7 +103,14 @@ extension View {
         return toolbar {
             ToolbarItem(placement: .topBarLeading) { filter }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if let today { Button("Today", action: today) }
+                if let today {
+                    Button(action: today) {
+                        Text("Today")
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                }
                 Button("Search", systemImage: "magnifyingglass") { model.sheet = .search }
             }
         }

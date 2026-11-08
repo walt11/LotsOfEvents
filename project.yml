@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
-    CURRENT_PROJECT_VERSION: 28
-    MARKETING_VERSION: 1.1
+    CURRENT_PROJECT_VERSION: 29
+    MARKETING_VERSION: 1.2
     INFOPLIST_KEY_CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
     INFOPLIST_KEY_CFBundleShortVersionString: '$(MARKETING_VERSION)'
     TARGETED_DEVICE_FAMILY: '1,2'
@@ -62,7 +62,7 @@ targets:
         NSRemindersFullAccessUsageDescription: Show reminders from the lists you select in your agenda and widget.
         NSMicrophoneUsageDescription: Dictate events and reminders into the Quick Add text box.
         NSSpeechRecognitionUsageDescription: Turn your spoken words into editable Quick Add text.
-        NSLocationWhenInUseUsageDescription: Show the weather forecast in your calendar and work out when to leave for events.
+        NSLocationWhenInUseUsageDescription: Use your location to calculate travel time and when to leave for events.
         NSContactsUsageDescription: Show birthdays, anniversaries, and other contact dates in your calendar, agenda, and widgets, and optionally show birthday ages.
         # The next-event countdown on the Lock Screen and in the Dynamic Island.
         NSSupportsLiveActivities: true
@@ -86,7 +86,6 @@ targets:
       path: LotsOfEvents/LotsOfEvents.entitlements
       properties:
         com.apple.security.application-groups: ['$(APP_GROUP)']
-        com.apple.developer.weatherkit: true
   AgendaWidget:
     type: app-extension
     platform: iOS

@@ -1,0 +1,24 @@
+{
+  "IOS": {
+    "versionID": "b680a718-53a0-4c6b-ba92-c84d92b36761",
+    "buildID": "86ce43cd-c585-49e4-b89a-c7809a67fd79",
+    "reviewSubmissionID": "78208e2f-83e0-4034-a698-3d6609a7551e",
+    "reviewItemID": "NzgyMDhlMmYtODNlMC00MDM0LWE2OTgtM2Q2NjA5YTc1NTFlfDZ8ODk0Nzc0MTEz",
+    "versionState": "WAITING_FOR_REVIEW",
+    "releaseType": "AFTER_APPROVAL",
+    "version": "1.2",
+    "build": "29",
+    "verifiedAt": "2026-11-07T14:29:13.703959+00:00"
+  },
+  "MAC_OS": {
+    "versionID": "f76e8002-e29c-46b9-9a90-0d5412fe04f0",
+    "buildID": "ff8d452c-3b09-43ee-8092-b47286b65d66",
+    "reviewSubmissionID": "245e4143-d264-4139-94c8-294398605c37",
+    "reviewItemID": "MjQ1ZTQxNDMtZDI2NC00MTM5LTk0YzgtMjk0Mzk4NjA1YzM3fDZ8ODk0MzAwNTA2",
+    "versionState": "WAITING_FOR_REVIEW",
+    "releaseType": "AFTER_APPROVAL",
+    "version": "1.0",
+    "build": "29",
+    "verifiedAt": "2026-11-07T14:29:14.795599+00:00"
+  }
+}

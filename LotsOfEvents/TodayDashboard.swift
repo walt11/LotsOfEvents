@@ -4,7 +4,6 @@ import EventKit
 /// Compact Today section: the same rows as later agenda dates, with optional earlier events.
 struct TodayDashboard: View {
     @ObservedObject var model: AgendaModel
-    @ObservedObject private var weather = WeatherStore.shared
     let items: [AgendaItem]
     let overdue: [EKReminder]
     let undated: [EKReminder]
@@ -22,7 +21,6 @@ struct TodayDashboard: View {
                 HStack {
                     SectionHeader(title: "Today · \(context.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))")
                     Spacer(minLength: 0)
-                    if let forecast = weather.forecast(for: context.date) { WeatherBadge(forecast: forecast) }
                 }
                 if showEarlierItems && !earlier.isEmpty {
                     SectionHeader(title: "Earlier today")

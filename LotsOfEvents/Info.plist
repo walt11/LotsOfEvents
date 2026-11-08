@@ -54,7 +54,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>Show birthdays, anniversaries, and other contact dates in your calendar, agenda, and widgets, and optionally show birthday ages.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Show the weather forecast in your calendar and work out when to leave for events.</string>
+	<string>Use your location to calculate travel time and when to leave for events.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dictate events and reminders into the Quick Add text box.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>

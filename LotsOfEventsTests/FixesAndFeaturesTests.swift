@@ -713,7 +713,7 @@ final class UIRefreshTests: XCTestCase {
         XCTAssertEqual(timed.date.map { calendar.startOfDay(for: $0) }, preset)
     }
     func testSettingsSearchFindsHiddenControlsAndSupportsMultipleWords() {
-        XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("weather") }, [.sources])
+        XCTAssertTrue(SettingsCategory.allCases.filter { $0.matches("weather") }.isEmpty)
         XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("accent color") }, [.appearance])
         XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("time leave") }, [.alerts])
         XCTAssertEqual(SettingsCategory.allCases.filter { $0.matches("undated") }, [.agenda])

@@ -21,10 +21,8 @@ struct SourcesView: View {
     @AppStorage("alertReminder", store: Preferences.defaults) private var reminderAlert = ReminderAlertOption.atTime.rawValue
     @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
-    @AppStorage(WeatherStore.key, store: Preferences.defaults) private var showWeather = false
     @AppStorage(TravelAlerts.key, store: Preferences.defaults) private var timeToLeave = false
     @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
-    @ObservedObject private var weather = WeatherStore.shared
     @AppStorage(ReminderNotifications.key, store: Preferences.defaults) private var reminderNotifications = true
     @AppStorage(ReminderNotifications.statusKey, store: Preferences.defaults) private var reminderNotificationStatus = ""
     @AppStorage("agendaShowEarlierItems", store: Preferences.defaults) private var agendaShowEarlierItems = false
@@ -77,22 +75,9 @@ struct SourcesView: View {
                         settingsRow("Second Time Zone", symbol: "globe", color: .cyan,
                                     detail: secondZoneID.isEmpty ? "Off" : TimeZonePicker.name(secondZoneID))
                     }
-                    Toggle(isOn: $showWeather) { settingsRow("Weather", symbol: "cloud.sun", color: .orange, detail: "Forecast in Day, 3 Day, and Week views") }
-                        .onChange(of: showWeather) { _, on in if on { Task { await weather.refresh(force: true) } } }
                     ContactDatesSettings(model: model)
-                } header: { SectionHeader(title: "Calendar") } footer: {
-                    Group {
-                        if showWeather, let problem = weather.problem {
-                            Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(GalleryPalette.warning)
-                        } else if showWeather, let attribution = weather.attribution {
-                            HStack(spacing: 6) {
-                                AsyncImage(url: attribution.mark) { $0.resizable().scaledToFit() } placeholder: { Text(" Weather") }.frame(height: 12)
-                                Link("Weather Data Sources", destination: attribution.legal)
-                            }
-                        }
-                    }
-                    .font(.footnote).foregroundStyle(GalleryPalette.muted)
-                }.listRowBackground(GalleryPalette.card)
+                } header: { SectionHeader(title: "Calendar") }
+                .listRowBackground(GalleryPalette.card)
 
                 }
                 if category == .alerts {
@@ -499,7 +484,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .appearance: "theme accent color text size spacing density tabs order dark light"
-        case .sources: "calendars reminders lists accounts sets focus contacts anniversaries birthdays dates week numbers second time zone weather birthday ages import ics connection status permissions refresh occasions"
+        case .sources: "calendars reminders lists accounts sets focus contacts anniversaries birthdays dates week numbers second time zone birthday ages import ics connection status permissions refresh occasions"
         case .alerts: "notifications default alerts travel time to leave countdown live activity"
         case .widgets: "widgets editor colors text layout days ahead guide reset timeout"
         case .agenda: "agenda earlier previous past completed history undated tasks today weekly planner schedule"

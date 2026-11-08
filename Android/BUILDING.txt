@@ -1,0 +1,44 @@
+LotsOfEvents for Android — development build 0.1
+
+Open this Android directory in Android Studio. Use JDK 17 or newer, Gradle 8.7,
+and Android SDK 35. Android 12 (API 31) or newer is required.
+
+Build and check:
+  ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+  ./gradlew :app:connectedDebugAndroidTest
+
+APK: app/build/outputs/apk/debug/app-debug.apk
+This is a debug-signed test build, not a Google Play release.
+
+Account setup:
+  Settings > Calendars & Lists > Connect iCloud.
+  Enter the Apple Account email and an app-specific password generated at
+  https://account.apple.com/. Never put the primary Apple Account password,
+  credentials, or a production account in tests, source, or build settings.
+
+Calendar data syncs directly with iCloud using HTTPS CalDAV. Credentials are
+AES-GCM encrypted with a non-exportable Android Keystore key. Backup and device
+transfer exclude the app's private data. Redirects are restricted to HTTPS
+icloud.com hosts. Writes use If-Match/If-None-Match to detect conflicts.
+
+Calendar cache: previous year through next two years. A failed calendar sync
+keeps the prior snapshot. Event writes require a network connection; local
+reminders work offline. Android schedules background sync roughly every
+30 minutes, subject to battery and network restrictions. Manual Sync is available.
+
+The 11 widget types appear in Android's widget gallery and Settings > Widgets.
+List content scrolls. Tap the three-dot control to configure each copy separately.
+Events + Tasks shows today unless its Include Upcoming Days option is enabled;
+when enabled it follows the app's Days Ahead value. Widget day reset timing is
+best effort, not an exact alarm. Each widget currently sends at most 200 rows to
+the launcher to bound RemoteViews size.
+
+Modern iCloud Reminders are not available using an app-specific password or
+CalDAV. Reminders created here are local to this Android installation and do not
+appear in Apple's Reminders app. The app labels this limitation. Optional contact
+dates use iCloud CardDAV and retain only the names and date fields needed to
+render annual occasions. Disabling this feature clears its local date cache.
+
+Tests use synthetic calendar data and fake credentials only. The Android runtime
+suite clears its synthetic account and cache; run it only on a disposable test
+emulator, never a user's configured phone.

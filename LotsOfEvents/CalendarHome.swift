@@ -132,7 +132,6 @@ struct CalendarHome: View {
     @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
     /// An optional second time zone, shown beside the hours on the timeline.
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
-    @ObservedObject private var weather = WeatherStore.shared
     @State private var datePicker = false
     private var calendar: Calendar { .current }
     private var days: [Date] {
@@ -213,7 +212,6 @@ struct CalendarHome: View {
                 if weekNumbers && mode != .year {
                     Text("W\(calendar.component(.weekOfYear, from: date))").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
-                if mode == .day, let forecast = weather.forecast(for: date) { WeatherBadge(forecast: forecast) }
                 Image(systemName: "chevron.down").font(.caption)
             }.foregroundStyle(.primary)
             Spacer()
@@ -353,7 +351,6 @@ struct CalendarHome: View {
                 Button("Next day", systemImage: "chevron.right") { shiftDay(1) }
                     .labelStyle(.iconOnly).frame(width: 44, height: 44)
                 Spacer(minLength: 0)
-                if let forecast = weather.forecast(for: day) { WeatherBadge(forecast: forecast) }
             }.buttonStyle(.plain).foregroundStyle(accent).padding(.horizontal, 16)
             List {
                 if dayEvents.isEmpty && tasks.isEmpty {
@@ -713,7 +710,6 @@ struct CalendarHome: View {
                         Text(column.day.formatted(.dateTime.day())).font(.subheadline.weight(today ? .bold : .regular))
                             .foregroundStyle(today ? _accent.contrastingText : .primary)
                             .frame(width: 28, height: 28).background(today ? accent : .clear, in: Circle())
-                        if let forecast = weather.forecast(for: column.day) { WeatherBadge(forecast: forecast, compact: columns.count > 3) }
                     }.frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
