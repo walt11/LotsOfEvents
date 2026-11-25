@@ -101,8 +101,10 @@ final class ICSImportTests: XCTestCase {
         END:VCALENDAR
         """
         let events = ICSParser.parse(text, defaultZone: chicago)
-        XCTAssertEqual(events.map(\.title), ["Standup", "Standup (moved)"])
-        XCTAssertTrue(events.allSatisfy { $0.importIssue != nil })
+        XCTAssertEqual(events.map(\.title), ["Standup"])
+        XCTAssertNil(events[0].importIssue)
+        XCTAssertEqual(events[0].overrides.map(\.title), ["Standup (moved)"])
+        XCTAssertEqual(events[0].timeZone?.identifier, "America/Los_Angeles")
         XCTAssertEqual(events[0].start, date(2026, 10, 26, 9, 30, zone: TimeZone(identifier: "America/Los_Angeles")!))
         XCTAssertEqual(events[0].recurrence, "FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261231T000000Z")
     }
@@ -136,14 +138,22 @@ extension ICSImportTests {
         }
     }
 
-    func testExcludedAndCancelledOccurrencesBlockTheirSeries() {
-        for exception in ["EXDATE:20261102T090000Z", "RDATE:20261103T090000Z"] {
-            let events = ICSParser.parse("BEGIN:VEVENT\nUID:series\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY\n\(exception)\nEND:VEVENT")
-            XCTAssertEqual(events.count, 1)
-            XCTAssertNotNil(events.first?.importIssue)
-        }
+    func testExcludedAddedAndCancelledOccurrencesAreKeptWithTheirSeries() {
+        let excluded = ICSParser.parse("BEGIN:VEVENT\nUID:series\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY\nEXDATE:20261102T090000Z,20261104T090000Z\nEND:VEVENT")
+        XCTAssertEqual(excluded.first?.excludedDates.count, 2)
+        XCTAssertNil(excluded.first?.importIssue)
+        let added = ICSParser.parse("BEGIN:VEVENT\nUID:series\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY\nRDATE:20261203T090000Z\nEND:VEVENT")
+        XCTAssertEqual(added.first?.additionalDates.count, 1)
+        XCTAssertNil(added.first?.importIssue)
+        XCTAssertNotNil(ICSParser.parse("BEGIN:VEVENT\nUID:series\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY\nRDATE;VALUE=PERIOD:20261203T090000Z/PT1H\nEND:VEVENT").first?.importIssue)
         let text = "BEGIN:VEVENT\nUID:series\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY\nEND:VEVENT\nBEGIN:VEVENT\nUID:series\nRECURRENCE-ID:20261102T090000Z\nSTATUS:CANCELLED\nEND:VEVENT"
-        XCTAssertNotNil(ICSParser.parse(text).first?.importIssue)
+        let cancelled = ICSParser.parse(text)
+        XCTAssertEqual(cancelled.count, 1)
+        XCTAssertNil(cancelled.first?.importIssue)
+        XCTAssertEqual(cancelled.first?.overrides.first?.cancelled, true)
+        let single = ICSParser.parse("BEGIN:VEVENT\nUID:lone\nRECURRENCE-ID:20261102T090000Z\nDTSTART:20261102T100000Z\nDTEND:20261102T110000Z\nSUMMARY:Moved\nEND:VEVENT")
+        XCTAssertEqual(single.map(\.title), ["Moved"])
+        XCTAssertNil(single.first?.importIssue)
         let ordinary = ICSParser.parse("BEGIN:VEVENT\nDTSTART:20261101T090000Z\nRRULE:FREQ=DAILY;COUNT=3\nEND:VEVENT")
         XCTAssertEqual(ordinary.count, 1)
         XCTAssertNil(ordinary.first?.importIssue)
@@ -155,6 +165,22 @@ extension ICSImportTests {
             let events = ICSParser.parse("BEGIN:VEVENT\nDTSTART:20261101T090000Z\nRRULE:\(rule)\nEND:VEVENT")
             XCTAssertNotNil(events.first?.importIssue)
         }
+    }
+
+    /// Runs where Calendar access is granted (e.g. `simctl privacy grant calendar`); cleans up after itself.
+    func testSavingASeriesAppliesItsExceptions() throws {
+        try XCTSkipUnless(EKEventStore.authorizationStatus(for: .event) == .fullAccess, "Needs Calendar access")
+        let store = EKEventStore()
+        let calendar = try XCTUnwrap(store.defaultCalendarForNewEvents)
+        let uid = "test-\(UUID().uuidString)"
+        let text = "BEGIN:VEVENT\nUID:\(uid)\nSUMMARY:\(uid)\nDTSTART:20300107T150000Z\nDTEND:20300107T160000Z\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20300108T150000Z\nRDATE:20300120T150000Z\nEND:VEVENT\nBEGIN:VEVENT\nUID:\(uid)\nRECURRENCE-ID:20300109T150000Z\nSUMMARY:\(uid) moved\nDTSTART:20300109T180000Z\nDTEND:20300109T190000Z\nEND:VEVENT\nBEGIN:VEVENT\nUID:\(uid)\nRECURRENCE-ID:20300110T150000Z\nSTATUS:CANCELLED\nEND:VEVENT"
+        try ICSImporter.save(ICSParser.parse(text), calendarID: calendar.calendarIdentifier)
+        let start = Date(timeIntervalSince1970: 1_893_888_000) // Jan 6, 2030
+        let found = EKEventStore().events(matching: store.predicateForEvents(withStart: start, end: start.addingTimeInterval(30 * 86400), calendars: [calendar]))
+            .filter { ($0.title ?? "").hasPrefix(uid) }.sorted { $0.startDate < $1.startDate }
+        defer { let cleanup = EKEventStore(); for event in found { if let item = cleanup.event(withIdentifier: event.eventIdentifier) { try? cleanup.remove(item, span: .futureEvents, commit: true) } } }
+        XCTAssertEqual(found.count, 4, "Jan 7, moved Jan 9, Jan 11, and the added Jan 20")
+        XCTAssertEqual(found.filter { $0.title == "\(uid) moved" }.count, 1)
     }
 
     func testWeekStartFromGoogleAndOutlookDoesNotBlockARepeat() {

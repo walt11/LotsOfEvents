@@ -70,6 +70,22 @@ final class AgendaModel: ObservableObject {
     @Published var showingThemePicker = false
     @Published var sheet: AppSheet?
     @Published var inspectorSelection: AppSheet?
+    /// A move or resize of a repeating event, waiting on which occurrences to change.
+    @Published var recurringChange: RecurringChange?
+    /// Shown once, so the system's notification prompt never arrives without an explanation.
+    @Published var offerNotifications = false
+    /// Fetched events by range, so views that ask while drawing don't query EventKit each time. Any change clears it.
+    private var eventCache: [DateInterval: [EKEvent]] = [:]
+    func cachedEvents(in range: DateInterval, fetch: () -> [EKEvent]) -> [EKEvent] {
+        // During refresh, contacts can be available before EventKit calendars finish
+        // loading. Do not retain that partial result as the final event list.
+        guard !loading else { return fetch() }
+        if let cached = eventCache[range] { return cached }
+        let events = fetch()
+        if eventCache.count >= 48 { eventCache.removeAll() }
+        eventCache[range] = events
+        return events
+    }
     func inspect(_ event: EKEvent) {
         if let id = event.contactDateID, let record = ContactDates.records.first(where: { $0.id == id }) {
             sheet = .contactDate(record, event.startDate)
@@ -94,6 +110,7 @@ final class AgendaModel: ObservableObject {
     private var pendingRefresh: Task<Void, Never>?
     /// Coalesces bursts of triggers (store notifications, saves, sheet dismissals) into one fetch.
     func scheduleRefresh() {
+        eventCache.removeAll()
         pendingRefresh?.cancel()
         pendingRefresh = Task {
             try? await Task.sleep(for: .milliseconds(250))
@@ -117,6 +134,7 @@ final class AgendaModel: ObservableObject {
     func refresh() async {
         revision += 1
         let current = revision
+        eventCache.removeAll()
         loading = true
         do { try await ContactDateSync.refresh() }
         catch { ContactDateSync.clear(); self.error = "Could not refresh contact dates: \(error.localizedDescription)" }
@@ -137,21 +155,29 @@ final class AgendaModel: ObservableObject {
             }
         }
         guard current == revision else { return }
+        eventCache.removeAll()
         reminders = fetched
         completedToday = doneToday
         completedLoaded = wantsCompleted
-        generation += 1
         loading = false
         lastRefresh = .now
-        if let completion = WidgetUndoRecord.current, completion.expires > .now, undo == nil {
+        // Publish the new generation only after calendars, tasks, and cache state are ready.
+        generation += 1
+        // Offered once per completion, not again each time the app refreshes during its 30 seconds.
+        if let completion = WidgetUndoRecord.current, completion.expires > .now, undo == nil,
+           Preferences.defaults.string(forKey: "widgetUndoOffered") != completion.token {
+            Preferences.defaults.set(completion.token, forKey: "widgetUndoOffered")
             undo = UndoAction(message: "Completed “\(completion.title)” from widget") { [weak self] in
                 do { try WidgetUndoRecord.undo(token: completion.token); self?.scheduleRefresh() }
                 catch { self?.error = error.localizedDescription }
             }
         }
+        offerNotifications = await ReminderNotifications.shouldOffer(reminders: fetched)
         await ReminderNotifications.update(reminders: fetched)
         await ContactOccasionAlerts.update()
+        if !prunedBuffers { prunedBuffers = true; PlanningPreferences.pruneBuffers(store: store) }
     }
+    private var prunedBuffers = false
     /// When data was last fetched, so returning to the app right after launch doesn't fetch it all again.
     private(set) var lastRefresh = Date.distantPast
     func request(_ type: EKEntityType) async {
@@ -164,6 +190,13 @@ final class AgendaModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
         await refresh()
     }
+}
+
+/// Asks whether a change applies to one occurrence or to this and later ones.
+struct RecurringChange: Identifiable {
+    let id = UUID()
+    let title: String
+    let apply: @MainActor (EKSpan) -> Void
 }
 
 /// A short-lived offer to reverse the last reminder change.
@@ -210,7 +243,7 @@ struct AgendaView: View {
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                         }.id("agenda-today")
                     case .day(let day):
-                        let conflicts = Conflicts.ids(day.items.filter { !$0.reminder && !$0.allDay }.map { ($0.id, $0.eventStartDate ?? $0.date, $0.endDate ?? $0.date) })
+                        let conflicts = Conflicts.ids(items: day.items)
                         Section {
                             if day.items.isEmpty {
                                 Text("Nothing scheduled").font(.caption).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)
@@ -307,7 +340,7 @@ struct EventEditor: UIViewControllerRepresentable {
             event.startDate = template.startDate
             event.endDate = template.endDate
             event.availability = template.availability
-            event.calendar = template.calendar.allowsContentModifications ? template.calendar : store.defaultCalendarForNewEvents
+            event.calendar = template.calendar?.allowsContentModifications == true ? template.calendar : store.defaultCalendarForNewEvents
             event.alarms = template.alarms?.compactMap { $0.copy() as? EKAlarm }
         } else {
             event.startDate = startDate
@@ -332,6 +365,7 @@ struct EventEditor: UIViewControllerRepresentable {
 @MainActor final class LotsOfEventsAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = ReminderNotificationDelegate.shared
+        UNUserNotificationCenter.current().setNotificationCategories([ReminderNotifications.category])
         return true
     }
 }

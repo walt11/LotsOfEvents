@@ -8,10 +8,16 @@ import ActivityKit
 enum MeetingLink {
     private static let hosts = ["zoom.us", "zoomgov.com", "meet.google.com", "teams.microsoft.com", "teams.live.com", "webex.com",
                                 "facetime.apple.com", "whereby.com", "gotomeeting.com", "meet.goto.com", "bluejeans.com", "chime.aws", "around.co"]
+    private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    /// Most notes have no call link, so skip the detector unless a known service is named.
+    private static func mentionsService(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return hosts.contains { lowered.contains($0) }
+    }
     static func url(url: URL?, location: String?, notes: String?) -> URL? {
         if let url, isMeeting(url) { return url }
-        for text in [location, notes].compactMap({ $0 }) where !text.isEmpty {
-            guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        for text in [location, notes].compactMap({ $0 }) where !text.isEmpty && mentionsService(text) {
+            guard let detector else { return nil }
             let matches = detector.matches(in: text, range: NSRange(text.startIndex..., in: text))
             if let found = matches.compactMap(\.url).first(where: isMeeting) { return found }
         }
@@ -49,6 +55,18 @@ enum Conflicts {
         }
         return result
     }
+    /// Events that take up time, starting early enough to cover any preparation and travel. Free, canceled, and declined events don't count.
+    static func ids(items: [AgendaItem]) -> Set<String> {
+        ids(items.filter { !$0.reminder && !$0.allDay && $0.blocksAvailability }.map {
+            let start = $0.eventStartDate ?? $0.date
+            return ($0.id, start.addingTimeInterval(-Double($0.bufferMinutes * 60)), $0.endDate ?? $0.date)
+        })
+    }
+    static func ids(events: [EKEvent], key: (EKEvent) -> String) -> Set<String> {
+        ids(events.filter { !$0.isAllDay && $0.blocksTime }.map {
+            (key($0), $0.startDate.addingTimeInterval(-Double(PlanningPreferences.bufferMinutes($0) * 60)), $0.endDate)
+        })
+    }
 }
 
 /// True when the event is an invitation the user hasn't answered.
@@ -58,13 +76,16 @@ extension EKEvent {
         return me.participantStatus == .pending
     }
     var isBirthday: Bool { calendar?.type == .birthday }
+    var isDeclined: Bool { attendees?.first(where: \.isCurrentUser)?.participantStatus == .declined }
+    /// Birthdays and contact dates aren't events the user can copy.
+    var canDuplicate: Bool { contactDateID == nil && !isBirthday }
     /// Whether the event takes up its time for Open Time. Birthdays never do, and all-day events only when marked busy,
     /// since holiday and other subscribed calendars don't track availability and would otherwise fill every day.
     var blocksTime: Bool {
-        Self.blocksTime(availability: availability, allDay: isAllDay, canceled: status == .canceled, birthday: isBirthday)
+        Self.blocksTime(availability: availability, allDay: isAllDay, canceled: status == .canceled, birthday: isBirthday, declined: isDeclined)
     }
-    static func blocksTime(availability: EKEventAvailability, allDay: Bool, canceled: Bool = false, birthday: Bool = false) -> Bool {
-        guard !canceled, !birthday else { return false }
+    static func blocksTime(availability: EKEventAvailability, allDay: Bool, canceled: Bool = false, birthday: Bool = false, declined: Bool = false) -> Bool {
+        guard !canceled, !birthday, !declined else { return false }
         switch availability {
         case .free: return false
         case .notSupported: return !allDay
@@ -102,6 +123,25 @@ struct CalendarSet: Codable, Identifiable, Hashable, Sendable {
         store.set(set?.hiddenLists ?? [], forKey: "hiddenReminderLists")
         store.set(0, forKey: "page")
         activeID = set?.id
+    }
+
+    /// What was showing before a Focus switched sets, so the end of the Focus can put it back.
+    private struct FocusSnapshot: Codable { let shown: CalendarSet; let activeID: UUID? }
+    private static let focusSnapshotKey = "calendarSetBeforeFocus"
+    static func focusBegan(_ set: CalendarSet, in store: UserDefaults = Preferences.defaults) {
+        // A second Focus starting before the first ends must not replace the original selection.
+        if store.data(forKey: focusSnapshotKey) == nil,
+           let data = try? JSONEncoder().encode(FocusSnapshot(shown: current(named: "", in: store), activeID: activeID)) {
+            store.set(data, forKey: focusSnapshotKey)
+        }
+        apply(set, in: store)
+    }
+    /// Restores the selection from before the Focus. Without one there is nothing to undo, so nothing changes.
+    static func focusEnded(in store: UserDefaults = Preferences.defaults) {
+        guard let data = store.data(forKey: focusSnapshotKey), let snapshot = try? JSONDecoder().decode(FocusSnapshot.self, from: data) else { return }
+        apply(snapshot.shown, in: store)
+        activeID = snapshot.activeID
+        store.removeObject(forKey: focusSnapshotKey)
     }
 }
 

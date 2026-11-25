@@ -31,6 +31,8 @@ struct MacEventDetails: View {
                         let alerts = (event.alarms ?? []).map(Self.alertText)
                         if !alerts.isEmpty { row("bell", alerts.formatted(.list(type: .and))) }
                         if event.availability == .free { row("cup.and.saucer", "Shown as free") }
+                        let buffer = PlanningPreferences.bufferMinutes(event)
+                        if buffer > 0 { row("clock.badge.checkmark", "\(buffer) min preparation / travel") }
                     }
                     .gallerySurface(radius: 14)
                     if !event.isAllDay { Button("Preparation & Travel", systemImage: "clock.badge.checkmark") { planning = true } }
@@ -120,7 +122,11 @@ struct MacEventDetails: View {
                           systemImage: "car.fill")
                 }
             }
-            Button { model.sheet = .duplicate(event) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            if event.canDuplicate { Button { model.sheet = .duplicate(event) } label: { Label("Duplicate", systemImage: "plus.square.on.square") } }
+            // EventKit can't send an invitation reply, so it's sent from the Calendar app.
+            if event.attendees?.contains(where: \.isCurrentUser) == true {
+                Button { replyInCalendar() } label: { Label(event.needsReply ? "Reply in Calendar" : "Change Reply in Calendar", systemImage: "envelope.arrow.triangle.branch") }
+            }
             if event.isWritable && !event.isBirthday {
                 Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
             }
@@ -172,6 +178,11 @@ struct MacEventDetails: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
+    }
+
+    private func replyInCalendar() {
+        let id = (event.calendarItemExternalIdentifier ?? "").addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        if let url = URL(string: "ical://ekevent/\(id)?method=show&options=more") { UIApplication.shared.open(url) }
     }
 
     private func delete(_ span: EKSpan) {

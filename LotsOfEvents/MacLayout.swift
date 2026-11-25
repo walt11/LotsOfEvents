@@ -561,7 +561,7 @@ struct MacMonthView: View {
             .onTapGesture { model.inspect(event) }
             .contextMenu {
                 Button("Open", systemImage: "arrow.up.forward.app") { model.inspect(event) }
-                Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
+                if event.canDuplicate { Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) } }
                 if let link = MeetingLink.url(for: event) {
                     Button("Join \(MeetingLink.service(link))", systemImage: "video") { UIApplication.shared.open(link) }
                 }
@@ -607,16 +607,21 @@ struct MacMonthView: View {
         let kind: Kind
     }
 
+    /// Worked out when the data changes, not again for each day card on every draw.
+    @State private var remindersByDay: [Date: [EKReminder]] = [:]
+    private func groupReminders() -> [Date: [EKReminder]] {
+        let dated = model.reminders.compactMap { reminder -> (Date, EKReminder)? in
+            guard !reminder.isCompleted, let calendarID = reminder.calendar?.calendarIdentifier,
+                  Preferences.selected(calendarID, reminders: true), let due = ReminderDates.due(reminder) else { return nil }
+            return (due, reminder)
+        }
+        return Dictionary(grouping: dated) { calendar.startOfDay(for: $0.0) }.mapValues { $0.map(\.1) }
+    }
     private func entries(on day: Date) -> [MonthEntry] {
         let dayEvents = events.filter { CalendarDates.overlaps(start: $0.startDate, end: $0.endDate, day: day) }
             .sorted { if $0.isAllDay != $1.isAllDay { return $0.isAllDay }; return $0.startDate < $1.startDate }
             .map { MonthEntry(id: $0.occurrenceKey, kind: .event($0)) }
-        let dayReminders = model.reminders.filter { reminder in
-            guard !reminder.isCompleted, let calendarID = reminder.calendar?.calendarIdentifier,
-                  Preferences.selected(calendarID, reminders: true), let due = ReminderDates.due(reminder) else { return false }
-            return calendar.isDate(due, inSameDayAs: day)
-        }
-        .map { MonthEntry(id: "reminder:\($0.calendarItemIdentifier)", kind: .reminder($0)) }
+        let dayReminders = (remindersByDay[calendar.startOfDay(for: day)] ?? []).map { MonthEntry(id: "reminder:\($0.calendarItemIdentifier)", kind: .reminder($0)) }
         return dayEvents + dayReminders
     }
 
@@ -627,6 +632,7 @@ struct MacMonthView: View {
     private func reload() {
         guard let first = days.first, let last = days.last, let end = calendar.date(byAdding: .day, value: 1, to: last) else { return }
         events = model.events(in: DateInterval(start: first, end: end))
+        remindersByDay = groupReminders()
     }
 }
 
@@ -892,7 +898,9 @@ struct MacDaySummary: View {
                     VStack(spacing: 2) {
                         CompactContactDates(events: events, model: model)
                         ForEach(events.filter { $0.contactDateID == nil }, id: \.occurrenceKey) { event in
-                            EventRow(color: event.calendarColor, title: event.title ?? "Event", detail: event.location,
+                            let buffer = PlanningPreferences.bufferMinutes(event)
+                            EventRow(color: event.calendarColor, title: event.title ?? "Event",
+                                     detail: buffer > 0 ? [event.location, "\(buffer) min preparation / travel"].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") : event.location,
                                      time: event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened),
                                      birthday: event.isBirthday, contactDateSymbol: event.contactDateSymbol, needsReply: event.needsReply,
                                      joinURL: event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }

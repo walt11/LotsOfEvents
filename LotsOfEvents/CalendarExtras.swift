@@ -39,31 +39,14 @@ struct EventBadges: View {
         if needsReply || conflict {
             HStack(spacing: 6) {
                 if needsReply { Label("Needs reply", systemImage: "envelope.badge").foregroundStyle(GalleryPalette.accent) }
-                if conflict { Label("Overlaps", systemImage: "exclamationmark.triangle.fill").foregroundStyle(GalleryPalette.warning) }
+                if conflict {
+                    Image(systemName: "rectangle.on.rectangle")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Scheduling overlap")
+                        .help("Overlaps another event")
+                }
             }.font(.caption2.weight(.medium)).labelStyle(.titleAndIcon)
         }
-    }
-}
-
-/// Adds the age to a birthday ("Sam's Birthday · 34") from the contact's birth year, when allowed.
-@MainActor enum BirthdayAges {
-    static let key = "birthdayAges"
-    private static var years: [String: Int] = [:]
-    static var allowed: Bool {
-        let status = CNContactStore.authorizationStatus(for: .contacts)
-        return Preferences.defaults.bool(forKey: key) && (status == .authorized || status == .limited)
-    }
-    static func title(for event: EKEvent) -> String {
-        let title = event.title ?? "Birthday"
-        guard allowed, let id = event.birthdayContactIdentifier else { return title }
-        let year: Int
-        if let cached = years[id] { year = cached } else {
-            let keys = [CNContactBirthdayKey as CNKeyDescriptor]
-            year = (try? CNContactStore().unifiedContact(withIdentifier: id, keysToFetch: keys))?.birthday?.year ?? 0
-            years[id] = year
-        }
-        let age = Calendar.current.component(.year, from: event.startDate) - year
-        return year > 0 && age > 0 ? "\(title) · \(age)" : title
     }
 }
 
@@ -99,6 +82,31 @@ enum LocationProvider {
     static let key = "timeToLeave"
     /// Drive times by event occurrence, for the event details.
     private(set) static var estimates: [String: TimeInterval] = [:]
+    /// Recent routes, so frequent refreshes don't request directions again from nearly the same place.
+    private static var routes: [String: (travel: TimeInterval, origin: CLLocation, at: Date)] = [:]
+    /// Why Time to Leave can't work right now, for Settings.
+    static var locationBlocked: Bool {
+        let status = CLLocationManager().authorizationStatus
+        return status == .denied || status == .restricted
+    }
+    /// Turns on what Time to Leave needs. Returns a message when something is still off.
+    static func enable() async -> String? {
+        guard await requestPermission() else { return "Allow notifications for LotsOfEvents in system Settings to get Time to Leave alerts." }
+        if CLLocationManager().authorizationStatus == .notDetermined { _ = await LocationProvider.current() }
+        return locationBlocked ? "Allow location access for LotsOfEvents in system Settings to work out when to leave." : nil
+    }
+    private static func driveTime(for event: EKEvent, from here: CLLocation, to destination: CLLocation) async -> TimeInterval? {
+        if let route = routes[event.occurrenceKey], Date.now.timeIntervalSince(route.at) < 900, route.origin.distance(from: here) < 500 { return route.travel }
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: here.coordinate))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination.coordinate))
+        request.transportType = .automobile
+        request.departureDate = event.startDate.addingTimeInterval(-1800)
+        guard let travel = try? await MKDirections(request: request).calculateETA().expectedTravelTime else { return nil }
+        routes = routes.filter { Date.now.timeIntervalSince($0.value.at) < 3600 }
+        routes[event.occurrenceKey] = (travel, here, .now)
+        return travel
+    }
     private static var places: [String: CLLocation] = [:]
     static var enabled: Bool { Preferences.defaults.bool(forKey: key) }
     private static var revision = 0
@@ -120,7 +128,7 @@ enum LocationProvider {
         let eligible = Set(soon.map { "leave-\($0.occurrenceKey)" })
         center.removePendingNotificationRequests(withIdentifiers: obsoleteIDs(pending: old, eligible: eligible, enabled: enabled))
         guard enabled else { estimates = [:]; return }
-        guard !soon.isEmpty, let here = await LocationProvider.current(), current == revision, !Task.isCancelled else { return }
+        guard !soon.isEmpty, !locationBlocked, let here = await LocationProvider.current(), current == revision, !Task.isCancelled else { return }
         for event in soon.prefix(8) {
             guard current == revision, !Task.isCancelled else { return }
             guard let destination = await place(for: event) else { continue }
@@ -129,15 +137,11 @@ enum LocationProvider {
                 center.removePendingNotificationRequests(withIdentifiers: ["leave-\(event.occurrenceKey)"])
                 continue
             }
-            let request = MKDirections.Request()
-            request.source = MKMapItem(placemark: MKPlacemark(coordinate: here.coordinate))
-            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination.coordinate))
-            request.transportType = .automobile
-            request.departureDate = event.startDate.addingTimeInterval(-1800)
-            guard let travel = try? await MKDirections(request: request).calculateETA().expectedTravelTime else { continue }
+            guard let travel = await driveTime(for: event, from: here, to: destination) else { continue }
             guard current == revision, !Task.isCancelled else { return }
             estimates[event.occurrenceKey] = travel
-            let leave = event.startDate.addingTimeInterval(-travel - 300)
+            // Any preparation time comes before leaving; the planned travel time is replaced by the real drive.
+            let leave = event.startDate.addingTimeInterval(-travel - 300 - Double(PlanningPreferences.buffer(event, travel: false) * 60))
             guard leave > .now else { continue }
             let content = UNMutableNotificationContent()
             content.title = "Time to leave for \(event.title ?? "your event")"
@@ -178,8 +182,9 @@ enum LocationProvider {
         }
         guard let event = wanted else { return }
         let state = NextEventAttributes.ContentState(title: event.title ?? "Event", start: event.startDate, end: event.endDate,
-                                                     location: event.location, colorRGB: rgb(event.calendar.cgColor), joinURL: MeetingLink.url(for: event))
-        let content = ActivityContent(state: state, staleDate: event.endDate)
+                                                     location: event.location, colorRGB: rgb(event.calendar?.cgColor), joinURL: MeetingLink.url(for: event))
+        // Going stale at the start redraws the countdown so it switches to the time left, without the app running.
+        let content = ActivityContent(state: state, staleDate: event.startDate > now ? event.startDate : event.endDate)
         var updated = false
         for activity in Activity<NextEventAttributes>.activities where activity.attributes.eventID == event.occurrenceKey {
             await activity.update(content)
@@ -302,7 +307,7 @@ struct CalendarSetQuery: EntityQuery {
 }
 
 /// A Focus filter: while a Focus is on, show one calendar set; when it ends, iOS runs this again with no set,
-/// which shows all calendars.
+/// which puts back what was showing before.
 struct CalendarFocusFilter: SetFocusFilterIntent {
     static let title: LocalizedStringResource = "Show a Calendar Set"
     static let description: IntentDescription? = "Shows only the calendars and reminder lists in a set while this Focus is on."
@@ -311,7 +316,8 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
         DisplayRepresentation(title: "\(calendarSet?.name ?? "All Calendars")")
     }
     func perform() async throws -> some IntentResult {
-        CalendarSet.apply(CalendarSet.saved.first { $0.id.uuidString == calendarSet?.id })
+        if let set = CalendarSet.saved.first(where: { $0.id.uuidString == calendarSet?.id }) { CalendarSet.focusBegan(set) }
+        else { CalendarSet.focusEnded() }
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
@@ -323,18 +329,70 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
     static let key = "appReminderNotifications"
     static let statusKey = "appReminderNotificationStatus"
     static let pendingOpenKey = "notificationReminderID"
+    /// Preserve existing LotsOfEvents alerts unless the user explicitly opts out.
+    static let includeOwnAlarmsKey = "appReminderNotificationsIncludeAlarms"
+    static let offeredKey = "appReminderNotificationsOffered"
     static var enabled: Bool { Preferences.defaults.object(forKey: key) as? Bool ?? true }
+    static var includeOwnAlarms: Bool { includesOwnAlarms(in: Preferences.defaults) }
+    static func includesOwnAlarms(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: includeOwnAlarmsKey) as? Bool ?? true
+    }
+    static func snoozeKey(_ id: String) -> String { "reminderSnooze.\(id)" }
     private static var revision = 0
+    private static var lastPlan: (fingerprint: Int, at: Date)?
+
+    nonisolated static let completeAction = "reminder.complete"
+    nonisolated static let snoozeAction = "reminder.snooze"
+    static let category = UNNotificationCategory(identifier: "reminder", actions: [
+        UNNotificationAction(identifier: completeAction, title: "Complete", options: []),
+        UNNotificationAction(identifier: snoozeAction, title: "Remind in 1 Hour", options: [])
+    ], intentIdentifiers: [])
+
+    /// True once there's a reason to ask: a dated task to alert for and no answer yet, and only the first time.
+    static func shouldOffer(reminders: [EKReminder]) async -> Bool {
+        guard enabled, !Preferences.defaults.bool(forKey: offeredKey), reminders.contains(where: { !$0.isCompleted && ReminderDates.due($0) != nil }) else { return false }
+        return await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
+    }
+    /// The answer to the app's own explanation; "Not Now" leaves the system prompt unused for later.
+    static func answerOffer(allow: Bool) async {
+        Preferences.defaults.set(true, forKey: offeredKey)
+        guard allow else { return }
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+    }
+    /// Runs a notification's Complete or snooze button; the app may be in the background with no window.
+    static func perform(action: String, reminderID: String) async {
+        let store = EKEventStore()
+        guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess,
+              let reminder = store.calendarItem(withIdentifier: reminderID) as? EKReminder, reminder.isWritable, !reminder.isCompleted else { return }
+        if action == completeAction { reminder.isCompleted = true }
+        else { ReminderSchedule.apply(to: reminder, due: Date.now.addingTimeInterval(3600), timed: true, repeatRule: .keep, alert: .keep) }
+        guard (try? store.save(reminder, commit: true)) != nil else { return }
+        // Persist an explicit snooze independently of default alarm preferences, including across launches.
+        let key = snoozeKey(reminderID)
+        if action == snoozeAction, let due = ReminderDates.due(reminder) {
+            Preferences.defaults.set(due.timeIntervalSince1970, forKey: key)
+        } else { Preferences.defaults.removeObject(forKey: key) }
+        // Reconcile all tasks before finishing the background action; no active app window is required.
+        lastPlan = nil
+        let reminders = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil))
+        await update(reminders: reminders)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 
     /// Explicit alarms win. An item without alarms uses the app's due-time defaults.
     static func dates(for reminder: EKReminder, now: Date, option: ReminderAlertOption = AlertDefaults.reminder,
                       dateOnly: Bool = AlertDefaults.dateOnlyEnabled, minute: Int = AlertDefaults.dateOnlyMinute,
-                      calendar: Calendar = .current) -> [Date] {
+                      includeOwnAlarms: Bool = includeOwnAlarms, calendar: Calendar = .current) -> [Date] {
         guard !reminder.isCompleted else { return [] }
         let due = ReminderDates.due(reminder)
+        if let timestamp = Preferences.defaults.object(forKey: snoozeKey(reminder.calendarItemIdentifier)) as? Double {
+            let snoozed = Date(timeIntervalSince1970: timestamp)
+            if let due, abs(due.timeIntervalSince(snoozed)) < 1, snoozed > now { return [snoozed] }
+        }
         let alarms = reminder.alarms ?? []
         let dates: [Date]
         if !alarms.isEmpty {
+            guard includeOwnAlarms else { return [] }
             dates = alarms.compactMap { alarm in
                 // Location alerts stay with Apple's Reminders; don't turn them into time alerts.
                 guard alarm.structuredLocation == nil else { return nil }
@@ -349,6 +407,20 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
 
     private static var pendingUpdate: Task<Void, Never>?
     static func update(reminders: [EKReminder]) async {
+        // Most refreshes change nothing about alerts. The time limit lets later alerts move into the system's 64 slots.
+        var hasher = Hasher()
+        hasher.combine(enabled); hasher.combine(includeOwnAlarms); hasher.combine(AlertDefaults.reminder.rawValue)
+        hasher.combine(AlertDefaults.dateOnlyEnabled); hasher.combine(AlertDefaults.dateOnlyMinute)
+        for reminder in reminders.sorted(by: { $0.calendarItemIdentifier < $1.calendarItemIdentifier }) {
+            hasher.combine(reminder.calendarItemIdentifier); hasher.combine(reminder.isCompleted); hasher.combine(reminder.title)
+            hasher.combine(reminder.calendar?.calendarIdentifier); hasher.combine(ReminderDates.due(reminder)); hasher.combine(reminder.alarms?.count)
+            hasher.combine(reminder.lastModifiedDate)
+        }
+        hasher.combine(Preferences.defaults.stringArray(forKey: "hiddenReminderLists"))
+        hasher.combine(await UNUserNotificationCenter.current().notificationSettings().authorizationStatus.rawValue)
+        let fingerprint = hasher.finalize()
+        if let lastPlan, lastPlan.fingerprint == fingerprint, Date.now.timeIntervalSince(lastPlan.at) < 900 { return }
+        lastPlan = (fingerprint, .now)
         revision += 1
         let current = revision
         let previous = pendingUpdate
@@ -377,10 +449,12 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
             return
         }
         var settings = await center.notificationSettings()
+        // The prompt comes from the app's own explanation or a Settings toggle, never from a background refresh.
         if settings.authorizationStatus == .notDetermined {
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            settings = await center.notificationSettings()
+            Preferences.defaults.set("", forKey: statusKey)
+            return
         }
+        settings = await center.notificationSettings()
         guard current == revision else { return }
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
             center.removePendingNotificationRequests(withIdentifiers: own.map(\.identifier))
@@ -412,6 +486,7 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
             content.title = reminder.title ?? "Reminder"
             content.body = reminder.calendar?.title ?? ""
             content.sound = .default
+            content.categoryIdentifier = "reminder"
             content.threadIdentifier = "reminder-list-\(reminder.calendar?.calendarIdentifier ?? "")"
             content.userInfo = ["reminderID": reminder.calendarItemIdentifier]
             var components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
@@ -427,25 +502,43 @@ struct CalendarFocusFilter: SetFocusFilterIntent {
 
 @MainActor final class ReminderNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = ReminderNotificationDelegate()
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in completionHandler([.banner, .list, .sound]) }
     }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-           let id = response.notification.request.content.userInfo["contactDateID"] as? String,
-           let date = response.notification.request.content.userInfo["contactDateTimestamp"] as? Double {
-            await MainActor.run {
-                Preferences.defaults.set(id, forKey: "pendingContactDateID")
-                Preferences.defaults.set(date, forKey: "pendingContactDateTimestamp")
-                ReminderNotificationRoute.shared.contactDateID = id
-            }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
+        // Copy only values across isolation boundaries. UIKit's completion performs
+        // snapshot/state restoration and must run on the main thread, even when
+        // the notification (for example a travel alert) has no routing payload.
+        let action = response.actionIdentifier
+        let info = response.notification.request.content.userInfo
+        let contactID = info["contactDateID"] as? String
+        let timestamp = info["contactDateTimestamp"] as? Double
+        let reminderID = info["reminderID"] as? String
+        Self.receive(action: action, contactID: contactID, timestamp: timestamp, reminderID: reminderID, completionHandler: completionHandler)
+    }
+    nonisolated static func receive(action: String, contactID: String?, timestamp: Double?, reminderID: String?,
+        completionHandler: @escaping @Sendable () -> Void) {
+        Task { @MainActor in
+            defer { completionHandler() }
+            await Self.handleResponse(action: action, contactID: contactID, timestamp: timestamp, reminderID: reminderID)
+        }
+    }
+    static func handleResponse(action: String, contactID: String?, timestamp: Double?, reminderID: String?) async {
+        if action == UNNotificationDefaultActionIdentifier, let id = contactID, let date = timestamp {
+            Preferences.defaults.set(id, forKey: "pendingContactDateID")
+            Preferences.defaults.set(date, forKey: "pendingContactDateTimestamp")
+            ReminderNotificationRoute.shared.contactDateID = id
             return
         }
-        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              let id = response.notification.request.content.userInfo["reminderID"] as? String else { return }
-        await MainActor.run {
-            ReminderNotificationRoute.shared.open(id)
+        guard let id = reminderID else { return }
+        if action == ReminderNotifications.completeAction || action == ReminderNotifications.snoozeAction {
+            await ReminderNotifications.perform(action: action, reminderID: id)
+            return
         }
+        guard action == UNNotificationDefaultActionIdentifier else { return }
+        ReminderNotificationRoute.shared.open(id)
     }
 }
 

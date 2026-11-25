@@ -77,7 +77,7 @@ struct AgendaProvider: AppIntentTimelineProvider {
             entries.append(expired)
             entries.sort { $0.date < $1.date }
         }
-        return Timeline(entries: entries, policy: .after(min(Date.now.addingTimeInterval(900), midnight)))
+        return Timeline(entries: entries, policy: .after(min(Date.now.addingTimeInterval(WidgetRefresh.interval), midnight)))
     }
     func entry(theme: WidgetThemeOption, sources: [SourceEntity]?, tasks: Bool = false, accent: WidgetAccentOption = .app) async -> AgendaEntry {
         let now = Date.now

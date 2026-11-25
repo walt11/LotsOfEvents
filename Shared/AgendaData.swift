@@ -24,15 +24,18 @@ struct AgendaItem: Identifiable {
     var blocksAvailability = true
     var contactDateID: String? = nil
     var contactDateSymbol: String? = nil
+    /// Preparation and travel reserved before the event, in minutes.
+    var bufferMinutes = 0
     var dateSymbol: String? { birthday ? "gift.fill" : contactDateSymbol }
     /// The Agenda's second line: the list for reminders, otherwise where or how long. The color bar already identifies the calendar.
     var agendaDetail: String? {
         if reminder { return source }
-        if let location, !location.isEmpty { return location }
-        guard !allDay, !continuation, let endDate else { return nil }
+        let buffer = bufferMinutes > 0 ? "\(bufferMinutes) min preparation / travel" : nil
+        if let location, !location.isEmpty { return [location, buffer].compactMap { $0 }.joined(separator: " · ") }
+        guard !allDay, !continuation, let endDate else { return buffer }
         let seconds = endDate.timeIntervalSince(eventStartDate ?? date)
-        guard seconds >= 60 else { return nil }
-        return Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+        guard seconds >= 60 else { return buffer }
+        return [Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)), buffer].compactMap { $0 }.joined(separator: " · ")
     }
     /// True when this row shows an event that began before the row's day.
     var continuation: Bool { sourceID != nil || (eventStartDate.map { $0 < date } ?? false) }
@@ -53,6 +56,11 @@ struct AgendaItem: Identifiable {
     }
     var timeLabel: String {
         if continuation && !allDay { return continuationLabel }
+        // A task from an earlier day needs its date, or 5:00 PM reads as later today.
+        if reminder, date < Calendar.current.startOfDay(for: .now) {
+            let day = date.formatted(.dateTime.month(.abbreviated).day())
+            return allDay ? day : "\(day)\n\(date.formatted(date: .omitted, time: .shortened))"
+        }
         return allDay ? (reminder ? "Due" : "All day") : date.formatted(date: .omitted, time: .shortened)
     }
 }
@@ -161,13 +169,39 @@ enum TodayTasks {
 /// Carries EventKit objects, which aren't Sendable, out of EventKit's fetch callback.
 struct EventKitResult<Value>: @unchecked Sendable { let value: Value }
 
+/// Coalesce repeated shared-list records without matching tasks by their titles.
+enum ReminderIdentity {
+    struct ServerKey: Hashable {
+        let listID: String
+        let itemID: String
+        let due: DateComponents?
+        let start: DateComponents?
+        let completed: Bool
+    }
+    static func unique(_ reminders: [EKReminder]) -> [EKReminder] {
+        var localIDs = Set<String>()
+        var serverIDs = Set<ServerKey>()
+        return reminders.filter { reminder in
+            let id = reminder.calendarItemIdentifier
+            if !id.isEmpty, !localIDs.insert(id).inserted { return false }
+            if let externalID = reminder.calendarItemExternalIdentifier, !externalID.isEmpty,
+               let listID = reminder.calendar?.calendarIdentifier {
+                return serverIDs.insert(ServerKey(listID: listID, itemID: externalID,
+                    due: reminder.dueDateComponents, start: reminder.startDateComponents,
+                    completed: reminder.isCompleted)).inserted
+            }
+            return true
+        }
+    }
+}
+
 extension EKEventStore {
     /// Runs in the caller's isolation, so a main-actor store never crosses actors.
     nonisolated(nonsending) func reminders(matching predicate: NSPredicate) async -> [EKReminder] {
         let result: EventKitResult<[EKReminder]> = await withCheckedContinuation { continuation in
             fetchReminders(matching: predicate) { continuation.resume(returning: EventKitResult(value: $0 ?? [])) }
         }
-        return result.value
+        return ReminderIdentity.unique(result.value)
     }
 }
 
@@ -196,7 +230,7 @@ enum AgendaQuery {
                 birthdayContacts = Set(events.compactMap(\.birthdayContactIdentifier))
                 items += events.map {
                     AgendaItem(id: "event:\($0.calendarItemIdentifier):\($0.startDate.timeIntervalSince1970)", title: $0.title ?? "Untitled event", date: max($0.startDate, range.start), allDay: $0.isAllDay, reminder: false, source: $0.calendar.title, color: Color(cgColor: $0.calendar.cgColor), notes: $0.notes, eventIdentifier: $0.eventIdentifier, eventStartDate: $0.startDate, endDate: $0.endDate, location: $0.location,
-                               joinURL: MeetingLink.url(for: $0), needsReply: $0.needsReply, birthday: $0.isBirthday, blocksAvailability: $0.blocksTime)
+                               joinURL: MeetingLink.url(for: $0), needsReply: $0.needsReply, birthday: $0.isBirthday, blocksAvailability: $0.blocksTime, bufferMinutes: PlanningPreferences.bufferMinutes($0))
                 }
             }
         }
@@ -320,7 +354,7 @@ enum WidgetAgendaLayout {
             let day = calendar.date(byAdding: .day, value: offset, to: first)!
             return self.items(on: day, from: items, calendar: calendar).map { item in
                 guard item.date < day else { return item }
-                return AgendaItem(id: "\(item.sourceID ?? item.id)@\(day.timeIntervalSince1970)", title: item.title, date: day, allDay: item.allDay, reminder: item.reminder, source: item.source, color: item.color, notes: item.notes, eventIdentifier: item.eventIdentifier, eventStartDate: item.eventStartDate, endDate: item.endDate, sourceID: item.sourceID ?? item.id, location: item.location)
+                return AgendaItem(id: "\(item.sourceID ?? item.id)@\(day.timeIntervalSince1970)", title: item.title, date: day, allDay: item.allDay, reminder: item.reminder, source: item.source, color: item.color, notes: item.notes, eventIdentifier: item.eventIdentifier, eventStartDate: item.eventStartDate, endDate: item.endDate, sourceID: item.sourceID ?? item.id, location: item.location, joinURL: item.joinURL, needsReply: item.needsReply, birthday: item.birthday, blocksAvailability: item.blocksAvailability, contactDateID: item.contactDateID, contactDateSymbol: item.contactDateSymbol, bufferMinutes: item.bufferMinutes)
             }
         }
     }
@@ -511,6 +545,10 @@ enum WidgetCompanionData {
         return DateInterval(start: Date(timeIntervalSince1970: a), end: Date(timeIntervalSince1970: b))
     }
 }
+
+/// How often widgets look for changes made elsewhere. The app reloads them itself when it sees a change, and
+/// iOS gives each widget a limited daily budget of reloads, so a shorter interval just gets throttled.
+enum WidgetRefresh { static let interval: TimeInterval = 1800 }
 
 /// Widget navigation expires without a repeating background timer.
 enum WidgetDayNavigation {

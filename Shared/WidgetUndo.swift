@@ -19,7 +19,7 @@ struct WidgetUndoRecord: Codable {
         let store = EKEventStore()
         guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess,
               let reminder = store.calendarItem(withIdentifier: record.identifier) as? EKReminder,
-              reminder.isCompleted, reminder.calendar.allowsContentModifications,
+              reminder.isCompleted, reminder.calendar?.allowsContentModifications == true,
               let completion = reminder.completionDate, abs(completion.timeIntervalSince(record.completedAt)) < 5 else { return }
         reminder.isCompleted = false
         try store.save(reminder, commit: true)

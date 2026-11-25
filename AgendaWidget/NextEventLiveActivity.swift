@@ -64,7 +64,8 @@ struct NextEventLiveActivity: Widget {
     }
     /// Counts down to the start, then shows the time left until the end.
     private func countdown(_ state: NextEventAttributes.ContentState) -> Text {
-        state.start > .now ? Text(timerInterval: Date.now...state.start, countsDown: true) : Text(timerInterval: state.start...state.end, countsDown: true)
+        // An activity goes stale at the start, and that redraw is what moves it from the first timer to the second.
+        state.start > .now ? Text(timerInterval: Date.now...state.start, countsDown: true) : Text(timerInterval: state.start...max(state.start, state.end), countsDown: true)
     }
 }
 #endif

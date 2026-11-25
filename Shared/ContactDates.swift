@@ -19,13 +19,19 @@ struct ContactDateRecord: Codable, Equatable, Identifiable, Sendable {
     }
     var title: String { "\(name) · \(label)" }
 
+    /// Chinese-calendar years repeat every 60; the era says which cycle a year is in.
+    private func elapsedYears(to year: DateComponents, calendar: Calendar) -> Int? {
+        guard let originalYear = components.year, originalYear > 0, let current = year.year else { return nil }
+        guard calendar.identifier == .chinese else { return current - originalYear }
+        guard let originalEra = components.era, let currentEra = year.era else { return nil }
+        return (currentEra - originalEra) * 60 + current - originalYear
+    }
+
     /// Use the occurrence year, so browsing future anniversaries shows the correct count.
     func title(on date: Date, timeZone: TimeZone = .current) -> String {
-        guard let originalYear = components.year, originalYear > 0 else { return title }
         var calendar = components.calendar ?? Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let years = calendar.component(.year, from: date) - originalYear
-        guard years > 0 else { return title }
+        guard let years = elapsedYears(to: calendar.dateComponents([.era, .year], from: date), calendar: calendar), years > 0 else { return title }
         return "\(title) · \(years) \(years == 1 ? "year" : "years")"
     }
 
@@ -40,12 +46,15 @@ struct ContactDateRecord: Codable, Equatable, Identifiable, Sendable {
             var candidate = calendar.dateComponents([.era, .year], from: year.start)
             candidate.month = month; candidate.day = 1
             candidate.isLeapMonth = components.isLeapMonth
+            // A date in a leap month is kept in the ordinary month in years that have no such leap month.
+            if components.isLeapMonth == true, let leap = calendar.date(from: candidate),
+               calendar.dateComponents([.month], from: leap).isLeapMonth != true { candidate.isLeapMonth = false }
             if let first = calendar.date(from: candidate), calendar.component(.month, from: first) == month,
                let days = calendar.range(of: .day, in: .month, for: first) {
                 // February 29 anniversaries appear on February 28 in non-leap years.
                 candidate.day = min(day, days.count)
                 if let date = calendar.date(from: candidate), date >= range.start, date < range.end,
-                   components.year == nil || components.year! <= (candidate.year ?? 0) {
+                   components.year == nil || (elapsedYears(to: candidate, calendar: calendar) ?? 0) >= 0 {
                     result.append(calendar.startOfDay(for: date))
                 }
             }
@@ -76,9 +85,16 @@ enum ContactDates {
     }
     static var enabled: Bool { Preferences.defaults.bool(forKey: enabledKey) }
     static var records: [ContactDateRecord] { allRecords.filter { PlanningPreferences.contactIsVisible($0.id) } }
+    private static let decodeLock = NSLock()
+    nonisolated(unsafe) private static var decoded: (data: Data, records: [ContactDateRecord])?
+    /// Decoded once per stored value, since calendar views ask for these on every fetch.
     static var allRecords: [ContactDateRecord] {
         guard enabled, let data = Preferences.defaults.data(forKey: cacheKey) else { return [] }
-        return (try? JSONDecoder().decode([ContactDateRecord].self, from: data)) ?? []
+        decodeLock.lock(); defer { decodeLock.unlock() }
+        if let decoded, decoded.data == data { return decoded.records }
+        let records = (try? JSONDecoder().decode([ContactDateRecord].self, from: data)) ?? []
+        decoded = (data, records)
+        return records
     }
     static func items(in range: DateInterval, excludingBirthdays: Set<String> = [], records: [ContactDateRecord]? = nil) -> [AgendaItem] {
         (records ?? Self.records).flatMap { record -> [AgendaItem] in

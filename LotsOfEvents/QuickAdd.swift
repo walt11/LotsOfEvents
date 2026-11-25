@@ -56,6 +56,7 @@ struct QuickAddView: View {
                     Section {
                         Text(parsed.title).font(.headline)
                         if let repeats = parsed.repeats { Label(repeats.title, systemImage: "repeat").font(.caption).foregroundStyle(.secondary) }
+                        if !reminder, let length = lengthText { Label(length, systemImage: "timer").font(.caption).foregroundStyle(.secondary) }
                         if reminder && noDueDate && QuickAddParser.parse(text).repeats != nil {
                             Text("Repeating tasks need a due date. This task will not repeat.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -180,6 +181,12 @@ struct QuickAddView: View {
         }.presentationDetents([.medium])
     }
     private var eventStart: Date { QuickAddSaver.eventStart(parsed) }
+    /// How long the typed event will last, when the text says so.
+    private var lengthText: String? {
+        if parsed.allDay { return parsed.spanDays > 1 ? "\(parsed.spanDays) days" : nil }
+        guard let duration = parsed.duration, duration > 0 else { return nil }
+        return Duration.seconds(duration).formatted(.units(allowed: [.days, .hours, .minutes], width: .wide))
+    }
     private var whenText: String {
         if reminder && parsed.date == nil { return "No due date" }
         let date = reminder ? parsed.date! : eventStart
@@ -219,11 +226,14 @@ enum QuickAddResolution {
         if timed == false {
             if let date = result.date { result.date = calendar.startOfDay(for: date) }
             result.allDay = true
+            result.duration = nil
         }
         if noDueDate {
             result.date = nil
             result.allDay = true
             result.repeats = nil
+            result.duration = nil
+            result.spanDays = 1
         }
         return result
     }

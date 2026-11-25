@@ -31,7 +31,7 @@ struct WeeklyPlanner: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
     private var tasks: [EKReminder] {
-        model.reminders.filter { !$0.isCompleted && Preferences.selected($0.calendar.calendarIdentifier, reminders: true) }
+        model.reminders.filter { !$0.isCompleted && $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true }
     }
     var body: some View {
         NavigationStack {
@@ -128,14 +128,14 @@ struct EventPlanningView: View {
             }
             .navigationTitle("Preparation & Travel").navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                preparation = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: false))
-                travel = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: true))
+                preparation = PlanningPreferences.buffer(event, travel: false)
+                travel = PlanningPreferences.buffer(event, travel: true)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") {
-                    Preferences.defaults.set(preparation, forKey: PlanningPreferences.bufferKey(event, travel: false))
-                    Preferences.defaults.set(travel, forKey: PlanningPreferences.bufferKey(event, travel: true))
+                    PlanningPreferences.setBuffer(event, travel: false, minutes: preparation)
+                    PlanningPreferences.setBuffer(event, travel: true, minutes: travel)
                     model.scheduleRefresh(); dismiss()
                 } }
             }
@@ -218,6 +218,7 @@ struct ContactDateSelectionView: View {
             .values.map { ($0.first?.name ?? "Contact", $0.sorted { $0.label < $1.label }) }.sorted { $0.0.localizedStandardCompare($1.0) == .orderedAscending }
     }
     var body: some View {
+        let _ = revision
         List {
             Section {
                 Picker("Advance alerts at 9 AM", selection: $alerts) {
@@ -250,15 +251,24 @@ struct ContactDateSelectionView: View {
             }
         }
         .navigationTitle("Contacts & Occasions").searchable(text: $query)
-        .id(revision)
     }
+    // Changing `revision` redraws the toggles in place, so the list keeps its scroll position.
     private func changed() { revision += 1; model.scheduleRefresh(); WidgetReloader.schedule() }
 }
 
 @MainActor enum ContactOccasionAlerts {
     private static var revision = 0
+    private static var lastPlan: (fingerprint: Int, at: Date)?
     private static var pendingUpdate: Task<Void, Never>?
     static func update() async {
+        var hasher = Hasher()
+        hasher.combine(ContactDates.enabled)
+        hasher.combine(Preferences.defaults.object(forKey: PlanningPreferences.contactAlerts) as? Int ?? -1)
+        hasher.combine(Preferences.defaults.data(forKey: ContactDates.cacheKey))
+        hasher.combine(Preferences.defaults.stringArray(forKey: PlanningPreferences.hiddenContactDates))
+        let fingerprint = hasher.finalize()
+        if let lastPlan, lastPlan.fingerprint == fingerprint, Date.now.timeIntervalSince(lastPlan.at) < 3600 { return }
+        lastPlan = (fingerprint, .now)
         revision += 1
         let current = revision
         let previous = pendingUpdate

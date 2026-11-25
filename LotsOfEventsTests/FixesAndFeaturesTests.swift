@@ -728,7 +728,9 @@ extension FixesAndFeaturesTests {
         let reminder = EKReminder(eventStore: EKEventStore())
         reminder.dueDateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date(25, hour: 10))
         reminder.alarms = [EKAlarm(absoluteDate: date(25, hour: 9)), EKAlarm(absoluteDate: date(24, hour: 8))]
-        XCTAssertEqual(ReminderNotifications.dates(for: reminder, now: date(24, hour: 12), option: .none, calendar: calendar), [date(25, hour: 9)])
+        XCTAssertEqual(ReminderNotifications.dates(for: reminder, now: date(24, hour: 12), option: .none, includeOwnAlarms: true, calendar: calendar), [date(25, hour: 9)])
+        // Apple Reminders delivers a reminder's own alarms, so by default the app adds no second alert.
+        XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24, hour: 12), option: .none, includeOwnAlarms: false, calendar: calendar).isEmpty)
         reminder.isCompleted = true
         XCTAssertTrue(ReminderNotifications.dates(for: reminder, now: date(24), calendar: calendar).isEmpty)
     }

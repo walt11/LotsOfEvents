@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
-    CURRENT_PROJECT_VERSION: 29
-    MARKETING_VERSION: 1.2
+    CURRENT_PROJECT_VERSION: 31
+    MARKETING_VERSION: 1.3
     INFOPLIST_KEY_CFBundleVersion: '$(CURRENT_PROJECT_VERSION)'
     INFOPLIST_KEY_CFBundleShortVersionString: '$(MARKETING_VERSION)'
     TARGETED_DEVICE_FAMILY: '1,2'
@@ -63,7 +63,7 @@ targets:
         NSMicrophoneUsageDescription: Dictate events and reminders into the Quick Add text box.
         NSSpeechRecognitionUsageDescription: Turn your spoken words into editable Quick Add text.
         NSLocationWhenInUseUsageDescription: Use your location to calculate travel time and when to leave for events.
-        NSContactsUsageDescription: Show birthdays, anniversaries, and other contact dates in your calendar, agenda, and widgets, and optionally show birthday ages.
+        NSContactsUsageDescription: Show birthdays, anniversaries, and other contact dates in your calendar, agenda, and widgets.
         # The next-event countdown on the Lock Screen and in the Dynamic Island.
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -155,6 +155,8 @@ targets:
     platform: watchOS
     deploymentTarget: '11.0'
     sources: [LotsOfEventsWatch]
+    dependencies:
+      - target: LotsOfEventsWatchWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.walt.LotsOfEvents.watchkitapp
@@ -171,6 +173,26 @@ targets:
         WKCompanionAppBundleIdentifier: com.walt.LotsOfEvents
         NSCalendarsFullAccessUsageDescription: Show your upcoming events on your watch.
         NSRemindersFullAccessUsageDescription: Show today's reminders on your watch.
+  LotsOfEventsWatchWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: '11.0'
+    sources: [LotsOfEventsWatchWidget]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.walt.LotsOfEvents.watchkitapp.Complications
+        TARGETED_DEVICE_FAMILY: '4'
+        INFOPLIST_KEY_CFBundleDisplayName: LotsOfEvents
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: LotsOfEventsWatchWidget/Info.plist
+      properties:
+        CFBundleDisplayName: LotsOfEvents
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSCalendarsFullAccessUsageDescription: Show your next event on your watch face.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   LotsOfEventsTests:
     type: bundle.unit-test
     platform: iOS

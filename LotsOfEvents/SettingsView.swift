@@ -25,6 +25,7 @@ struct SourcesView: View {
     @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
     @AppStorage(ReminderNotifications.key, store: Preferences.defaults) private var reminderNotifications = true
     @AppStorage(ReminderNotifications.statusKey, store: Preferences.defaults) private var reminderNotificationStatus = ""
+    @AppStorage(ReminderNotifications.includeOwnAlarmsKey, store: Preferences.defaults) private var reminderOwnAlarms = true
     @AppStorage("agendaShowEarlierItems", store: Preferences.defaults) private var agendaShowEarlierItems = false
     @State private var importing = false
     var category: SettingsCategory? = nil
@@ -83,7 +84,17 @@ struct SourcesView: View {
                 if category == .alerts {
                 Section {
                     Toggle("LotsOfEvents Reminder Notifications", isOn: $reminderNotifications)
-                        .onChange(of: reminderNotifications) { _, _ in model.scheduleRefresh() }
+                        .onChange(of: reminderNotifications) { _, on in
+                            Task {
+                                // Turning this on is the moment to ask, if the app hasn't been answered yet.
+                                if on { await ReminderNotifications.answerOffer(allow: true) }
+                                model.scheduleRefresh()
+                            }
+                        }
+                    if reminderNotifications {
+                        Toggle("Include Reminders With Their Own Alerts", isOn: $reminderOwnAlarms)
+                            .onChange(of: reminderOwnAlarms) { _, _ in model.scheduleRefresh() }
+                    }
                     if !reminderNotificationStatus.isEmpty {
                         Text(reminderNotificationStatus).font(.footnote).foregroundStyle(GalleryPalette.warning)
                         Button("Open Notification Settings") {
@@ -91,17 +102,21 @@ struct SourcesView: View {
                         }
                     }
                 } footer: {
-                    Text("Send alerts for your selected reminder lists from LotsOfEvents. To avoid duplicate alerts, turn off Apple Reminders notifications in system Settings. Your reminder alarms stay unchanged. Open LotsOfEvents after changing reminders on another device to refresh upcoming alerts. Location alerts still use Apple Reminders.")
+                    Text("LotsOfEvents alerts you for reminders that have no alert of their own, using your Default Alerts. Apple Reminders already delivers a reminder's own alerts, so include them only if you've turned off Apple Reminders notifications in system Settings. Open LotsOfEvents after changing reminders on another device to refresh upcoming alerts. Location alerts still use Apple Reminders.")
                 }.listRowBackground(GalleryPalette.card)
                 Section {
                     NavigationLink { DefaultAlertsView() } label: {
                         settingsRow("Default Alerts", symbol: "bell.badge", color: .red,
                                     detail: "Events: \(EventAlertOption(rawValue: eventAlert)?.title ?? "None") · Reminders: \(ReminderAlertOption(rawValue: reminderAlert)?.title ?? "None")")
                     }
-                    Toggle(isOn: $timeToLeave) { settingsRow("Time to Leave", symbol: "car", color: .green, detail: "Alerts based on the drive to an event's location") }
+                    Toggle(isOn: $timeToLeave) { settingsRow("Time to Leave", symbol: "car", color: .green, detail: timeToLeave && TravelAlerts.locationBlocked ? "Location access is off, so these alerts can't be sent" : "Alerts based on the drive to an event's location") }
                         .onChange(of: timeToLeave) { _, on in
                             Task {
-                                if on { _ = await TravelAlerts.requestPermission() }
+                                if on, let problem = await TravelAlerts.enable() {
+                                    timeToLeave = false
+                                    model.errorOffersSettings = true
+                                    model.error = problem
+                                }
                                 model.scheduleRefresh()
                             }
                         }
@@ -196,7 +211,9 @@ struct SourcesView: View {
 
                 }
                 if category == .about {
+                    #if targetEnvironment(macCatalyst)
                     Section { NavigationLink("Keyboard Shortcuts") { KeyboardShortcutsView() } }
+                    #endif
                 Section {
                     LabeledContent("Version", value: Self.version)
                 } header: { SectionHeader(title: "About") }.listRowBackground(GalleryPalette.card)
@@ -484,7 +501,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .appearance: "theme accent color text size spacing density tabs order dark light"
-        case .sources: "calendars reminders lists accounts sets focus contacts anniversaries birthdays dates week numbers second time zone birthday ages import ics connection status permissions refresh occasions"
+        case .sources: "calendars reminders lists accounts sets focus contacts anniversaries birthdays dates week numbers second time zone import ics connection status permissions refresh occasions"
         case .alerts: "notifications default alerts travel time to leave countdown live activity"
         case .widgets: "widgets editor colors text layout days ahead guide reset timeout"
         case .agenda: "agenda earlier previous past completed history undated tasks today weekly planner schedule"

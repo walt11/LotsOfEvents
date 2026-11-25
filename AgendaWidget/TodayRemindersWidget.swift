@@ -21,7 +21,7 @@ struct TodayRemindersProvider: AppIntentTimelineProvider {
     func timeline(for configuration: AgendaConfigurationIntent, in context: Context) async -> Timeline<TodayRemindersEntry> {
         let entry = await load(configuration)
         let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
-        return Timeline(entries: [entry], policy: .after(min(Date.now.addingTimeInterval(900), midnight)))
+        return Timeline(entries: [entry], policy: .after(min(Date.now.addingTimeInterval(WidgetRefresh.interval), midnight)))
     }
     private func load(_ configuration: AgendaConfigurationIntent) async -> TodayRemindersEntry {
         guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else { return TodayRemindersEntry(date: .now, access: false) }

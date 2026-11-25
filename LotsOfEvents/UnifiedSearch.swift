@@ -16,7 +16,7 @@ struct UnifiedSearchResults: View {
     private var reminders: [EKReminder] {
         (filter == .completed ? completed : model.reminders).filter {
             filter != .contacts && (filter == .completed ? $0.isCompleted : !$0.isCompleted) &&
-            Preferences.selected($0.calendar.calendarIdentifier, reminders: true) &&
+            $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true &&
             UnifiedSearch.matches([$0.title, $0.notes, $0.calendarTitle], query) &&
             (filter != .upcoming || (ReminderDates.due($0).map { $0 >= .now } ?? false)) &&
             (filter != .past || ReminderDates.isOverdue($0))

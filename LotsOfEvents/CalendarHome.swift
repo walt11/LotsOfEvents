@@ -117,6 +117,9 @@ struct CalendarHome: View {
         nonmutating set { model.calendarMode = newValue }
     }
     @State private var events: [EKEvent] = []
+    /// Worked out when the data changes rather than once per cell on every draw.
+    @State private var eventsByDay: [Date: [EKEvent]] = [:]
+    @State private var tasksByDay: [Date: [EKReminder]] = [:]
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var gridWidth: CGFloat = 0
     /// The event being dragged on the timeline: the start it would drop at, or with `resize`, its new end.
@@ -286,7 +289,7 @@ struct CalendarHome: View {
     }
     /// Twelve small months; days with events are tinted, and tapping a month opens it.
     private var yearGrid: some View {
-        let busy = Set(datedTasks.compactMap { ReminderDates.due($0).map { calendar.startOfDay(for: $0) } }).union(Set(events.flatMap { event -> [Date] in
+        let busy = Set(tasksByDay.keys).union(Set(events.flatMap { event -> [Date] in
             var day = calendar.startOfDay(for: event.startDate)
             var result: [Date] = []
             // Multi-day events tint each day they cover, up to a month.
@@ -365,7 +368,7 @@ struct CalendarHome: View {
                         } header: { SectionHeader(title: "Coming up") }
                     }
                 } else {
-                    let conflicts = Conflicts.ids(dayEvents.filter { !$0.isAllDay }.map { (dragKey($0), $0.startDate, $0.endDate) })
+                    let conflicts = Conflicts.ids(events: dayEvents, key: dragKey)
                     if dayEvents.contains(where: { $0.contactDateID != nil }) {
                         CompactContactDates(events: dayEvents, model: model)
                             .galleryRow()
@@ -408,10 +411,11 @@ struct CalendarHome: View {
             date = calendar.date(byAdding: .day, value: direction, to: date) ?? date
         }
     }
-    /// The next few events after `day`, from what's already loaded for the visible month.
+    /// The next few events after `day`, looking two months ahead so it doesn't run dry at the end of a month.
     private func comingUp(after day: Date) -> [EKEvent] {
         let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day))!
-        return Array(events.filter { $0.startDate >= end }.prefix(3))
+        let horizon = calendar.date(byAdding: .day, value: 60, to: end)!
+        return Array(model.events(in: DateInterval(start: end, end: horizon)).filter { $0.startDate >= end }.prefix(3))
     }
     private var hourHeight: CGFloat { CGFloat(zoom) }
     private var secondZone: TimeZone? { secondZoneID.isEmpty ? nil : TimeZone(identifier: secondZoneID) }
@@ -733,7 +737,14 @@ struct CalendarHome: View {
                                 .background(event.calendarColor.opacity(0.25), in: RoundedRectangle(cornerRadius: 3))
                         }.buttonStyle(.plain)
                     }
-                    if column.allDay.count > 2 { Text("+\(column.allDay.count - 2)").font(.system(size: 10)).foregroundStyle(.secondary) }
+                    if column.allDay.count > 2 {
+                        Button { date = column.day; mode = .day } label: {
+                            Text("+\(column.allDay.count - 2)").font(.system(size: 10)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(column.allDay.count - 2) more all-day events")
+                        .accessibilityHint("Opens this day")
+                    }
                 }.frame(maxWidth: .infinity).padding(.horizontal, 1)
             }
         }.padding(.trailing, 8).padding(.vertical, 4)
@@ -774,27 +785,27 @@ struct CalendarHome: View {
         let place = event.location.flatMap { $0.isEmpty || MeetingLink.url(url: nil, location: $0, notes: nil) != nil ? nil : $0 }
         let preparation = PlanningPreferences.bufferMinutes(event)
         let detail = [date, place, preparation > 0 ? "\(preparation) min preparation / travel" : nil, event.hasRecurrenceRules ? "Repeats" : nil].compactMap { $0 }.joined(separator: " · ")
-        return EventRow(color: event.calendarColor, title: event.isBirthday ? BirthdayAges.title(for: event) : event.title ?? "Untitled event",
+        return EventRow(color: event.calendarColor, title: event.title ?? "Untitled event",
                         detail: detail.isEmpty ? nil : detail,
                         time: event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened))\n\(event.endDate.formatted(date: .omitted, time: .shortened))",
                         birthday: event.isBirthday, contactDateSymbol: event.contactDateSymbol, needsReply: event.needsReply, conflict: conflict,
                         joinURL: !event.isAllDay && event.endDate > .now ? MeetingLink.url(for: event) : nil) { model.inspect(event) }
             .contextMenu {
-                Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) }
+                if event.canDuplicate { Button("Duplicate", systemImage: "plus.square.on.square") { model.sheet = .duplicate(event) } }
                 if let link = MeetingLink.url(for: event) { Link(destination: link) { Label("Join \(MeetingLink.service(link))", systemImage: "video") } }
             }
             .galleryRow()
             .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
     }
-    private var datedTasks: [EKReminder] {
-        model.reminders.filter {
-            !$0.isCompleted && ReminderDates.due($0) != nil &&
-            $0.calendar.map { Preferences.selected($0.calendarIdentifier, reminders: true) } == true
-        }.sorted { ReminderDates.due($0)! < ReminderDates.due($1)! }
+    private func groupTasks() -> [Date: [EKReminder]] {
+        let dated = model.reminders.compactMap { reminder -> (due: Date, reminder: EKReminder)? in
+            guard !reminder.isCompleted, reminder.calendar.map({ Preferences.selected($0.calendarIdentifier, reminders: true) }) == true,
+                  let due = ReminderDates.due(reminder) else { return nil }
+            return (due, reminder)
+        }.sorted { $0.due < $1.due }
+        return Dictionary(grouping: dated) { calendar.startOfDay(for: $0.due) }.mapValues { $0.map(\.reminder) }
     }
-    private func tasksOn(_ day: Date) -> [EKReminder] {
-        datedTasks.filter { calendar.isDate(ReminderDates.due($0)!, inSameDayAs: day) }
-    }
+    private func tasksOn(_ day: Date) -> [EKReminder] { tasksByDay[calendar.startOfDay(for: day)] ?? [] }
     private func taskRow(_ task: EKReminder, compact: Bool = false) -> some View {
         HStack(alignment: .top, spacing: compact ? 4 : 10) {
             Button { model.toggle(task) } label: {
@@ -814,10 +825,11 @@ struct CalendarHome: View {
             }.buttonStyle(.plain)
         }
     }
-    private func eventsOn(_ day: Date) -> [EKEvent] {
+    private func filterEvents(on day: Date) -> [EKEvent] {
         events.filter { CalendarDates.overlaps(start: $0.startDate, end: $0.endDate, day: day) }
             .sorted { if $0.isAllDay != $1.isAllDay { return $0.isAllDay }; return $0.startDate < $1.startDate }
     }
+    private func eventsOn(_ day: Date) -> [EKEvent] { eventsByDay[calendar.startOfDay(for: day)] ?? filterEvents(on: day) }
     private func shift(_ direction: Int) {
         let component: Calendar.Component = mode == .month ? .month : mode == .year ? .year : .day
         let amount = mode == .week ? 7 : mode == .threeDay ? 3 : 1
@@ -825,7 +837,11 @@ struct CalendarHome: View {
     }
     private func reload() {
         model.calendarCreationDate = newEventDate
-        events = model.events(in: DateInterval(start: days.first!, end: calendar.date(byAdding: .day, value: 1, to: days.last!)!))
+        let visible = days
+        events = model.events(in: DateInterval(start: visible.first!, end: calendar.date(byAdding: .day, value: 1, to: visible.last!)!))
+        tasksByDay = groupTasks()
+        // The Year view only tints days, so it doesn't need each day's list.
+        eventsByDay = mode == .year ? [:] : Dictionary(uniqueKeysWithValues: visible.map { (calendar.startOfDay(for: $0), filterEvents(on: $0)) })
     }
 }
 

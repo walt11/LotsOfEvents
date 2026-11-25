@@ -9,14 +9,14 @@ struct TodayDashboard: View {
     let undated: [EKReminder]
     @AppStorage(AppDensity.key, store: Preferences.defaults) private var densityID = AppDensity.standard.rawValue
     @AppStorage("agendaShowEarlierItems", store: Preferences.defaults) private var showEarlierItems = false
-    private var conflicts: Set<String> {
-        Conflicts.ids(items.filter { !$0.reminder && !$0.allDay }.map { ($0.id, $0.eventStartDate ?? $0.date, $0.endDate ?? $0.date) })
-    }
+    private var conflicts: Set<String> { Conflicts.ids(items: items) }
 
     var body: some View {
         TimelineView(.everyMinute) { context in
             let earlier = items.filter { !$0.reminder && !$0.allDay && ($0.endDate ?? $0.date) <= context.date }
-            let upcoming = items.filter { $0.reminder || $0.allDay || ($0.endDate ?? $0.date) > context.date }
+            // A timed task whose time has passed is overdue, the same as in Reminders and Catch Up.
+            let lateToday = items.filter { $0.reminder && !$0.allDay && $0.date < context.date }
+            let upcoming = items.filter { ($0.reminder && ($0.allDay || $0.date >= context.date)) || (!$0.reminder && ($0.allDay || ($0.endDate ?? $0.date) > context.date)) }
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     SectionHeader(title: "Today · \(context.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))")
@@ -28,12 +28,12 @@ struct TodayDashboard: View {
                 }
                 CompactContactDates(items: upcoming, model: model)
                 ForEach(upcoming.filter { $0.contactDateID == nil }) { row($0) }
-                if upcoming.isEmpty && overdue.isEmpty && undated.isEmpty {
+                if upcoming.isEmpty && overdue.isEmpty && lateToday.isEmpty && undated.isEmpty {
                     Text("Nothing else scheduled today").font(.caption).foregroundStyle(GalleryPalette.muted).padding(.vertical, 4)
                 }
-                if !overdue.isEmpty {
+                if !overdue.isEmpty || !lateToday.isEmpty {
                     SectionHeader(title: "Overdue", tint: GalleryPalette.alert).padding(.top, 4)
-                    ForEach(overdue.map(Self.item)) { row($0) }
+                    ForEach(overdue.map(Self.item) + lateToday) { row($0) }
                 }
                 if !undated.isEmpty {
                     SectionHeader(title: "Anytime").padding(.top, 4)

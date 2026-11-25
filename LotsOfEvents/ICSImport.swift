@@ -19,6 +19,15 @@ struct ICSEvent: Identifiable, Hashable {
     var alertOffsets: [TimeInterval] = []
     /// A blocked import is displayed with a reason rather than silently changing its schedule.
     var importIssue: String? = nil
+    /// The zone the file gives, so repeats stay at the right local time across daylight saving changes.
+    var timeZone: TimeZone? = nil
+    /// Occurrences the series skips (EXDATE).
+    var excludedDates: [Date] = []
+    /// Dates added to the series (RDATE). EventKit can't hold these in a repeat rule, so each becomes its own event.
+    var additionalDates: [Date] = []
+    /// Occurrences changed or cancelled on their own (RECURRENCE-ID).
+    var overrides: [ICSOverride] = []
+    var exceptionCount: Int { excludedDates.count + additionalDates.count + overrides.count }
 
     /// "Thu, Oct 29 · 9:00 AM – 10:00 AM", or "Thu, Oct 29 · All day".
     var summary: String {
@@ -32,15 +41,27 @@ struct ICSEvent: Identifiable, Hashable {
     }
 }
 
+/// One occurrence of a series that differs from the rule: cancelled, or with its own details.
+struct ICSOverride: Hashable {
+    var originalStart: Date
+    var cancelled = false
+    var title: String? = nil
+    var start: Date? = nil
+    var end: Date? = nil
+    var allDay = false
+    var location: String? = nil
+    var notes: String? = nil
+}
+
 /// Reads the events in an iCalendar (.ics) file: titles, times and time zones, all-day events,
-/// repeats, alerts, places, notes, and links. Unsupported recurrence exceptions are blocked with an explanation.
+/// repeats and their exceptions, alerts, places, notes, and links.
 enum ICSParser {
+    private typealias Field = (name: String, params: [String: String], value: String)
     static func parse(_ text: String, defaultZone: TimeZone = .current) -> [ICSEvent] {
-        var events: [ICSEvent] = []
+        var parsed: [(fields: [Field], alarms: [TimeInterval])] = []
         var stack: [String] = []
         var fields: [(name: String, params: [String: String], value: String)] = []
         var alarms: [TimeInterval] = []
-        var exceptionIDs = Set<String>()
         for line in unfold(text) {
             guard let (name, params, value) = split(line) else { continue }
             switch name {
@@ -49,11 +70,7 @@ enum ICSParser {
                 if value.uppercased() == "VEVENT" { fields = []; alarms = [] }
             case "END":
                 let ended = stack.popLast()
-                if ended == "VEVENT" {
-                    if fields.contains(where: { ["RECURRENCE-ID", "EXDATE", "RDATE"].contains($0.name) }),
-                       let uid = fields.first(where: { $0.name == "UID" })?.value { exceptionIDs.insert(uid) }
-                    if let event = makeEvent(fields, alarms: alarms, zone: defaultZone) { events.append(event) }
-                }
+                if ended == "VEVENT" { parsed.append((fields, alarms)) }
             case "TRIGGER" where stack.last == "VALARM":
                 // Only alerts relative to the start; "RELATED=END" and fixed times are rare and skipped.
                 if params["VALUE"] != "DATE-TIME", params["RELATED"] != "END", let offset = duration(value) { alarms.append(offset) }
@@ -61,16 +78,56 @@ enum ICSParser {
                 if stack.last == "VEVENT" { fields.append((name, params, value)) }
             }
         }
+        func value(_ name: String, _ fields: [Field]) -> Field? { fields.first { $0.name == name } }
+        // An occurrence belongs to its series when the file has the series; on its own (a single changed invitation) it's an ordinary event.
+        let series = Set(parsed.compactMap { item in
+            value("RRULE", item.fields) != nil && value("RECURRENCE-ID", item.fields) == nil ? value("UID", item.fields)?.value : nil
+        })
+        var overrides: [String: [ICSOverride]] = [:]
+        var unreadable = Set<String>()
+        var events: [ICSEvent] = []
+        for item in parsed {
+            if let id = value("RECURRENCE-ID", item.fields), let uid = value("UID", item.fields)?.value, series.contains(uid) {
+                if let change = makeOverride(item.fields, id: id, zone: defaultZone) { overrides[uid, default: []].append(change) }
+                else { unreadable.insert(uid) }
+            } else if let event = makeEvent(item.fields, alarms: item.alarms, zone: defaultZone) {
+                events.append(event)
+            }
+        }
         return events.map { event in
             var event = event
-            if let uid = event.uid, exceptionIDs.contains(uid) {
-                event.importIssue = "This series contains changed, cancelled, or additional occurrences. Import it with Apple Calendar to preserve those changes."
+            guard let uid = event.uid else { return event }
+            event.overrides = overrides[uid] ?? []
+            if unreadable.contains(uid), event.importIssue == nil {
+                event.importIssue = "This series has a changed occurrence that can't be read. Import it with Apple Calendar to preserve it."
             }
             return event
         }
     }
 
-    private static func makeEvent(_ fields: [(name: String, params: [String: String], value: String)], alarms: [TimeInterval], zone: TimeZone) -> ICSEvent? {
+    private static func makeOverride(_ fields: [Field], id: Field, zone: TimeZone) -> ICSOverride? {
+        // A change to "this and all later" occurrences has no single-occurrence form here.
+        guard id.params["RANGE"] == nil, let (original, _) = date(id.value, params: id.params, zone: zone) else { return nil }
+        if fields.first(where: { $0.name == "STATUS" })?.value.uppercased() == "CANCELLED" { return ICSOverride(originalStart: original, cancelled: true) }
+        guard let changed = makeEvent(fields, alarms: [], zone: zone) else { return nil }
+        return ICSOverride(originalStart: original, title: changed.title, start: changed.start, end: changed.end, allDay: changed.allDay,
+                           location: changed.location, notes: changed.notes)
+    }
+
+    /// EXDATE and RDATE values, which can hold several dates and repeat over several lines. Nil if any can't be read.
+    private static func dateList(_ name: String, in fields: [Field], zone: TimeZone) -> [Date]? {
+        var result: [Date] = []
+        for field in fields where field.name == name {
+            guard field.params["VALUE"] != "PERIOD" else { return nil }
+            for part in field.value.split(separator: ",") {
+                guard let (date, _) = date(String(part), params: field.params, zone: zone) else { return nil }
+                result.append(date)
+            }
+        }
+        return result
+    }
+
+    private static func makeEvent(_ fields: [Field], alarms: [TimeInterval], zone: TimeZone) -> ICSEvent? {
         func field(_ name: String) -> (params: [String: String], value: String)? {
             fields.first { $0.name == name }.map { ($0.params, $0.value) }
         }
@@ -86,18 +143,25 @@ enum ICSParser {
         }
         if allDay && end <= start { end = Calendar.current.date(byAdding: .day, value: 1, to: start)! }
         let title = field("SUMMARY").map { unescape($0.value) }.flatMap { $0.isEmpty ? nil : $0 } ?? "New Event"
-        // Keep exceptions visible in the preview, but never save them as unrelated standalone events.
         let isRecurrenceCopy = field("RECURRENCE-ID") != nil
-        let hasExceptions = fields.contains { ["RECURRENCE-ID", "EXDATE", "RDATE"].contains($0.name) }
+        let excluded = dateList("EXDATE", in: fields, zone: zone)
+        let additional = dateList("RDATE", in: fields, zone: zone)
         let unsupportedRule = field("RRULE").map { recurrenceRule($0.value, zone: zone) == nil } ?? false
-        let issue = hasExceptions ? "This event has recurrence exceptions. Import it with Apple Calendar to preserve them."
+        let issue = excluded == nil || additional == nil ? "This event has dates that can't be read. Import it with Apple Calendar to preserve them."
             : unsupportedRule ? "This repeat pattern is not supported. Import it with Apple Calendar to preserve the schedule." : nil
+        let repeats = !isRecurrenceCopy && field("RRULE") != nil
+        var fileZone: TimeZone?
+        if !allDay {
+            if startField.value.hasSuffix("Z") { fileZone = repeats ? TimeZone(identifier: "UTC") : nil }
+            else if let id = startField.params["TZID"] { fileZone = timeZone(id) }
+        }
         return ICSEvent(uid: field("UID")?.value, title: title, start: start, end: end, allDay: allDay,
                         location: field("LOCATION").map { unescape($0.value) }.flatMap { $0.isEmpty ? nil : $0 },
                         notes: field("DESCRIPTION").map { unescape($0.value) }.flatMap { $0.isEmpty ? nil : $0 },
                         url: field("URL").flatMap { URL(string: $0.value) },
                         recurrence: isRecurrenceCopy ? nil : field("RRULE")?.value,
-                        alertOffsets: alarms, importIssue: issue)
+                        alertOffsets: alarms, importIssue: issue, timeZone: fileZone,
+                        excludedDates: repeats ? excluded ?? [] : [], additionalDates: (additional ?? []).filter { abs($0.timeIntervalSince(start)) >= 60 })
     }
 
     /// Joins folded lines (a line starting with a space or tab continues the one before it).
@@ -283,6 +347,76 @@ enum ICSParser {
     }
 }
 
+/// Adds parsed events to a calendar, including a series' skipped and changed occurrences.
+enum ICSImporter {
+    /// Uses its own store: undoing a failed import must not disturb the objects the rest of the app is holding.
+    static func save(_ events: [ICSEvent], calendarID: String, store: EKEventStore = EKEventStore()) throws {
+        guard let calendar = store.calendar(withIdentifier: calendarID) else { return }
+        func makeItem(_ event: ICSEvent, start: Date, end: Date) -> EKEvent {
+            let item = EKEvent(eventStore: store)
+            item.calendar = calendar
+            item.title = event.title
+            item.isAllDay = event.allDay
+            item.timeZone = event.allDay ? nil : event.timeZone
+            item.startDate = start
+            // EventKit's all-day end is the last day itself; the file's end is the morning after.
+            item.endDate = event.allDay ? max(start, end.addingTimeInterval(-1)) : end
+            item.location = event.location
+            item.notes = event.notes
+            item.url = event.url
+            for offset in event.alertOffsets { item.addAlarm(EKAlarm(relativeOffset: offset)) }
+            return item
+        }
+        var series: [(event: ICSEvent, id: String)] = []
+        do {
+            for event in events where event.importIssue == nil {
+                let item = makeItem(event, start: event.start, end: event.end)
+                if let rule = event.recurrence.flatMap({ ICSParser.recurrenceRule($0) }) { item.addRecurrenceRule(rule) }
+                try store.save(item, span: event.recurrence == nil ? .thisEvent : .futureEvents, commit: false)
+                for date in event.additionalDates {
+                    try store.save(makeItem(event, start: date, end: date.addingTimeInterval(event.end.timeIntervalSince(event.start))), span: .thisEvent, commit: false)
+                }
+                if !event.excludedDates.isEmpty || !event.overrides.isEmpty { series.append((event, item.calendarItemIdentifier)) }
+            }
+            try store.commit()
+        } catch {
+            store.reset()
+            throw error
+        }
+        do {
+            for (event, id) in series { try applyExceptions(event, seriesID: id, calendar: calendar, store: store) }
+        } catch {
+            // A series missing some of its changes would quietly be wrong, so leave none of those series behind.
+            for (_, id) in series {
+                if let item = store.calendarItem(withIdentifier: id) as? EKEvent { try? store.remove(item, span: .futureEvents, commit: true) }
+            }
+            throw error
+        }
+    }
+    private static func applyExceptions(_ event: ICSEvent, seriesID: String, calendar: EKCalendar, store: EKEventStore) throws {
+        func occurrence(at date: Date) -> EKEvent? {
+            let around = store.predicateForEvents(withStart: date.addingTimeInterval(-86400), end: date.addingTimeInterval(86400), calendars: [calendar])
+            return store.events(matching: around).first {
+                $0.calendarItemIdentifier == seriesID && abs(($0.occurrenceDate ?? $0.startDate).timeIntervalSince(date)) < 60
+            }
+        }
+        for date in event.excludedDates {
+            if let found = occurrence(at: date) { try store.remove(found, span: .thisEvent, commit: true) }
+        }
+        for change in event.overrides {
+            guard let found = occurrence(at: change.originalStart) else { continue }
+            if change.cancelled { try store.remove(found, span: .thisEvent, commit: true); continue }
+            if let title = change.title { found.title = title }
+            found.isAllDay = change.allDay
+            if let start = change.start { found.startDate = start }
+            if let end = change.end { found.endDate = change.allDay ? max(found.startDate, end.addingTimeInterval(-1)) : end }
+            if let location = change.location { found.location = location }
+            if let notes = change.notes { found.notes = notes }
+            try store.save(found, span: .thisEvent, commit: true)
+        }
+    }
+}
+
 extension UTType {
     static let ics = UTType("com.apple.ical.ics") ?? .calendarEvent
 }
@@ -368,6 +502,9 @@ struct ICSImportView: View {
                     }
                     Text(event.summary).font(.caption).foregroundStyle(GalleryPalette.muted)
                     if let location = event.location { Text(location).font(.caption).foregroundStyle(GalleryPalette.muted).lineLimit(1) }
+                    if event.importIssue == nil, event.exceptionCount > 0 {
+                        Text("Includes \(event.exceptionCount) changed or skipped \(event.exceptionCount == 1 ? "date" : "dates")").font(.caption).foregroundStyle(GalleryPalette.muted)
+                    }
                     if let issue = event.importIssue { Text(issue).font(.caption).foregroundStyle(GalleryPalette.warning) }
                     if existing.contains(event.id) { Text("Already in your calendar").font(.caption.weight(.medium)).foregroundStyle(GalleryPalette.warning) }
                 }
@@ -384,36 +521,28 @@ struct ICSImportView: View {
         guard !loaded else { return }
         loaded = true
         calendarID = store.defaultCalendarForNewEvents?.calendarIdentifier ?? calendars.first?.calendarIdentifier ?? ""
-        // Events with the same title and start as one already in any calendar are noted, so sharing a file twice is easy to spot.
-        for event in events {
-            let window = store.predicateForEvents(withStart: event.start.addingTimeInterval(-60), end: event.end.addingTimeInterval(60), calendars: nil)
-            if store.events(matching: window).contains(where: { $0.title == event.title && abs($0.startDate.timeIntervalSince(event.start)) < 60 }) {
+        // Events with the same title and start as one already in any calendar are noted and left unchecked, so
+        // sharing a file twice doesn't add everything twice. Fetched by year rather than once per event.
+        func key(_ title: String?, _ start: Date) -> String { "\(title ?? "")|\(Int(start.timeIntervalSince1970 / 60))" }
+        let ordered = events.sorted { $0.start < $1.start }
+        var index = 0
+        while index < ordered.count {
+            let windowStart = ordered[index].start.addingTimeInterval(-60)
+            let batch = ordered[index...].prefix { $0.start < windowStart.addingTimeInterval(365 * 86400) }
+            let windowEnd = (batch.map(\.end).max() ?? windowStart).addingTimeInterval(60)
+            let found = Set(store.events(matching: store.predicateForEvents(withStart: windowStart, end: windowEnd, calendars: nil)).map { key($0.title, $0.startDate) })
+            for event in batch where found.contains(key(event.title, event.start)) {
                 existing.insert(event.id)
+                chosen.remove(event.id)
             }
+            index += batch.count
         }
     }
     private func save() {
-        guard let calendar = store.calendar(withIdentifier: calendarID) else { return }
         do {
-            for event in events where chosen.contains(event.id) && event.importIssue == nil {
-                let item = EKEvent(eventStore: store)
-                item.calendar = calendar
-                item.title = event.title
-                item.isAllDay = event.allDay
-                item.startDate = event.start
-                // EventKit's all-day end is the last day itself; the file's end is the morning after.
-                item.endDate = event.allDay ? max(event.start, event.end.addingTimeInterval(-1)) : event.end
-                item.location = event.location
-                item.notes = event.notes
-                item.url = event.url
-                if let rule = event.recurrence.flatMap({ ICSParser.recurrenceRule($0) }) { item.addRecurrenceRule(rule) }
-                for offset in event.alertOffsets { item.addAlarm(EKAlarm(relativeOffset: offset)) }
-                try store.save(item, span: event.recurrence == nil ? .thisEvent : .futureEvents, commit: false)
-            }
-            try store.commit()
+            try ICSImporter.save(events.filter { chosen.contains($0.id) }, calendarID: calendarID)
             close()
         } catch {
-            store.reset()
             self.error = error.localizedDescription
         }
     }

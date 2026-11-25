@@ -26,3 +26,29 @@ final class SnoozeTests: XCTestCase {
         XCTAssertEqual(ReminderDates.due(reminder), later)
     }
 }
+
+final class NotificationCompletionTests: XCTestCase {
+    func testTravelTapCompletesOnMainThreadWhenDeliveredFromBackground() async {
+        let completed = expectation(description: "Notification completed")
+        completed.assertForOverFulfill = true
+        await Task.detached {
+            ReminderNotificationDelegate.receive(action: "com.apple.UNNotificationDefaultActionIdentifier",
+                contactID: nil, timestamp: nil, reminderID: nil) {
+                XCTAssertTrue(Thread.isMainThread)
+                completed.fulfill()
+            }
+        }.value
+        await fulfillment(of: [completed], timeout: 5)
+    }
+    func testUnknownActionStillCompletesOnMainThread() async {
+        let completed = expectation(description: "Unknown action completed")
+        completed.assertForOverFulfill = true
+        await Task.detached {
+            ReminderNotificationDelegate.receive(action: "unknown", contactID: nil, timestamp: nil, reminderID: "unused") {
+                XCTAssertTrue(Thread.isMainThread)
+                completed.fulfill()
+            }
+        }.value
+        await fulfillment(of: [completed], timeout: 5)
+    }
+}

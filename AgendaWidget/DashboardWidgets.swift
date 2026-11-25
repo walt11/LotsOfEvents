@@ -96,7 +96,7 @@ struct DashboardProvider: AppIntentTimelineProvider {
                 }
                 return updated
             }
-            return Timeline(entries: [entry] + future, policy: .after(min(entry.date.addingTimeInterval(900), midnight)))
+            return Timeline(entries: [entry] + future, policy: .after(min(entry.date.addingTimeInterval(WidgetRefresh.interval), midnight)))
         }
     }
     func load(theme: WidgetThemeOption, sources: [SourceEntity]?, days taskDays: Int = 1, accent: WidgetAccentOption = .app) async -> DashboardEntry {
@@ -139,8 +139,8 @@ struct DashboardProvider: AppIntentTimelineProvider {
            let reminder = store.calendarItem(withIdentifier: preparationID) as? EKReminder, !reminder.isCompleted {
             entry.preparation = WidgetTask(id: reminder.calendarItemIdentifier, title: reminder.title ?? "Reminder",
                 due: reminder.dueDateComponents.flatMap { ($0.calendar ?? calendar).date(from: $0) },
-                timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendar.title,
-                color: Color(cgColor: reminder.calendar.cgColor), writable: reminder.calendar.allowsContentModifications, priority: reminder.priority)
+                timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendarTitle,
+                color: reminder.calendarColor, writable: reminder.calendar?.allowsContentModifications ?? false, priority: reminder.priority)
         }
         return entry
     }
@@ -153,12 +153,11 @@ struct DashboardProvider: AppIntentTimelineProvider {
         let lists = store.calendars(for: .reminder).filter { shown($0.calendarIdentifier) || undated.contains($0.calendarIdentifier) }
         guard !lists.isEmpty else { return (false, []) }
         let reminders = await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: lists))
-        let today = calendar.startOfDay(for: now)
         return (true, WidgetDashboardData.sortedTasks(reminders.compactMap { reminder in
             let due = reminder.dueDateComponents.flatMap { ($0.calendar ?? calendar).date(from: $0) }
-            let id = reminder.calendar.calendarIdentifier
+            guard let id = reminder.calendar?.calendarIdentifier else { return nil }
             if let days, !TodayTasks.includes(due: due, listID: id, shown: shown(id), now: now, days: days, undatedLists: undated) { return nil }
-            return WidgetTask(id: reminder.calendarItemIdentifier, title: reminder.title ?? "Reminder", due: due, timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendar.title, color: Color(cgColor: reminder.calendar.cgColor), writable: reminder.calendar.allowsContentModifications, priority: reminder.priority, overdue: due.map { $0 < today } ?? false)
+            return WidgetTask(id: reminder.calendarItemIdentifier, title: reminder.title ?? "Reminder", due: due, timed: reminder.dueDateComponents?.hour != nil, list: reminder.calendar.title, color: Color(cgColor: reminder.calendar.cgColor), writable: reminder.calendar.allowsContentModifications, priority: reminder.priority, overdue: due.map { ReminderDates.isOverdue(due: $0, timed: reminder.dueDateComponents?.hour != nil, now: now, calendar: calendar) } ?? false)
         }))
     }
 }
@@ -229,7 +228,7 @@ struct CompleteWidgetReminderIntent: AppIntent {
             return .result()
         }
         // Widgets can be limited to lists outside the app's selection, so only writability is checked here.
-        guard reminder.calendar.allowsContentModifications else { throw WidgetReminderError.readOnly }
+        guard reminder.calendar?.allowsContentModifications == true else { throw WidgetReminderError.readOnly }
         let currentDue = reminder.dueDateComponents.flatMap { ($0.calendar ?? Calendar.current).date(from: $0) }?.timeIntervalSince1970 ?? -1
         // Do not let a stale button complete the next occurrence of a repeating reminder.
         guard currentDue == expectedDue else { WidgetCenter.shared.reloadAllTimelines(); return .result() }

@@ -68,7 +68,7 @@ struct MainView: View {
         .preferredColorScheme((AppTheme(rawValue: themeID) ?? .graphite).scheme)
         .tint(accent)
         .task { await model.refresh() }
-        // After each refresh: the next-event Live Activity, time-to-leave alerts, and the forecast.
+        // After each refresh: the next-event Live Activity and time-to-leave alerts.
         .task(id: model.generation) {
             guard model.calendarAccess else { return }
             let soon = model.events(in: DateInterval(start: .now.addingTimeInterval(-6 * 3600), duration: 30 * 3600))
@@ -79,7 +79,14 @@ struct MainView: View {
             if phase == .active && Date.now.timeIntervalSince(model.lastRefresh) > 2 { model.scheduleRefresh() }
         }
         // Widgets reload only when calendar or reminder data actually changed (including the app's own saves).
-        .onReceive(NotificationCenter.default.publisher(for: .CNContactStoreDidChange)) { _ in model.scheduleRefresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .CNContactStoreDidChange)) { _ in
+            ContactDateSync.markChanged()
+            model.scheduleRefresh()
+        }
+        // Today, overdue tasks, and time zones all change without any data changing, most visibly in a window left open overnight.
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: RunLoop.main)) { _ in dayChanged() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in dayChanged() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange).receive(on: RunLoop.main)) { _ in dayChanged() }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
             model.scheduleRefresh()
             WidgetReloader.schedule()
@@ -170,7 +177,25 @@ struct MainView: View {
                 }
             }
         } message: { Text(model.error ?? "") }
+        .alert("This is a repeating event.", isPresented: Binding(get: { model.recurringChange != nil }, set: { if !$0 { model.recurringChange = nil } }), presenting: model.recurringChange) { change in
+            Button("Change This Event Only") { change.apply(.thisEvent) }
+            Button("Change All Future Events") { change.apply(.futureEvents) }
+            Button("Cancel", role: .cancel) {}
+        } message: { change in Text("Do you want to change only this occurrence of “\(change.title)”, or this and all future occurrences?") }
+        .alert("Get alerts for your tasks?", isPresented: $model.offerNotifications) {
+            Button("Not Now", role: .cancel) { Task { await ReminderNotifications.answerOffer(allow: false) } }
+            Button("Continue") {
+                Task {
+                    await ReminderNotifications.answerOffer(allow: true)
+                    model.scheduleRefresh()
+                }
+            }
+        } message: { Text("LotsOfEvents can alert you when reminders without their own alert come due. You can change this any time in Settings.") }
         .modifier(TextSizeModifier(size: (AppTextSize(rawValue: textSizeID) ?? .automatic).dynamicType))
+    }
+    private func dayChanged() {
+        model.scheduleRefresh()
+        WidgetCenter.shared.reloadAllTimelines()
     }
     private static let sections: [(title: String, symbol: String)] = [("Calendar", "calendar"), ("Agenda", "list.bullet.rectangle"), ("Reminders", "checklist"), ("Settings", "gearshape")]
     private var tabs: some View {
@@ -284,11 +309,13 @@ extension AgendaModel {
     var calendarAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     var reminderAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     func events(in range: DateInterval) -> [EKEvent] {
-        let selected = calendars.filter { !(ContactDates.enabled && $0.type == .birthday) }.filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
-        let native = calendarAccess && !selected.isEmpty
-            ? store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: selected)) : []
-        let contacts = ContactDates.events(store: store, in: range, excludingBirthdays: Set(native.compactMap(\.birthdayContactIdentifier)))
-        return (native + contacts).sorted { $0.startDate < $1.startDate }
+        cachedEvents(in: range) {
+            let selected = calendars.filter { !(ContactDates.enabled && $0.type == .birthday) }.filter { Preferences.selected($0.calendarIdentifier, reminders: false) }
+            let native = calendarAccess && !selected.isEmpty
+                ? store.events(matching: store.predicateForEvents(withStart: range.start, end: range.end, calendars: selected)) : []
+            let contacts = ContactDates.events(store: store, in: range, excludingBirthdays: Set(native.compactMap(\.birthdayContactIdentifier)))
+            return (native + contacts).sorted { $0.startDate < $1.startDate }
+        }
     }
     func open(_ item: AgendaItem) {
         if let id = item.contactDateID, let record = ContactDates.records.first(where: { $0.id == id }) {
@@ -344,24 +371,26 @@ extension AgendaModel {
         }
         catch { reminder.isCompleted = previous; self.error = error.localizedDescription }
     }
-    /// Moves one occurrence of an event, keeping its length, with Undo.
-    func move(_ event: EKEvent, to shifted: Date) {
+    /// Moves an event, keeping its length, with Undo. A repeating event first asks which occurrences to change.
+    func move(_ event: EKEvent, to shifted: Date, span chosenSpan: EKSpan? = nil) {
         let originalStart = event.startDate!, originalEnd = event.endDate!
         guard shifted != originalStart, event.isWritable else { return }
-        let previousPreparation = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: false))
-        let previousTravel = Preferences.defaults.integer(forKey: PlanningPreferences.bufferKey(event, travel: true))
+        if chosenSpan == nil, event.hasRecurrenceRules {
+            recurringChange = RecurringChange(title: event.title ?? "Event") { [weak self] span in self?.move(event, to: shifted, span: span) }
+            return
+        }
+        let span = chosenSpan ?? .thisEvent
+        _ = PlanningPreferences.bufferMinutes(event) // Migrate legacy values before the start date changes.
         event.startDate = shifted
         event.endDate = shifted.addingTimeInterval(originalEnd.timeIntervalSince(originalStart))
         do {
-            try store.save(event, span: .thisEvent, commit: true)
-            Preferences.defaults.set(previousPreparation, forKey: PlanningPreferences.bufferKey(event, travel: false))
-            Preferences.defaults.set(previousTravel, forKey: PlanningPreferences.bufferKey(event, travel: true))
+            try store.save(event, span: span, commit: true)
             let title = event.title ?? "Event"
             undo = UndoAction(message: "Moved “\(title)” to \(shifted.formatted(.dateTime.weekday(.abbreviated).hour().minute()))") { [weak self] in
                 guard let self else { return }
                 event.startDate = originalStart
                 event.endDate = originalEnd
-                do { try self.store.save(event, span: .thisEvent, commit: true); self.scheduleRefresh() }
+                do { try self.store.save(event, span: span, commit: true); self.scheduleRefresh() }
                 catch { self.error = error.localizedDescription }
             }
             scheduleRefresh()
@@ -383,17 +412,22 @@ extension AgendaModel {
         // Files shared to the app arrive as a copy in an "…Inbox" folder; it isn't needed once read.
         if url.deletingLastPathComponent().lastPathComponent.hasSuffix("Inbox") { try? FileManager.default.removeItem(at: url) }
     }
-    /// Changes when one occurrence of an event ends, with Undo.
-    func resize(_ event: EKEvent, end: Date) {
+    /// Changes when an event ends, with Undo. A repeating event first asks which occurrences to change.
+    func resize(_ event: EKEvent, end: Date, span chosenSpan: EKSpan? = nil) {
         let originalEnd = event.endDate!
         guard end != originalEnd, end > event.startDate, event.isWritable else { return }
+        if chosenSpan == nil, event.hasRecurrenceRules {
+            recurringChange = RecurringChange(title: event.title ?? "Event") { [weak self] span in self?.resize(event, end: end, span: span) }
+            return
+        }
+        let span = chosenSpan ?? .thisEvent
         event.endDate = end
         do {
-            try store.save(event, span: .thisEvent, commit: true)
+            try store.save(event, span: span, commit: true)
             undo = UndoAction(message: "“\(event.title ?? "Event")” now ends at \(end.formatted(date: .omitted, time: .shortened))") { [weak self] in
                 guard let self else { return }
                 event.endDate = originalEnd
-                do { try self.store.save(event, span: .thisEvent, commit: true); self.scheduleRefresh() }
+                do { try self.store.save(event, span: span, commit: true); self.scheduleRefresh() }
                 catch { self.error = error.localizedDescription }
             }
             scheduleRefresh()
@@ -542,7 +576,7 @@ struct EventDetailsSheet: View {
                                   systemImage: "car.fill").frame(maxWidth: .infinity)
                         }
                     }
-                    Button(action: onDuplicate) { Label("Duplicate", systemImage: "plus.square.on.square").frame(maxWidth: .infinity) }
+                    if event.canDuplicate { Button(action: onDuplicate) { Label("Duplicate", systemImage: "plus.square.on.square").frame(maxWidth: .infinity) } }
                 }
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.bordered).controlSize(.large).tint(accent)

@@ -13,9 +13,15 @@ private actor ContactDateReader {
         var records: [ContactDateRecord] = []
         try CNContactStore().enumerateContacts(with: request) { contact, _ in
             let name = CNContactFormatter.string(from: contact, style: .fullName) ?? "Contact"
-            if let birthday = contact.nonGregorianBirthday ?? contact.birthday {
+            if let birthday = contact.birthday ?? contact.nonGregorianBirthday {
                 records.append(ContactDateRecord(id: contact.identifier + ":birthday", contactID: contact.identifier,
                                                  name: name, label: "Birthday", components: birthday, birthday: true))
+            }
+            // A contact can have both, and people often keep both dates.
+            if contact.birthday != nil, let other = contact.nonGregorianBirthday {
+                let calendarName = other.calendar.flatMap { Locale.current.localizedString(for: $0.identifier) } ?? "Other Calendar"
+                records.append(ContactDateRecord(id: contact.identifier + ":birthday-other", contactID: contact.identifier,
+                                                 name: name, label: "Birthday (\(calendarName))", components: other, birthday: true))
             }
             for date in contact.dates {
                 let label = date.label.map { CNLabeledValue<NSDateComponents>.localizedString(forLabel: $0) } ?? "Date"
@@ -29,14 +35,22 @@ private actor ContactDateReader {
 
 @MainActor enum ContactDateSync {
     private static let reader = ContactDateReader()
+    /// Reading every contact is slow, so it waits for a change in Contacts, or an hour as a backstop.
+    private static var contactsChanged = true
+    private static var lastRead = Date.distantPast
+    static func markChanged() { contactsChanged = true }
     static var allowed: Bool {
         let status = CNContactStore.authorizationStatus(for: .contacts)
         return status == .authorized || status == .limited
     }
     static func refresh() async throws {
         ContactDates.migrateSettings()
-        guard ContactDates.enabled && allowed else { clear(); return }
-        let records = try await reader.read()
+        guard ContactDates.enabled && allowed else { clear(); contactsChanged = true; return }
+        guard contactsChanged || Date.now.timeIntervalSince(lastRead) > 3600 else { return }
+        contactsChanged = false
+        lastRead = .now
+        let records: [ContactDateRecord]
+        do { records = try await reader.read() } catch { contactsChanged = true; throw error }
         // Permission or the setting can change while the read is running.
         guard ContactDates.enabled && allowed else { clear(); return }
         let data = try JSONEncoder().encode(records)
@@ -70,6 +84,7 @@ struct ContactDatesSettings: View {
                         let granted = try await CNContactStore().requestAccess(for: .contacts)
                         guard granted else { problem = "Allow Contacts access in system Settings to show contact dates."; return }
                         enabled = true
+                        ContactDateSync.markChanged()
                         try await ContactDateSync.refresh()
                         model.scheduleRefresh()
                     } catch { problem = error.localizedDescription }

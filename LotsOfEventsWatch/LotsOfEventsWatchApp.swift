@@ -66,7 +66,7 @@ struct WatchAgendaView: View {
                         // watchOS can read reminders but not change them, so they're completed on iPhone.
                         ForEach(agenda.reminders, id: \.calendarItemIdentifier) { reminder in
                             HStack {
-                                Image(systemName: "circle").foregroundStyle(Color(cgColor: reminder.calendar.cgColor))
+                                Image(systemName: "circle").foregroundStyle(Color(cgColor: reminder.calendar?.cgColor ?? CGColor(gray: 0.6, alpha: 1)))
                                 Text(reminder.title ?? "Reminder").lineLimit(2)
                             }
                         }
@@ -83,7 +83,7 @@ struct WatchAgendaView: View {
     }
     private func row(_ event: EKEvent) -> some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2).fill(Color(cgColor: event.calendar.cgColor)).frame(width: 4)
+            RoundedRectangle(cornerRadius: 2).fill(Color(cgColor: event.calendar?.cgColor ?? CGColor(gray: 0.6, alpha: 1))).frame(width: 4)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title ?? "Event").font(.headline).lineLimit(2)
                 Text(event.isAllDay ? "All day" : "\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")

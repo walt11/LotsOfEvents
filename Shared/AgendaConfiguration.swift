@@ -224,7 +224,7 @@ struct PreparationReminderQuery: EntityQuery {
         let store = EKEventStore()
         guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else { return [] }
         return identifiers.compactMap { store.calendarItem(withIdentifier: $0) as? EKReminder }
-            .filter { !$0.isCompleted }.map { PreparationReminderEntity(id: $0.calendarItemIdentifier, title: $0.title ?? "Reminder", list: $0.calendar.title) }
+            .filter { !$0.isCompleted }.map { PreparationReminderEntity(id: $0.calendarItemIdentifier, title: $0.title ?? "Reminder", list: $0.calendar?.title ?? "") }
     }
     func suggestedEntities() async throws -> [PreparationReminderEntity] {
         let store = EKEventStore()
@@ -233,6 +233,6 @@ struct PreparationReminderQuery: EntityQuery {
         guard !lists.isEmpty else { return [] }
         return await store.reminders(matching: store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: lists))
             .sorted { ($0.title ?? "").localizedStandardCompare($1.title ?? "") == .orderedAscending }
-            .map { PreparationReminderEntity(id: $0.calendarItemIdentifier, title: $0.title ?? "Reminder", list: $0.calendar.title) }
+            .map { PreparationReminderEntity(id: $0.calendarItemIdentifier, title: $0.title ?? "Reminder", list: $0.calendar?.title ?? "") }
     }
 }
