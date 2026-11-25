@@ -223,7 +223,7 @@ struct SourcesView: View {
                         Link(destination: URL(string: "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/index.html")!) {
                             Label("Support", systemImage: "questionmark.circle")
                         }
-                        Link(destination: URL(string: "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/privacy.html")!) {
+                        Link(destination: URL(string: "https://walt11.github.io/LotsOfEvents/privacy.html")!) {
                             Label("Privacy Policy", systemImage: "hand.raised")
                         }
                     }
