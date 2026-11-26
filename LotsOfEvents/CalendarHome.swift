@@ -133,6 +133,7 @@ struct CalendarHome: View {
     @State private var scroll = ScrollPosition(edge: .top)
     @State private var scrollFraction: CGFloat = 0
     @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
+    @AppStorage("calendarShowUpcomingOnEmptyDays", store: Preferences.defaults) private var showUpcomingOnEmptyDays = false
     /// An optional second time zone, shown beside the hours on the timeline.
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
     @State private var datePicker = false
@@ -357,7 +358,7 @@ struct CalendarHome: View {
             }.buttonStyle(.plain).foregroundStyle(accent).padding(.horizontal, 16)
             List {
                 if dayEvents.isEmpty && tasks.isEmpty {
-                    let upcoming = comingUp(after: day)
+                    let upcoming = showUpcomingOnEmptyDays ? comingUp(after: day) : []
                     Section {
                         Label("Nothing scheduled", systemImage: "moon.zzz")
                             .font(.subheadline).foregroundStyle(GalleryPalette.muted).listRowBackground(Color.clear)

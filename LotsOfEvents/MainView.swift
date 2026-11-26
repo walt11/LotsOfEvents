@@ -564,8 +564,12 @@ struct EventDetailsSheet: View {
     let model: AgendaModel
     let onDuplicate: () -> Void
     @State private var planning = false
+    @State private var editing = false
+    @State private var deletedInEditor = false
+    @State private var detailsRevision = 0
     var body: some View {
-        EventDetails(event: event)
+        EventDetails(event: event, onEdit: { editing = true })
+            .id(detailsRevision)
             .ignoresSafeArea(edges: .bottom)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 12) {
@@ -584,6 +588,20 @@ struct EventDetailsSheet: View {
                 .background(.bar)
             }
             .sheet(isPresented: $planning) { EventPlanningView(event: event, model: model) }
+            .sheet(isPresented: $editing, onDismiss: {
+                // Finish dismissing the editor before dismissing its presenting detail sheet.
+                if deletedInEditor {
+                    model.sheet = nil
+                } else {
+                    detailsRevision += 1
+                }
+                model.scheduleRefresh()
+            }) {
+                ExistingEventEditor(store: model.store, event: event) { deleted in
+                    deletedInEditor = deleted
+                    editing = false
+                }
+            }
     }
     private func directions() {
         let query = event.structuredLocation?.geoLocation.map { "daddr=\($0.coordinate.latitude),\($0.coordinate.longitude)" }
@@ -595,22 +613,32 @@ struct EventDetailsSheet: View {
 struct EventDetails: UIViewControllerRepresentable {
     @AppAccent private var accent
     let event: EKEvent
+    let onEdit: () -> Void
     @Environment(\.dismiss) private var dismiss
-    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }, edit: onEdit) }
     func makeUIViewController(context: Context) -> UINavigationController {
         let view = EKEventViewController()
         view.event = event
         view.view.tintColor = UIColor(accent)
-        view.allowsEditing = event.isWritable
+        // Own the editor delegate so deletion closes both the editor and details.
+        view.allowsEditing = false
         view.allowsCalendarPreview = true
         view.delegate = context.coordinator
         view.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: context.coordinator, action: #selector(Coordinator.close))
+        if event.isWritable {
+            view.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .edit, target: context.coordinator, action: #selector(Coordinator.editEvent))
+        }
         return UINavigationController(rootViewController: view)
     }
     func updateUIViewController(_ controller: UINavigationController, context: Context) {}
     final class Coordinator: NSObject, EKEventViewDelegate {
         let dismiss: () -> Void
-        init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
+        let edit: () -> Void
+        init(dismiss: @escaping () -> Void, edit: @escaping () -> Void) {
+            self.dismiss = dismiss
+            self.edit = edit
+        }
+        @objc func editEvent() { edit() }
         @objc func close() { dismiss() }
         func eventViewController(_ controller: EKEventViewController, didCompleteWith action: EKEventViewAction) { dismiss() }
     }

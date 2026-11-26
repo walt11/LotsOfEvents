@@ -20,6 +20,7 @@ struct SourcesView: View {
     @AppStorage("alertEvent", store: Preferences.defaults) private var eventAlert = EventAlertOption.minutes15.rawValue
     @AppStorage("alertReminder", store: Preferences.defaults) private var reminderAlert = ReminderAlertOption.atTime.rawValue
     @AppStorage("showWeekNumbers", store: Preferences.defaults) private var weekNumbers = false
+    @AppStorage("calendarShowUpcomingOnEmptyDays", store: Preferences.defaults) private var showUpcomingOnEmptyDays = false
     @AppStorage("secondTimeZone", store: Preferences.defaults) private var secondZoneID = ""
     @AppStorage(TravelAlerts.key, store: Preferences.defaults) private var timeToLeave = false
     @AppStorage(NextEventActivity.key, store: Preferences.defaults) private var liveActivity = true
@@ -71,6 +72,7 @@ struct SourcesView: View {
                 }
                 if category == .sources {
                 Section {
+                    Toggle(isOn: $showUpcomingOnEmptyDays) { settingsRow("Upcoming Events on Empty Days", symbol: "calendar.badge.clock", color: .blue, detail: "Show Coming up when the selected day has no events or tasks") }
                     Toggle(isOn: $weekNumbers) { settingsRow("Week Numbers", symbol: "number", color: .gray, detail: "In Month view and beside dates") }
                     NavigationLink { TimeZonePicker(selection: $secondZoneID) } label: {
                         settingsRow("Second Time Zone", symbol: "globe", color: .cyan,
