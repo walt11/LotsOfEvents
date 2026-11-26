@@ -220,7 +220,7 @@ struct SourcesView: View {
                 }
                 if category == .about {
                     Section {
-                        Link(destination: URL(string: "https://filedn.eu/llU18sSCFuIjhnGu5KyT3q8/LotsOfEvents/index.html")!) {
+                        Link(destination: URL(string: "https://walt11.github.io/LotsOfEvents/")!) {
                             Label("Support", systemImage: "questionmark.circle")
                         }
                         Link(destination: URL(string: "https://walt11.github.io/LotsOfEvents/privacy.html")!) {
