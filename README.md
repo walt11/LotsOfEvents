@@ -1,6 +1,18 @@
 # LotsOfEvents
 
+> **Development disclosure:** AI was used to develop this app.
+
 Native SwiftUI iPhone/iPad agenda and WidgetKit extension. Requires iOS 18+ and Xcode 26+ (Swift 6 language mode; built with Xcode 27).
+
+## App screenshots
+
+iPhone screenshots with sample data. Select an image to view it full size.
+
+<a href="docs/images/agenda.png"><img src="docs/images/agenda.png" alt="LotsOfEvents agenda view" width="240"></a>
+<a href="docs/images/calendar.png"><img src="docs/images/calendar.png" alt="LotsOfEvents calendar view" width="240"></a>
+<a href="docs/images/reminders.png"><img src="docs/images/reminders.png" alt="LotsOfEvents reminders view" width="240"></a>
+
+[Support and how-to guide](https://walt11.github.io/LotsOfEvents/) · [Privacy policy](https://walt11.github.io/LotsOfEvents/privacy.html)
 
 ## Run
 
